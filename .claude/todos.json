@@ -1,0 +1,238 @@
+[
+  {
+    "timestamp": "2025-11-27T09:16:26.575300Z",
+    "session_id": "83015d92-eb5e-400b-b264-238d990b1fca",
+    "cwd": "/home/jamesprial/code/shawnbot",
+    "todos": [
+      {
+        "content": "Phase 1: Project setup (package.json, tsconfig.json, .env)",
+        "status": "in_progress",
+        "activeForm": "Setting up project foundation"
+      },
+      {
+        "content": "Phase 2: Database layer (SQLite connection, schema, repository)",
+        "status": "pending",
+        "activeForm": "Creating database layer"
+      },
+      {
+        "content": "Phase 3: Voice detection core (VoiceConnectionManager, SpeakingTracker, AFKDetectionService, WarningService)",
+        "status": "pending",
+        "activeForm": "Building voice detection core"
+      },
+      {
+        "content": "Phase 4: Discord integration (client setup, voiceStateUpdate handler)",
+        "status": "pending",
+        "activeForm": "Integrating with Discord"
+      },
+      {
+        "content": "Phase 5: Slash commands (afk-config, afk-status)",
+        "status": "pending",
+        "activeForm": "Creating slash commands"
+      },
+      {
+        "content": "Phase 6: Entry points (bot.ts, index.ts)",
+        "status": "pending",
+        "activeForm": "Creating entry points"
+      }
+    ]
+  },
+  {
+    "timestamp": "2025-11-27T09:17:22.862787Z",
+    "session_id": "83015d92-eb5e-400b-b264-238d990b1fca",
+    "cwd": "/home/jamesprial/code/shawnbot",
+    "todos": [
+      {
+        "content": "Phase 1: Project setup (package.json, tsconfig.json, .env)",
+        "status": "completed",
+        "activeForm": "Setting up project foundation"
+      },
+      {
+        "content": "Phase 2: Database layer (SQLite connection, schema, repository)",
+        "status": "completed",
+        "activeForm": "Creating database layer"
+      },
+      {
+        "content": "Phase 3: Voice detection core (VoiceConnectionManager, SpeakingTracker, AFKDetectionService, WarningService)",
+        "status": "in_progress",
+        "activeForm": "Building voice detection core"
+      },
+      {
+        "content": "Phase 4: Discord integration (client setup, voiceStateUpdate handler)",
+        "status": "pending",
+        "activeForm": "Integrating with Discord"
+      },
+      {
+        "content": "Phase 5: Slash commands (afk-config, afk-status)",
+        "status": "pending",
+        "activeForm": "Creating slash commands"
+      },
+      {
+        "content": "Phase 6: Entry points (bot.ts, index.ts)",
+        "status": "pending",
+        "activeForm": "Creating entry points"
+      }
+    ]
+  },
+  {
+    "timestamp": "2025-11-27T09:18:57.947034Z",
+    "session_id": "83015d92-eb5e-400b-b264-238d990b1fca",
+    "cwd": "/home/jamesprial/code/shawnbot",
+    "todos": [
+      {
+        "content": "Phase 1: Project setup (package.json, tsconfig.json, .env)",
+        "status": "completed",
+        "activeForm": "Setting up project foundation"
+      },
+      {
+        "content": "Phase 2: Database layer (SQLite connection, schema, repository)",
+        "status": "completed",
+        "activeForm": "Creating database layer"
+      },
+      {
+        "content": "Phase 3: Voice detection core (VoiceConnectionManager, SpeakingTracker, AFKDetectionService, WarningService)",
+        "status": "completed",
+        "activeForm": "Building voice detection core"
+      },
+      {
+        "content": "Phase 4: Discord integration (client setup, voiceStateUpdate handler)",
+        "status": "in_progress",
+        "activeForm": "Integrating with Discord"
+      },
+      {
+        "content": "Phase 5: Slash commands (afk-config, afk-status)",
+        "status": "pending",
+        "activeForm": "Creating slash commands"
+      },
+      {
+        "content": "Phase 6: Entry points (bot.ts, index.ts)",
+        "status": "pending",
+        "activeForm": "Creating entry points"
+      }
+    ]
+  },
+  {
+    "timestamp": "2025-11-27T09:19:02.324375Z",
+    "session_id": "83015d92-eb5e-400b-b264-238d990b1fca",
+    "cwd": "/home/jamesprial/code/shawnbot",
+    "todos": [
+      {
+        "content": "Create handlers/events/ready.ts",
+        "status": "in_progress",
+        "activeForm": "Creating handlers/events/ready.ts"
+      },
+      {
+        "content": "Create handlers/events/voiceStateUpdate.ts",
+        "status": "pending",
+        "activeForm": "Creating handlers/events/voiceStateUpdate.ts"
+      },
+      {
+        "content": "Create services/VoiceMonitorService.ts",
+        "status": "pending",
+        "activeForm": "Creating services/VoiceMonitorService.ts"
+      }
+    ]
+  },
+  {
+    "timestamp": "2025-11-27T09:19:13.180157Z",
+    "session_id": "83015d92-eb5e-400b-b264-238d990b1fca",
+    "cwd": "/home/jamesprial/code/shawnbot",
+    "todos": [
+      {
+        "content": "Create handlers/events/ready.ts",
+        "status": "completed",
+        "activeForm": "Creating handlers/events/ready.ts"
+      },
+      {
+        "content": "Create handlers/events/voiceStateUpdate.ts",
+        "status": "in_progress",
+        "activeForm": "Creating handlers/events/voiceStateUpdate.ts"
+      },
+      {
+        "content": "Create services/VoiceMonitorService.ts",
+        "status": "pending",
+        "activeForm": "Creating services/VoiceMonitorService.ts"
+      }
+    ]
+  },
+  {
+    "timestamp": "2025-11-27T09:19:28.887969Z",
+    "session_id": "83015d92-eb5e-400b-b264-238d990b1fca",
+    "cwd": "/home/jamesprial/code/shawnbot",
+    "todos": [
+      {
+        "content": "Create handlers/events/ready.ts",
+        "status": "completed",
+        "activeForm": "Creating handlers/events/ready.ts"
+      },
+      {
+        "content": "Create handlers/events/voiceStateUpdate.ts",
+        "status": "completed",
+        "activeForm": "Creating handlers/events/voiceStateUpdate.ts"
+      },
+      {
+        "content": "Create services/VoiceMonitorService.ts",
+        "status": "in_progress",
+        "activeForm": "Creating services/VoiceMonitorService.ts"
+      }
+    ]
+  },
+  {
+    "timestamp": "2025-11-27T09:19:45.623215Z",
+    "session_id": "83015d92-eb5e-400b-b264-238d990b1fca",
+    "cwd": "/home/jamesprial/code/shawnbot",
+    "todos": [
+      {
+        "content": "Create handlers/events/ready.ts",
+        "status": "completed",
+        "activeForm": "Creating handlers/events/ready.ts"
+      },
+      {
+        "content": "Create handlers/events/voiceStateUpdate.ts",
+        "status": "completed",
+        "activeForm": "Creating handlers/events/voiceStateUpdate.ts"
+      },
+      {
+        "content": "Create services/VoiceMonitorService.ts",
+        "status": "completed",
+        "activeForm": "Creating services/VoiceMonitorService.ts"
+      }
+    ]
+  },
+  {
+    "timestamp": "2025-11-27T09:20:58.637336Z",
+    "session_id": "83015d92-eb5e-400b-b264-238d990b1fca",
+    "cwd": "/home/jamesprial/code/shawnbot",
+    "todos": [
+      {
+        "content": "Phase 1: Project setup (package.json, tsconfig.json, .env)",
+        "status": "completed",
+        "activeForm": "Setting up project foundation"
+      },
+      {
+        "content": "Phase 2: Database layer (SQLite connection, schema, repository)",
+        "status": "completed",
+        "activeForm": "Creating database layer"
+      },
+      {
+        "content": "Phase 3: Voice detection core (VoiceConnectionManager, SpeakingTracker, AFKDetectionService, WarningService)",
+        "status": "completed",
+        "activeForm": "Building voice detection core"
+      },
+      {
+        "content": "Phase 4: Discord integration (client setup, voiceStateUpdate handler)",
+        "status": "completed",
+        "activeForm": "Integrating with Discord"
+      },
+      {
+        "content": "Phase 5: Slash commands (afk-config, afk-status)",
+        "status": "completed",
+        "activeForm": "Creating slash commands"
+      },
+      {
+        "content": "Phase 6: Entry points (bot.ts, index.ts)",
+        "status": "completed",
+        "activeForm": "Creating entry points"
+      }
+    ]
+  }
+]
