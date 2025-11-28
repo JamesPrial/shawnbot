@@ -13,7 +13,7 @@ async function main(): Promise<void> {
   const rest = new REST({ version: '10' }).setToken(config.DISCORD_TOKEN);
 
   try {
-    const commandsData = commands.map(command => command.toJSON());
+    const commandsData = commands.map((command) => command.toJSON());
 
     await rest.put(
       Routes.applicationCommands(config.CLIENT_ID),

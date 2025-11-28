@@ -29,7 +29,7 @@ export function createVoiceStateUpdateHandler(deps: VoiceStateHandlerDeps) {
       return;
     }
 
-    const config = await guildConfig.getConfig(guildId);
+    const config = guildConfig.getConfig(guildId);
     if (!config.enabled) {
       logger.debug({ guildId }, 'Guild monitoring not enabled');
       return;
@@ -42,33 +42,33 @@ export function createVoiceStateUpdateHandler(deps: VoiceStateHandlerDeps) {
 
     // User joined a channel
     if (!oldChannel && newChannel) {
-      logger.debug({ userId, guildId, channelId: newChannelId }, 'User joined voice channel');
+      logger.debug({ userId, guildId, channelId: newChannel.id }, 'User joined voice channel');
 
       await voiceMonitor.handleUserJoin(newChannel);
-      await afkDetection.startTracking(guildId, userId, newChannelId);
+      await afkDetection.startTracking(guildId, userId, newChannel.id);
       return;
     }
 
     // User left a channel
     if (oldChannel && !newChannel) {
-      logger.debug({ userId, guildId, channelId: oldChannelId }, 'User left voice channel');
+      logger.debug({ userId, guildId, channelId: oldChannel.id }, 'User left voice channel');
 
-      await afkDetection.stopTracking(guildId, userId);
-      await voiceMonitor.handleUserLeave(guildId, oldChannelId);
+      afkDetection.stopTracking(guildId, userId);
+      await voiceMonitor.handleUserLeave(guildId, oldChannel.id);
       return;
     }
 
     // User switched channels
-    if (oldChannel && newChannel && oldChannelId !== newChannelId) {
+    if (oldChannel && newChannel && oldChannel.id !== newChannel.id) {
       logger.debug(
-        { userId, guildId, oldChannelId, newChannelId },
+        { userId, guildId, oldChannelId: oldChannel.id, newChannelId: newChannel.id },
         'User switched voice channels'
       );
 
-      await afkDetection.stopTracking(guildId, userId);
-      await voiceMonitor.handleUserLeave(guildId, oldChannelId);
+      afkDetection.stopTracking(guildId, userId);
+      await voiceMonitor.handleUserLeave(guildId, oldChannel.id);
       await voiceMonitor.handleUserJoin(newChannel);
-      await afkDetection.startTracking(guildId, userId, newChannelId);
+      await afkDetection.startTracking(guildId, userId, newChannel.id);
       return;
     }
 

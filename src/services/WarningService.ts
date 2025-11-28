@@ -1,4 +1,4 @@
-import { Client, EmbedBuilder, TextChannel, ChannelType } from 'discord.js';
+import { Client, EmbedBuilder, TextChannel, ChannelType, Guild, GuildBasedChannel } from 'discord.js';
 import type { Logger } from 'pino';
 import { GuildConfigService } from './GuildConfigService';
 
@@ -55,7 +55,7 @@ export class WarningService {
     }
   }
 
-  private async findWarningChannel(guild: any, warningChannelId: string | null): Promise<TextChannel | null> {
+  private async findWarningChannel(guild: Guild, warningChannelId: string | null): Promise<TextChannel | null> {
     if (warningChannelId) {
       const channel = guild.channels.cache.get(warningChannelId);
       if (channel && channel.type === ChannelType.GuildText) {
@@ -68,7 +68,7 @@ export class WarningService {
     }
 
     const firstTextChannel = guild.channels.cache.find(
-      (channel: any) => channel.type === ChannelType.GuildText
+      (channel: GuildBasedChannel) => channel.type === ChannelType.GuildText
     );
 
     return firstTextChannel ? (firstTextChannel as TextChannel) : null;

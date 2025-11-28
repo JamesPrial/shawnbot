@@ -1,6 +1,6 @@
 import type Database from 'better-sqlite3';
 
-export function createTables(db: Database): void {
+export function createTables(db: Database.Database): void {
   db.exec(`
     CREATE TABLE IF NOT EXISTS guild_settings (
       guild_id TEXT PRIMARY KEY,

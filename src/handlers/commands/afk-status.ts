@@ -24,13 +24,13 @@ export async function execute(
   }
 
   try {
-    const config = await configService.getConfig(interaction.guildId);
+    const config = configService.getConfig(interaction.guildId);
 
     const statusColor = config.enabled ? 0x00ff00 : 0xff0000;
     const statusText = config.enabled ? 'Enabled' : 'Disabled';
 
-    const timeoutMinutes = Math.floor(config.timeoutSeconds / 60);
-    const timeoutRemainder = config.timeoutSeconds % 60;
+    const timeoutMinutes = Math.floor(config.afkTimeoutSeconds / 60);
+    const timeoutRemainder = config.afkTimeoutSeconds % 60;
     const timeoutDisplay =
       timeoutRemainder > 0
         ? `${timeoutMinutes}m ${timeoutRemainder}s`
@@ -43,7 +43,7 @@ export async function execute(
     let exemptRolesDisplay = 'None';
     if (config.exemptRoleIds.length > 0) {
       exemptRolesDisplay = config.exemptRoleIds
-        .map((roleId) => `<@&${roleId}>`)
+        .map((roleId: string) => `<@&${roleId}>`)
         .join(', ');
     }
 
@@ -58,12 +58,12 @@ export async function execute(
         },
         {
           name: 'Timeout',
-          value: `${config.timeoutSeconds}s (${timeoutDisplay})`,
+          value: `${config.afkTimeoutSeconds}s (${timeoutDisplay})`,
           inline: true,
         },
         {
           name: 'Warning Time',
-          value: `${config.warningTimeSeconds}s`,
+          value: `${config.warningSecondsBefore}s`,
           inline: true,
         },
         {

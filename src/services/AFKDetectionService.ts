@@ -32,7 +32,7 @@ export class AFKDetectionService {
     this.tracking = new Map();
   }
 
-  startTracking(guildId: string, userId: string, channelId: string): void {
+  async startTracking(guildId: string, userId: string, channelId: string): Promise<void> {
     const key = this.getTrackingKey(guildId, userId);
 
     this.stopTracking(guildId, userId);
@@ -41,6 +41,23 @@ export class AFKDetectionService {
 
     if (!config.enabled) {
       return;
+    }
+
+    // Check exempt roles
+    if (config.exemptRoleIds.length > 0) {
+      try {
+        const guild = await this.client.guilds.fetch(guildId);
+        const member = await guild.members.fetch(userId);
+        const isExempt = member.roles.cache.some(role =>
+          config.exemptRoleIds.includes(role.id)
+        );
+        if (isExempt) {
+          this.logger.debug({ guildId, userId }, 'User is exempt from AFK tracking');
+          return;
+        }
+      } catch (error) {
+        this.logger.error({ error, guildId, userId }, 'Failed to check exempt roles');
+      }
     }
 
     const warningTimeMs = (config.afkTimeoutSeconds - config.warningSecondsBefore) * 1000;
@@ -69,7 +86,7 @@ export class AFKDetectionService {
     );
   }
 
-  resetTimer(guildId: string, userId: string): void {
+  async resetTimer(guildId: string, userId: string): Promise<void> {
     const key = this.getTrackingKey(guildId, userId);
     const state = this.tracking.get(key);
 
@@ -79,7 +96,7 @@ export class AFKDetectionService {
 
     this.logger.debug({ guildId, userId }, 'User activity detected, resetting timer');
 
-    this.startTracking(guildId, userId, state.channelId);
+    await this.startTracking(guildId, userId, state.channelId);
   }
 
   stopTracking(guildId: string, userId: string): void {

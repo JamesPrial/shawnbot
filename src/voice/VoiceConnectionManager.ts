@@ -6,7 +6,8 @@ import {
   createAudioPlayer,
   createAudioResource,
   StreamType,
-  AudioPlayerStatus
+  AudioPlayerStatus,
+  DiscordGatewayAdapterCreator
 } from '@discordjs/voice';
 import type { VoiceBasedChannel, Client } from 'discord.js';
 import type { Logger } from 'pino';
@@ -14,7 +15,7 @@ import { SpeakingTracker } from './SpeakingTracker';
 import { Readable } from 'stream';
 
 export class VoiceConnectionManager {
-  public connections: Map<string, VoiceConnection>;
+  private connections: Map<string, VoiceConnection>;
   private speakingTracker: SpeakingTracker;
   private client: Client;
   private logger: Logger;
@@ -39,7 +40,7 @@ export class VoiceConnectionManager {
     const connection = joinVoiceChannel({
       channelId: channel.id,
       guildId: guildId,
-      adapterCreator: channel.guild.voiceAdapterCreator,
+      adapterCreator: channel.guild.voiceAdapterCreator as unknown as DiscordGatewayAdapterCreator,
       selfDeaf: false,
       selfMute: true
     });

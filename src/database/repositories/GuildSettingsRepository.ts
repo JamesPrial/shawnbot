@@ -23,9 +23,9 @@ interface GuildSettingsRow {
 }
 
 export class GuildSettingsRepository {
-  private db: Database;
+  private db: Database.Database;
 
-  constructor(db: Database) {
+  constructor(db: Database.Database) {
     this.db = db;
   }
 

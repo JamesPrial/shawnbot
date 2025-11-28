@@ -25,7 +25,7 @@ export declare interface SpeakingTracker {
 }
 
 export class SpeakingTracker extends EventEmitter {
-  public connections: Map<string, VoiceConnection>;
+  private connections: Map<string, VoiceConnection>;
   private logger: Logger;
 
   constructor(logger: Logger) {

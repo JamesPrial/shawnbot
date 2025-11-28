@@ -18,7 +18,7 @@ import { afkConfigCommand, afkStatusCommand } from './handlers/commands';
 
 export interface BotDependencies {
   client: Client;
-  database: Database;
+  database: Database.Database;
   config: EnvConfig;
   logger: Logger;
   repository: GuildSettingsRepository;
@@ -71,9 +71,9 @@ export async function createBot(): Promise<BotDependencies> {
     logger
   );
 
-  speakingTracker.on('userStartedSpeaking', (userId: string, guildId: string) => {
+  speakingTracker.on('userStartedSpeaking', async (userId: string, guildId: string) => {
     logger.debug({ userId, guildId }, 'User started speaking, resetting AFK timer');
-    afkDetectionService.resetTimer(guildId, userId);
+    await afkDetectionService.resetTimer(guildId, userId);
   });
 
   speakingTracker.on('userStoppedSpeaking', async (userId: string, guildId: string) => {
@@ -84,7 +84,7 @@ export async function createBot(): Promise<BotDependencies> {
       const member = await guild.members.fetch(userId);
 
       if (member.voice.channel) {
-        afkDetectionService.startTracking(guildId, userId, member.voice.channel.id);
+        await afkDetectionService.startTracking(guildId, userId, member.voice.channel.id);
       }
     } catch (error) {
       logger.error({ error, userId, guildId }, 'Failed to start tracking after user stopped speaking');

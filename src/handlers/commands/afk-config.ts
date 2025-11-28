@@ -174,18 +174,18 @@ async function handleTimeoutCommand(
   configService: GuildConfigService
 ): Promise<void> {
   const timeoutSeconds = interaction.options.getInteger('seconds', true);
-  const currentConfig = await configService.getConfig(interaction.guildId!);
+  const currentConfig = configService.getConfig(interaction.guildId!);
 
-  if (timeoutSeconds <= currentConfig.warningTimeSeconds) {
+  if (timeoutSeconds <= currentConfig.warningSecondsBefore) {
     await interaction.reply({
-      content: `Timeout (${timeoutSeconds}s) must be greater than warning time (${currentConfig.warningTimeSeconds}s).`,
+      content: `Timeout (${timeoutSeconds}s) must be greater than warning time (${currentConfig.warningSecondsBefore}s).`,
       ephemeral: true,
     });
     return;
   }
 
   await configService.updateConfig(interaction.guildId!, {
-    timeoutSeconds,
+    afkTimeoutSeconds: timeoutSeconds,
   });
 
   const timeoutMinutes = Math.floor(timeoutSeconds / 60);
@@ -200,18 +200,18 @@ async function handleWarningCommand(
   configService: GuildConfigService
 ): Promise<void> {
   const warningSeconds = interaction.options.getInteger('seconds', true);
-  const currentConfig = await configService.getConfig(interaction.guildId!);
+  const currentConfig = configService.getConfig(interaction.guildId!);
 
-  if (warningSeconds >= currentConfig.timeoutSeconds) {
+  if (warningSeconds >= currentConfig.afkTimeoutSeconds) {
     await interaction.reply({
-      content: `Warning time (${warningSeconds}s) must be less than timeout (${currentConfig.timeoutSeconds}s).`,
+      content: `Warning time (${warningSeconds}s) must be less than timeout (${currentConfig.afkTimeoutSeconds}s).`,
       ephemeral: true,
     });
     return;
   }
 
   await configService.updateConfig(interaction.guildId!, {
-    warningTimeSeconds: warningSeconds,
+    warningSecondsBefore: warningSeconds,
   });
 
   await interaction.reply({
@@ -242,7 +242,7 @@ async function handleExemptSubcommands(
   subcommand: string
 ): Promise<void> {
   const role = interaction.options.getRole('role', true);
-  const currentConfig = await configService.getConfig(interaction.guildId!);
+  const currentConfig = configService.getConfig(interaction.guildId!);
 
   if (subcommand === 'add') {
     if (currentConfig.exemptRoleIds.includes(role.id)) {
@@ -272,7 +272,7 @@ async function handleExemptSubcommands(
     }
 
     const updatedExemptRoles = currentConfig.exemptRoleIds.filter(
-      (id) => id !== role.id
+      (id: string) => id !== role.id
     );
     await configService.updateConfig(interaction.guildId!, {
       exemptRoleIds: updatedExemptRoles,

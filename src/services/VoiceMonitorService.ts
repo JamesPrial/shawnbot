@@ -1,6 +1,6 @@
 import { VoiceBasedChannel, Client } from 'discord.js';
 import { Logger } from 'pino';
-import { VoiceConnectionManager } from './VoiceConnectionManager';
+import { VoiceConnectionManager } from '../voice/VoiceConnectionManager';
 import { GuildConfigService } from './GuildConfigService';
 
 export class VoiceMonitorService {
@@ -15,13 +15,13 @@ export class VoiceMonitorService {
     const guildId = channel.guild.id;
     const channelId = channel.id;
 
-    const config = await this.guildConfig.getConfig(guildId);
+    const config = this.guildConfig.getConfig(guildId);
     if (!config.enabled) {
       this.logger.debug({ guildId, channelId }, 'Guild monitoring not enabled');
       return;
     }
 
-    const isAlreadyInChannel = this.connectionManager.isInChannel(guildId, channelId);
+    const isAlreadyInChannel = this.connectionManager.hasConnection(guildId);
     if (isAlreadyInChannel) {
       this.logger.debug({ guildId, channelId }, 'Bot already in this channel');
       return;
