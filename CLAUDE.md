@@ -2,6 +2,8 @@
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
+## ***DO NOT EVER, UNDER *ANY* CIRCUMSTANCES, ATTEMPT *ANY* LAZY SHORTCUT AROUND STATIC TYPING, I SWEAR TO GOD IF THIS IS LESS TYPE SAFE THAN VANILLA RUST I WILL HAVE YOU ULTRATHINK ON WHAT A BAD CLAUDE YOU WERE ***##
+
 ## Commands
 
 ```bash
