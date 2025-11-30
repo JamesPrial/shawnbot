@@ -1,7 +1,8 @@
-import { VoiceBasedChannel, Client } from 'discord.js';
+import { VoiceBasedChannel, Client, Guild } from 'discord.js';
 import { Logger } from 'pino';
 import { VoiceConnectionManager } from '../voice/VoiceConnectionManager';
 import { GuildConfigService } from './GuildConfigService';
+import { MIN_USERS_FOR_AFK_TRACKING } from './AFKDetectionService';
 
 export class VoiceMonitorService {
   constructor(
@@ -42,13 +43,76 @@ export class VoiceMonitorService {
     await this.connectionManager.leaveChannel(guildId);
   }
 
+  async scanGuild(guild: Guild): Promise<void> {
+    try {
+      const guildId = guild.id;
+      const config = this.guildConfig.getConfig(guildId);
+
+      if (!config.enabled) {
+        this.logger.debug({ guildId }, 'Guild monitoring not enabled, skipping scan');
+        return;
+      }
+
+      // Fetch all channels in the guild
+      const channels = await guild.channels.fetch();
+
+      // Filter to voice-based channels with 2+ non-bot members
+      const eligibleChannels = channels.filter((channel): channel is VoiceBasedChannel => {
+        if (!channel?.isVoiceBased()) return false;
+
+        // TypeScript knows this is voice-based now, safe to access members
+        const voiceChannel = channel as VoiceBasedChannel;
+        const nonBotCount = voiceChannel.members.filter(m => !m.user.bot).size;
+        return nonBotCount >= MIN_USERS_FOR_AFK_TRACKING;
+      });
+
+      if (eligibleChannels.size === 0) {
+        this.logger.debug(
+          { guildId },
+          'No voice channels with sufficient members found during scan'
+        );
+        return;
+      }
+
+      // Check if already connected to this guild
+      if (this.connectionManager.hasConnection(guildId)) {
+        this.logger.debug({ guildId }, 'Bot already connected to guild, skipping scan');
+        return;
+      }
+
+      // Join the first matching channel
+      const firstChannel = eligibleChannels.first();
+      if (firstChannel) {
+        this.logger.info(
+          { guildId, channelId: firstChannel.id, channelName: firstChannel.name },
+          'Joining voice channel during guild scan'
+        );
+        await this.connectionManager.joinChannel(firstChannel);
+      }
+    } catch (error) {
+      this.logger.error(
+        { error, guildId: guild.id, guildName: guild.name },
+        'Error scanning guild for voice channels'
+      );
+    }
+  }
+
   async initialize(): Promise<void> {
     this.logger.info('Initializing VoiceMonitorService');
-    // Placeholder for startup recovery logic
-    // Future implementation will:
-    // - Scan all guilds
-    // - Find users in voice channels
-    // - Join channels and start tracking
+
+    // Scan all guilds for active voice channels
+    for (const [guildId, guild] of this.client.guilds.cache) {
+      try {
+        await this.scanGuild(guild);
+      } catch (error) {
+        this.logger.error(
+          { error, guildId, guildName: guild.name },
+          'Error during guild scan in initialization'
+        );
+        // Continue with other guilds even if one fails
+      }
+    }
+
     this.logger.info('VoiceMonitorService initialization complete');
   }
 

@@ -14,6 +14,7 @@ import { SpeakingTracker } from './voice/SpeakingTracker';
 import { VoiceConnectionManager } from './voice/VoiceConnectionManager';
 import { createReadyHandler } from './handlers/events/ready';
 import { createVoiceStateUpdateHandler } from './handlers/events/voiceStateUpdate';
+import { createGuildCreateHandler } from './handlers/events/guildCreate';
 import { afkConfigCommand, afkStatusCommand } from './handlers/commands';
 
 export interface BotDependencies {
@@ -120,12 +121,20 @@ export async function createBot(): Promise<BotDependencies> {
     }
   });
 
-  client.on(Events.ClientReady, createReadyHandler(logger));
+  client.on(Events.ClientReady, createReadyHandler({
+    voiceMonitor: voiceMonitorService,
+    logger,
+  }));
 
   client.on(Events.VoiceStateUpdate, createVoiceStateUpdateHandler({
     voiceMonitor: voiceMonitorService,
     afkDetection: afkDetectionService,
     guildConfig: guildConfigService,
+    logger,
+  }));
+
+  client.on(Events.GuildCreate, createGuildCreateHandler({
+    voiceMonitor: voiceMonitorService,
     logger,
   }));
 
