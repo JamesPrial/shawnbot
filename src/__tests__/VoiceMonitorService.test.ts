@@ -305,7 +305,14 @@ describe('VoiceMonitorService', () => {
         await service.handleUserLeave(guildId, channelId);
 
         expect(mockLogger.error).toHaveBeenCalledWith(
-          expect.objectContaining({ error, guildId, channelId }),
+          expect.objectContaining({
+            error: expect.objectContaining({
+              message: expect.any(String),
+              stack: expect.any(String)
+            }),
+            guildId,
+            channelId
+          }),
           'Error checking if channel is empty'
         );
       });
@@ -848,12 +855,402 @@ describe('VoiceMonitorService', () => {
 
         expect(mockLogger.error).toHaveBeenCalledWith(
           expect.objectContaining({
-            error,
+            error: expect.objectContaining({
+              message: expect.any(String),
+              stack: expect.any(String)
+            }),
             guildId,
             guildName: 'Error Guild',
           }),
           'Error scanning guild for voice channels'
         );
+      });
+
+      it('should log error with message and stack properties when scan fails', async () => {
+        const guildId = 'detailed-error-guild';
+        const error = new Error('Detailed channel fetch failure');
+        error.stack = 'Error: Detailed channel fetch failure\n    at scanGuild (VoiceMonitorService.ts:57:15)';
+
+        const mockGuild: any = {
+          id: guildId,
+          name: 'Detailed Error Guild',
+          channels: {
+            fetch: vi.fn().mockRejectedValue(error),
+          },
+        };
+
+        vi.mocked(mockGuildConfig.getConfig).mockReturnValue(createEnabledConfig(guildId));
+
+        await (service as any).scanGuild(mockGuild);
+
+        // Verify error object is serialized with message and stack
+        const errorLogCall = vi.mocked(mockLogger.error).mock.calls[0];
+        const loggedContext = errorLogCall[0];
+
+        expect(loggedContext.error).toEqual(
+          expect.objectContaining({
+            message: 'Detailed channel fetch failure',
+            stack: expect.stringContaining('at scanGuild')
+          })
+        );
+      });
+    });
+
+    describe('null channel handling', () => {
+      it('should skip null channels in the collection without error', async () => {
+        const guildId = 'null-channel-guild';
+
+        const validChannel: any = {
+          id: 'valid-channel',
+          name: 'Valid Voice',
+          isVoiceBased: () => true,
+          members: new Collection<string, GuildMember>([
+            ['user1', { user: { bot: false } } as GuildMember],
+            ['user2', { user: { bot: false } } as GuildMember],
+          ]),
+          guild: { id: guildId },
+        };
+
+        // Collection with null entry - this can happen when channels are deleted
+        const channelsWithNull = new Collection<string, any>([
+          ['null-channel', null],
+          ['valid-channel', validChannel],
+        ]);
+
+        const mockGuild: any = {
+          id: guildId,
+          name: 'Null Channel Guild',
+          channels: {
+            fetch: vi.fn().mockResolvedValue(channelsWithNull),
+          },
+        };
+
+        vi.mocked(mockGuildConfig.getConfig).mockReturnValue(createEnabledConfig(guildId));
+        vi.mocked(mockConnectionManager.hasConnection).mockReturnValue(false);
+
+        // Should not throw when encountering null
+        await expect((service as any).scanGuild(mockGuild)).resolves.not.toThrow();
+
+        // Should still join the valid channel
+        expect(mockConnectionManager.joinChannel).toHaveBeenCalledWith(validChannel);
+      });
+
+      it('should filter out multiple null channels and process valid ones', async () => {
+        const guildId = 'multi-null-guild';
+
+        const validChannel1: any = {
+          id: 'valid-1',
+          name: 'Valid Voice 1',
+          isVoiceBased: () => true,
+          members: new Collection<string, GuildMember>([
+            ['user1', { user: { bot: false } } as GuildMember],
+            ['user2', { user: { bot: false } } as GuildMember],
+          ]),
+          guild: { id: guildId },
+        };
+
+        const validChannel2: any = {
+          id: 'valid-2',
+          name: 'Valid Voice 2',
+          isVoiceBased: () => true,
+          members: new Collection<string, GuildMember>([
+            ['user3', { user: { bot: false } } as GuildMember],
+          ]),
+        };
+
+        // Multiple nulls interspersed with valid channels
+        const channelsWithMultipleNulls = new Collection<string, any>([
+          ['null-1', null],
+          ['valid-1', validChannel1],
+          ['null-2', null],
+          ['valid-2', validChannel2],
+          ['null-3', null],
+        ]);
+
+        const mockGuild: any = {
+          id: guildId,
+          name: 'Multi Null Guild',
+          channels: {
+            fetch: vi.fn().mockResolvedValue(channelsWithMultipleNulls),
+          },
+        };
+
+        vi.mocked(mockGuildConfig.getConfig).mockReturnValue(createEnabledConfig(guildId));
+        vi.mocked(mockConnectionManager.hasConnection).mockReturnValue(false);
+
+        await (service as any).scanGuild(mockGuild);
+
+        // Should join the first valid channel with sufficient users (valid-1)
+        expect(mockConnectionManager.joinChannel).toHaveBeenCalledWith(validChannel1);
+        expect(mockConnectionManager.joinChannel).toHaveBeenCalledTimes(1);
+      });
+
+      it('should handle collection of all nulls gracefully', async () => {
+        const guildId = 'all-nulls-guild';
+
+        const allNulls = new Collection<string, any>([
+          ['null-1', null],
+          ['null-2', null],
+          ['null-3', null],
+        ]);
+
+        const mockGuild: any = {
+          id: guildId,
+          name: 'All Nulls Guild',
+          channels: {
+            fetch: vi.fn().mockResolvedValue(allNulls),
+          },
+        };
+
+        vi.mocked(mockGuildConfig.getConfig).mockReturnValue(createEnabledConfig(guildId));
+        vi.mocked(mockConnectionManager.hasConnection).mockReturnValue(false);
+
+        await (service as any).scanGuild(mockGuild);
+
+        expect(mockConnectionManager.joinChannel).not.toHaveBeenCalled();
+        expect(mockLogger.debug).toHaveBeenCalledWith(
+          { guildId },
+          'No voice channels with sufficient members found during scan'
+        );
+      });
+    });
+
+    describe('non-voice channel filtering', () => {
+      it('should filter out text channels from scan results', async () => {
+        const guildId = 'mixed-channel-guild';
+
+        const textChannel: any = {
+          id: 'text-1',
+          name: 'General Chat',
+          isVoiceBased: () => false,
+        };
+
+        const voiceChannel: any = {
+          id: 'voice-1',
+          name: 'Voice Chat',
+          isVoiceBased: () => true,
+          members: new Collection<string, GuildMember>([
+            ['user1', { user: { bot: false } } as GuildMember],
+            ['user2', { user: { bot: false } } as GuildMember],
+          ]),
+          guild: { id: guildId },
+        };
+
+        const channels = new Collection<string, any>([
+          ['text-1', textChannel],
+          ['voice-1', voiceChannel],
+        ]);
+
+        const mockGuild: any = {
+          id: guildId,
+          name: 'Mixed Channel Guild',
+          channels: {
+            fetch: vi.fn().mockResolvedValue(channels),
+          },
+        };
+
+        vi.mocked(mockGuildConfig.getConfig).mockReturnValue(createEnabledConfig(guildId));
+        vi.mocked(mockConnectionManager.hasConnection).mockReturnValue(false);
+
+        await (service as any).scanGuild(mockGuild);
+
+        // Should only join voice channel, not text channel
+        expect(mockConnectionManager.joinChannel).toHaveBeenCalledWith(voiceChannel);
+        expect(mockConnectionManager.joinChannel).toHaveBeenCalledTimes(1);
+      });
+
+      it('should filter out multiple non-voice channel types', async () => {
+        const guildId = 'various-types-guild';
+
+        const textChannel: any = {
+          id: 'text-1',
+          name: 'Text',
+          isVoiceBased: () => false,
+        };
+
+        const categoryChannel: any = {
+          id: 'category-1',
+          name: 'Category',
+          isVoiceBased: () => false,
+        };
+
+        const announcementChannel: any = {
+          id: 'announcement-1',
+          name: 'Announcements',
+          isVoiceBased: () => false,
+        };
+
+        const forumChannel: any = {
+          id: 'forum-1',
+          name: 'Forum',
+          isVoiceBased: () => false,
+        };
+
+        const voiceChannel: any = {
+          id: 'voice-1',
+          name: 'Voice',
+          isVoiceBased: () => true,
+          members: new Collection<string, GuildMember>([
+            ['user1', { user: { bot: false } } as GuildMember],
+            ['user2', { user: { bot: false } } as GuildMember],
+          ]),
+          guild: { id: guildId },
+        };
+
+        const channels = new Collection<string, any>([
+          ['text-1', textChannel],
+          ['category-1', categoryChannel],
+          ['announcement-1', announcementChannel],
+          ['forum-1', forumChannel],
+          ['voice-1', voiceChannel],
+        ]);
+
+        const mockGuild: any = {
+          id: guildId,
+          name: 'Various Types Guild',
+          channels: {
+            fetch: vi.fn().mockResolvedValue(channels),
+          },
+        };
+
+        vi.mocked(mockGuildConfig.getConfig).mockReturnValue(createEnabledConfig(guildId));
+        vi.mocked(mockConnectionManager.hasConnection).mockReturnValue(false);
+
+        await (service as any).scanGuild(mockGuild);
+
+        // Should only join the voice channel
+        expect(mockConnectionManager.joinChannel).toHaveBeenCalledWith(voiceChannel);
+        expect(mockConnectionManager.joinChannel).toHaveBeenCalledTimes(1);
+      });
+
+      it('should handle guild with only non-voice channels', async () => {
+        const guildId = 'no-voice-guild';
+
+        const textChannel1: any = {
+          id: 'text-1',
+          name: 'General',
+          isVoiceBased: () => false,
+        };
+
+        const textChannel2: any = {
+          id: 'text-2',
+          name: 'Random',
+          isVoiceBased: () => false,
+        };
+
+        const channels = new Collection<string, any>([
+          ['text-1', textChannel1],
+          ['text-2', textChannel2],
+        ]);
+
+        const mockGuild: any = {
+          id: guildId,
+          name: 'No Voice Guild',
+          channels: {
+            fetch: vi.fn().mockResolvedValue(channels),
+          },
+        };
+
+        vi.mocked(mockGuildConfig.getConfig).mockReturnValue(createEnabledConfig(guildId));
+        vi.mocked(mockConnectionManager.hasConnection).mockReturnValue(false);
+
+        await (service as any).scanGuild(mockGuild);
+
+        expect(mockConnectionManager.joinChannel).not.toHaveBeenCalled();
+        expect(mockLogger.debug).toHaveBeenCalledWith(
+          { guildId },
+          'No voice channels with sufficient members found during scan'
+        );
+      });
+
+      it('should handle channels where isVoiceBased throws an error', async () => {
+        const guildId = 'broken-channel-guild';
+
+        const brokenChannel: any = {
+          id: 'broken-1',
+          name: 'Broken',
+          isVoiceBased: () => {
+            throw new Error('isVoiceBased check failed');
+          },
+        };
+
+        const channels = new Collection<string, any>([
+          ['broken-1', brokenChannel],
+        ]);
+
+        const mockGuild: any = {
+          id: guildId,
+          name: 'Broken Channel Guild',
+          channels: {
+            fetch: vi.fn().mockResolvedValue(channels),
+          },
+        };
+
+        vi.mocked(mockGuildConfig.getConfig).mockReturnValue(createEnabledConfig(guildId));
+        vi.mocked(mockConnectionManager.hasConnection).mockReturnValue(false);
+
+        await (service as any).scanGuild(mockGuild);
+
+        // The error in filter should be caught by the outer try-catch
+        expect(mockLogger.error).toHaveBeenCalledWith(
+          expect.objectContaining({
+            error: expect.objectContaining({
+              message: expect.stringContaining('isVoiceBased'),
+              stack: expect.any(String)
+            }),
+            guildId,
+            guildName: 'Broken Channel Guild',
+          }),
+          'Error scanning guild for voice channels'
+        );
+      });
+    });
+
+    describe('combined null and non-voice filtering', () => {
+      it('should handle collection with both nulls and non-voice channels', async () => {
+        const guildId = 'complex-guild';
+
+        const textChannel: any = {
+          id: 'text-1',
+          name: 'Text',
+          isVoiceBased: () => false,
+        };
+
+        const voiceChannel: any = {
+          id: 'voice-1',
+          name: 'Voice',
+          isVoiceBased: () => true,
+          members: new Collection<string, GuildMember>([
+            ['user1', { user: { bot: false } } as GuildMember],
+            ['user2', { user: { bot: false } } as GuildMember],
+          ]),
+          guild: { id: guildId },
+        };
+
+        const complexCollection = new Collection<string, any>([
+          ['null-1', null],
+          ['text-1', textChannel],
+          ['null-2', null],
+          ['voice-1', voiceChannel],
+          ['null-3', null],
+        ]);
+
+        const mockGuild: any = {
+          id: guildId,
+          name: 'Complex Guild',
+          channels: {
+            fetch: vi.fn().mockResolvedValue(complexCollection),
+          },
+        };
+
+        vi.mocked(mockGuildConfig.getConfig).mockReturnValue(createEnabledConfig(guildId));
+        vi.mocked(mockConnectionManager.hasConnection).mockReturnValue(false);
+
+        await (service as any).scanGuild(mockGuild);
+
+        // Should successfully filter out both nulls and non-voice channels
+        expect(mockConnectionManager.joinChannel).toHaveBeenCalledWith(voiceChannel);
+        expect(mockConnectionManager.joinChannel).toHaveBeenCalledTimes(1);
       });
     });
   });
@@ -1093,7 +1490,12 @@ describe('VoiceMonitorService', () => {
         await service.initialize();
 
         expect(mockLogger.error).toHaveBeenCalledWith(
-          expect.objectContaining({ error }),
+          expect.objectContaining({
+            error: expect.objectContaining({
+              message: expect.any(String),
+              stack: expect.any(String)
+            })
+          }),
           'Error scanning guild for voice channels'
         );
         expect(mockLogger.info).toHaveBeenCalledWith('VoiceMonitorService initialization complete');

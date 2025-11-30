@@ -9,7 +9,9 @@
     "start": "tsx src/index.ts",
     "dev": "tsx src/index.ts",
     "test": "vitest",
-    "test:run": "vitest run"
+    "test:run": "vitest run",
+    "lint": "eslint src --ext .ts",
+    "lint:fix": "eslint src --ext .ts --fix"
   },
   "keywords": ["discord", "bot", "afk"],
   "author": "",
@@ -25,6 +27,9 @@
   "devDependencies": {
     "@types/better-sqlite3": "^7.6.11",
     "@types/node": "^22.0.0",
+    "@typescript-eslint/eslint-plugin": "^7.0.0",
+    "@typescript-eslint/parser": "^7.0.0",
+    "eslint": "^8.57.0",
     "pino-pretty": "^11.0.0",
     "tsx": "^4.19.0",
     "typescript": "^5.5.0",

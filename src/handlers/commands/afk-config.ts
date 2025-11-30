@@ -124,6 +124,8 @@ export async function execute(
     return;
   }
 
+  const guildId = interaction.guildId;
+
   if (!hasAFKAdminPermission(interaction, configService)) {
     await interaction.reply({
       content: 'You do not have permission to use this command. You need Administrator permission or an admin role.',
@@ -137,30 +139,30 @@ export async function execute(
 
   try {
     if (subcommandGroup === 'exempt') {
-      await handleExemptSubcommands(interaction, configService, subcommand);
+      await handleExemptSubcommands(interaction, configService, subcommand, guildId);
       return;
     }
 
     if (subcommandGroup === 'admin') {
-      await handleAdminSubcommands(interaction, configService, subcommand);
+      await handleAdminSubcommands(interaction, configService, subcommand, guildId);
       return;
     }
 
     switch (subcommand) {
       case 'enable':
-        await handleEnableCommand(interaction, configService);
+        await handleEnableCommand(interaction, configService, guildId);
         break;
       case 'disable':
-        await handleDisableCommand(interaction, configService);
+        await handleDisableCommand(interaction, configService, guildId);
         break;
       case 'timeout':
-        await handleTimeoutCommand(interaction, configService);
+        await handleTimeoutCommand(interaction, configService, guildId);
         break;
       case 'warning':
-        await handleWarningCommand(interaction, configService);
+        await handleWarningCommand(interaction, configService, guildId);
         break;
       case 'channel':
-        await handleChannelCommand(interaction, configService);
+        await handleChannelCommand(interaction, configService, guildId);
         break;
       default:
         await interaction.reply({
@@ -188,9 +190,10 @@ export async function execute(
 
 async function handleEnableCommand(
   interaction: ChatInputCommandInteraction,
-  configService: GuildConfigService
+  configService: GuildConfigService,
+  guildId: string
 ): Promise<void> {
-  await configService.updateConfig(interaction.guildId!, { enabled: true });
+  await configService.updateConfig(guildId, { enabled: true });
   await interaction.reply({
     content: 'AFK detection has been enabled.',
     ephemeral: true,
@@ -199,9 +202,10 @@ async function handleEnableCommand(
 
 async function handleDisableCommand(
   interaction: ChatInputCommandInteraction,
-  configService: GuildConfigService
+  configService: GuildConfigService,
+  guildId: string
 ): Promise<void> {
-  await configService.updateConfig(interaction.guildId!, { enabled: false });
+  await configService.updateConfig(guildId, { enabled: false });
   await interaction.reply({
     content: 'AFK detection has been disabled.',
     ephemeral: true,
@@ -210,10 +214,11 @@ async function handleDisableCommand(
 
 async function handleTimeoutCommand(
   interaction: ChatInputCommandInteraction,
-  configService: GuildConfigService
+  configService: GuildConfigService,
+  guildId: string
 ): Promise<void> {
   const timeoutSeconds = interaction.options.getInteger('seconds', true);
-  const currentConfig = configService.getConfig(interaction.guildId!);
+  const currentConfig = configService.getConfig(guildId);
 
   if (timeoutSeconds <= currentConfig.warningSecondsBefore) {
     await interaction.reply({
@@ -223,7 +228,7 @@ async function handleTimeoutCommand(
     return;
   }
 
-  await configService.updateConfig(interaction.guildId!, {
+  await configService.updateConfig(guildId, {
     afkTimeoutSeconds: timeoutSeconds,
   });
 
@@ -236,10 +241,11 @@ async function handleTimeoutCommand(
 
 async function handleWarningCommand(
   interaction: ChatInputCommandInteraction,
-  configService: GuildConfigService
+  configService: GuildConfigService,
+  guildId: string
 ): Promise<void> {
   const warningSeconds = interaction.options.getInteger('seconds', true);
-  const currentConfig = configService.getConfig(interaction.guildId!);
+  const currentConfig = configService.getConfig(guildId);
 
   if (warningSeconds >= currentConfig.afkTimeoutSeconds) {
     await interaction.reply({
@@ -249,7 +255,7 @@ async function handleWarningCommand(
     return;
   }
 
-  await configService.updateConfig(interaction.guildId!, {
+  await configService.updateConfig(guildId, {
     warningSecondsBefore: warningSeconds,
   });
 
@@ -261,11 +267,12 @@ async function handleWarningCommand(
 
 async function handleChannelCommand(
   interaction: ChatInputCommandInteraction,
-  configService: GuildConfigService
+  configService: GuildConfigService,
+  guildId: string
 ): Promise<void> {
   const channel = interaction.options.getChannel('channel', true);
 
-  await configService.updateConfig(interaction.guildId!, {
+  await configService.updateConfig(guildId, {
     warningChannelId: channel.id,
   });
 
@@ -278,10 +285,11 @@ async function handleChannelCommand(
 async function handleExemptSubcommands(
   interaction: ChatInputCommandInteraction,
   configService: GuildConfigService,
-  subcommand: string
+  subcommand: string,
+  guildId: string
 ): Promise<void> {
   const role = interaction.options.getRole('role', true);
-  const currentConfig = configService.getConfig(interaction.guildId!);
+  const currentConfig = configService.getConfig(guildId);
 
   if (subcommand === 'add') {
     if (currentConfig.exemptRoleIds.includes(role.id)) {
@@ -293,7 +301,7 @@ async function handleExemptSubcommands(
     }
 
     const updatedExemptRoles = [...currentConfig.exemptRoleIds, role.id];
-    await configService.updateConfig(interaction.guildId!, {
+    await configService.updateConfig(guildId, {
       exemptRoleIds: updatedExemptRoles,
     });
 
@@ -313,7 +321,7 @@ async function handleExemptSubcommands(
     const updatedExemptRoles = currentConfig.exemptRoleIds.filter(
       (id) => id !== role.id
     );
-    await configService.updateConfig(interaction.guildId!, {
+    await configService.updateConfig(guildId, {
       exemptRoleIds: updatedExemptRoles,
     });
 
@@ -327,10 +335,11 @@ async function handleExemptSubcommands(
 async function handleAdminSubcommands(
   interaction: ChatInputCommandInteraction,
   configService: GuildConfigService,
-  subcommand: string
+  subcommand: string,
+  guildId: string
 ): Promise<void> {
   const role = interaction.options.getRole('role', true);
-  const currentConfig = configService.getConfig(interaction.guildId!);
+  const currentConfig = configService.getConfig(guildId);
 
   if (subcommand === 'add') {
     if (currentConfig.adminRoleIds.includes(role.id)) {
@@ -342,7 +351,7 @@ async function handleAdminSubcommands(
     }
 
     const updatedAdminRoles = [...currentConfig.adminRoleIds, role.id];
-    await configService.updateConfig(interaction.guildId!, {
+    await configService.updateConfig(guildId, {
       adminRoleIds: updatedAdminRoles,
     });
 
@@ -362,7 +371,7 @@ async function handleAdminSubcommands(
     const updatedAdminRoles = currentConfig.adminRoleIds.filter(
       (id) => id !== role.id
     );
-    await configService.updateConfig(interaction.guildId!, {
+    await configService.updateConfig(guildId, {
       adminRoleIds: updatedAdminRoles,
     });
 

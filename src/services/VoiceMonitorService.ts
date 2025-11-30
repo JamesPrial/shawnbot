@@ -58,11 +58,9 @@ export class VoiceMonitorService {
 
       // Filter to voice-based channels with 2+ non-bot members
       const eligibleChannels = channels.filter((channel): channel is VoiceBasedChannel => {
-        if (!channel?.isVoiceBased()) return false;
-
-        // TypeScript knows this is voice-based now, safe to access members
-        const voiceChannel = channel as VoiceBasedChannel;
-        const nonBotCount = voiceChannel.members.filter(m => !m.user.bot).size;
+        if (channel === null) return false;
+        if (!channel.isVoiceBased()) return false;
+        const nonBotCount = channel.members.filter(m => !m.user.bot).size;
         return nonBotCount >= MIN_USERS_FOR_AFK_TRACKING;
       });
 
@@ -91,7 +89,11 @@ export class VoiceMonitorService {
       }
     } catch (error) {
       this.logger.error(
-        { error, guildId: guild.id, guildName: guild.name },
+        {
+          error: error instanceof Error ? { message: error.message, stack: error.stack } : error,
+          guildId: guild.id,
+          guildName: guild.name
+        },
         'Error scanning guild for voice channels'
       );
     }
@@ -106,7 +108,11 @@ export class VoiceMonitorService {
         await this.scanGuild(guild);
       } catch (error) {
         this.logger.error(
-          { error, guildId, guildName: guild.name },
+          {
+            error: error instanceof Error ? { message: error.message, stack: error.stack } : error,
+            guildId,
+            guildName: guild.name
+          },
           'Error during guild scan in initialization'
         );
         // Continue with other guilds even if one fails
@@ -137,7 +143,11 @@ export class VoiceMonitorService {
       return isEmpty;
     } catch (error) {
       this.logger.error(
-        { error, guildId, channelId },
+        {
+          error: error instanceof Error ? { message: error.message, stack: error.stack } : error,
+          guildId,
+          channelId
+        },
         'Error checking if channel is empty'
       );
       return true;

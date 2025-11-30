@@ -7,6 +7,8 @@ export interface SpeakingTrackerEvents {
   userStoppedSpeaking: (userId: string, guildId: string) => void;
 }
 
+// ESLint disable for intentional declaration merging pattern (typed EventEmitter)
+// eslint-disable-next-line @typescript-eslint/no-unsafe-declaration-merging
 export declare interface SpeakingTracker {
   on<Event extends keyof SpeakingTrackerEvents>(
     event: Event,
@@ -24,6 +26,7 @@ export declare interface SpeakingTracker {
   ): boolean;
 }
 
+// eslint-disable-next-line @typescript-eslint/no-unsafe-declaration-merging
 export class SpeakingTracker extends EventEmitter {
   private connections: Map<string, VoiceConnection>;
   private logger: Logger;

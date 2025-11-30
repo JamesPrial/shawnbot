@@ -30,9 +30,10 @@ export class VoiceConnectionManager {
   public async joinChannel(channel: VoiceBasedChannel): Promise<VoiceConnection> {
     const guildId = channel.guild.id;
 
-    if (this.connections.has(guildId)) {
+    const existingConnection = this.connections.get(guildId);
+    if (existingConnection) {
       this.logger.warn({ guildId, channelId: channel.id }, 'Already connected to a channel in this guild');
-      return this.connections.get(guildId)!;
+      return existingConnection;
     }
 
     this.logger.info({ guildId, channelId: channel.id }, 'Joining voice channel');

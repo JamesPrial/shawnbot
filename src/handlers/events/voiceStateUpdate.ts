@@ -41,8 +41,6 @@ export function createVoiceStateUpdateHandler(deps: VoiceStateHandlerDeps) {
 
     const oldChannel = oldState.channel;
     const newChannel = newState.channel;
-    const oldChannelId = oldChannel?.id;
-    const newChannelId = newChannel?.id;
 
     // User joined a channel
     if (!oldChannel && newChannel) {
