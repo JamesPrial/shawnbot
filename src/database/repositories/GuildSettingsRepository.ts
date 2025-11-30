@@ -7,6 +7,7 @@ export interface GuildSettings {
   warningSecondsBefore: number;
   warningChannelId: string | null;
   exemptRoleIds: string[];
+  adminRoleIds: string[];
   createdAt: string;
   updatedAt: string;
 }
@@ -18,6 +19,7 @@ interface GuildSettingsRow {
   warning_seconds_before: number;
   warning_channel_id: string | null;
   exempt_role_ids: string | null;
+  admin_role_ids: string | null;
   created_at: string;
   updated_at: string;
 }
@@ -48,6 +50,10 @@ export class GuildSettingsRepository {
       ? JSON.stringify(settings.exemptRoleIds)
       : null;
 
+    const adminRoleIdsJson = settings.adminRoleIds
+      ? JSON.stringify(settings.adminRoleIds)
+      : null;
+
     const statement = this.db.prepare(`
       INSERT INTO guild_settings (
         guild_id,
@@ -56,14 +62,16 @@ export class GuildSettingsRepository {
         warning_seconds_before,
         warning_channel_id,
         exempt_role_ids,
+        admin_role_ids,
         updated_at
-      ) VALUES (?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
       ON CONFLICT(guild_id) DO UPDATE SET
         enabled = COALESCE(excluded.enabled, enabled),
         afk_timeout_seconds = COALESCE(excluded.afk_timeout_seconds, afk_timeout_seconds),
         warning_seconds_before = COALESCE(excluded.warning_seconds_before, warning_seconds_before),
         warning_channel_id = COALESCE(excluded.warning_channel_id, warning_channel_id),
         exempt_role_ids = COALESCE(excluded.exempt_role_ids, exempt_role_ids),
+        admin_role_ids = COALESCE(excluded.admin_role_ids, admin_role_ids),
         updated_at = CURRENT_TIMESTAMP
     `);
 
@@ -73,7 +81,8 @@ export class GuildSettingsRepository {
       settings.afkTimeoutSeconds ?? null,
       settings.warningSecondsBefore ?? null,
       settings.warningChannelId ?? null,
-      exemptRoleIdsJson
+      exemptRoleIdsJson,
+      adminRoleIdsJson
     );
   }
 
@@ -90,6 +99,10 @@ export class GuildSettingsRepository {
       ? JSON.parse(row.exempt_role_ids) as string[]
       : [];
 
+    const adminRoleIds = row.admin_role_ids
+      ? JSON.parse(row.admin_role_ids) as string[]
+      : [];
+
     return {
       guildId: row.guild_id,
       enabled: row.enabled === 1,
@@ -97,6 +110,7 @@ export class GuildSettingsRepository {
       warningSecondsBefore: row.warning_seconds_before,
       warningChannelId: row.warning_channel_id,
       exemptRoleIds,
+      adminRoleIds,
       createdAt: row.created_at,
       updatedAt: row.updated_at
     };

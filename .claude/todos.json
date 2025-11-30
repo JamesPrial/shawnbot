@@ -2956,5 +2956,534 @@
         "activeForm": "Committing and pushing changes"
       }
     ]
+  },
+  {
+    "timestamp": "2025-11-30T18:57:45.817938Z",
+    "session_id": "a8f9ef45-b7b6-43c0-8151-ef1e59e89611",
+    "cwd": "/home/jamesprial/code/shawnbot",
+    "todos": [
+      {
+        "content": "Create feature branch feat/admin-roles",
+        "status": "completed",
+        "activeForm": "Creating feature branch"
+      },
+      {
+        "content": "Phase 2: Parallel implementation",
+        "status": "in_progress",
+        "activeForm": "Implementing changes"
+      },
+      {
+        "content": "Phase 3: Parallel review + test",
+        "status": "pending",
+        "activeForm": "Reviewing code and running tests"
+      },
+      {
+        "content": "Phase 4: Unit-level verdict",
+        "status": "pending",
+        "activeForm": "Evaluating unit verdicts"
+      },
+      {
+        "content": "Phase 5: Final integration review",
+        "status": "pending",
+        "activeForm": "Running final integration review"
+      },
+      {
+        "content": "Phase 6: Git operations (commit + merge)",
+        "status": "pending",
+        "activeForm": "Committing and merging changes"
+      }
+    ]
+  },
+  {
+    "timestamp": "2025-11-30T18:58:25.185796Z",
+    "session_id": "a8f9ef45-b7b6-43c0-8151-ef1e59e89611",
+    "cwd": "/home/jamesprial/code/shawnbot",
+    "todos": [
+      {
+        "content": "Add admin_role_ids column to database schema",
+        "status": "in_progress",
+        "activeForm": "Adding admin_role_ids column to database schema"
+      },
+      {
+        "content": "Update GuildSettingsRepository interfaces and methods",
+        "status": "pending",
+        "activeForm": "Updating GuildSettingsRepository interfaces and methods"
+      },
+      {
+        "content": "Add adminRoleIds to DEFAULT_CONFIG in GuildConfigService",
+        "status": "pending",
+        "activeForm": "Adding adminRoleIds to DEFAULT_CONFIG in GuildConfigService"
+      },
+      {
+        "content": "Implement permission check and admin subcommands in afk-config.ts",
+        "status": "pending",
+        "activeForm": "Implementing permission check and admin subcommands in afk-config.ts"
+      },
+      {
+        "content": "Add permission check and admin roles display to afk-status.ts",
+        "status": "pending",
+        "activeForm": "Adding permission check and admin roles display to afk-status.ts"
+      }
+    ]
+  },
+  {
+    "timestamp": "2025-11-30T18:58:35.799962Z",
+    "session_id": "a8f9ef45-b7b6-43c0-8151-ef1e59e89611",
+    "cwd": "/home/jamesprial/code/shawnbot",
+    "todos": [
+      {
+        "content": "Add admin_role_ids column to database schema",
+        "status": "completed",
+        "activeForm": "Adding admin_role_ids column to database schema"
+      },
+      {
+        "content": "Update GuildSettingsRepository interfaces and methods",
+        "status": "in_progress",
+        "activeForm": "Updating GuildSettingsRepository interfaces and methods"
+      },
+      {
+        "content": "Add adminRoleIds to DEFAULT_CONFIG in GuildConfigService",
+        "status": "pending",
+        "activeForm": "Adding adminRoleIds to DEFAULT_CONFIG in GuildConfigService"
+      },
+      {
+        "content": "Implement permission check and admin subcommands in afk-config.ts",
+        "status": "pending",
+        "activeForm": "Implementing permission check and admin subcommands in afk-config.ts"
+      },
+      {
+        "content": "Add permission check and admin roles display to afk-status.ts",
+        "status": "pending",
+        "activeForm": "Adding permission check and admin roles display to afk-status.ts"
+      }
+    ]
+  },
+  {
+    "timestamp": "2025-11-30T18:59:06.151069Z",
+    "session_id": "a8f9ef45-b7b6-43c0-8151-ef1e59e89611",
+    "cwd": "/home/jamesprial/code/shawnbot",
+    "todos": [
+      {
+        "content": "Add admin_role_ids column to database schema",
+        "status": "completed",
+        "activeForm": "Adding admin_role_ids column to database schema"
+      },
+      {
+        "content": "Update GuildSettingsRepository interfaces and methods",
+        "status": "completed",
+        "activeForm": "Updating GuildSettingsRepository interfaces and methods"
+      },
+      {
+        "content": "Add adminRoleIds to DEFAULT_CONFIG in GuildConfigService",
+        "status": "in_progress",
+        "activeForm": "Adding adminRoleIds to DEFAULT_CONFIG in GuildConfigService"
+      },
+      {
+        "content": "Implement permission check and admin subcommands in afk-config.ts",
+        "status": "pending",
+        "activeForm": "Implementing permission check and admin subcommands in afk-config.ts"
+      },
+      {
+        "content": "Add permission check and admin roles display to afk-status.ts",
+        "status": "pending",
+        "activeForm": "Adding permission check and admin roles display to afk-status.ts"
+      }
+    ]
+  },
+  {
+    "timestamp": "2025-11-30T18:59:15.968485Z",
+    "session_id": "a8f9ef45-b7b6-43c0-8151-ef1e59e89611",
+    "cwd": "/home/jamesprial/code/shawnbot",
+    "todos": [
+      {
+        "content": "Add admin_role_ids column to database schema",
+        "status": "completed",
+        "activeForm": "Adding admin_role_ids column to database schema"
+      },
+      {
+        "content": "Update GuildSettingsRepository interfaces and methods",
+        "status": "completed",
+        "activeForm": "Updating GuildSettingsRepository interfaces and methods"
+      },
+      {
+        "content": "Add adminRoleIds to DEFAULT_CONFIG in GuildConfigService",
+        "status": "completed",
+        "activeForm": "Adding adminRoleIds to DEFAULT_CONFIG in GuildConfigService"
+      },
+      {
+        "content": "Implement permission check and admin subcommands in afk-config.ts",
+        "status": "in_progress",
+        "activeForm": "Implementing permission check and admin subcommands in afk-config.ts"
+      },
+      {
+        "content": "Add permission check and admin roles display to afk-status.ts",
+        "status": "pending",
+        "activeForm": "Adding permission check and admin roles display to afk-status.ts"
+      }
+    ]
+  },
+  {
+    "timestamp": "2025-11-30T18:59:29.460675Z",
+    "session_id": "a8f9ef45-b7b6-43c0-8151-ef1e59e89611",
+    "cwd": "/home/jamesprial/code/shawnbot",
+    "todos": [
+      {
+        "content": "Analyze the admin roles feature requirements and implementation status",
+        "status": "completed",
+        "activeForm": "Analyzing the admin roles feature requirements and implementation status"
+      },
+      {
+        "content": "Write comprehensive tests for admin roles permission checks",
+        "status": "in_progress",
+        "activeForm": "Writing comprehensive tests for admin roles permission checks"
+      },
+      {
+        "content": "Write tests for adding admin roles via commands",
+        "status": "pending",
+        "activeForm": "Writing tests for adding admin roles via commands"
+      },
+      {
+        "content": "Write tests for removing admin roles via commands",
+        "status": "pending",
+        "activeForm": "Writing tests for removing admin roles via commands"
+      },
+      {
+        "content": "Write tests for admin roles display in status",
+        "status": "pending",
+        "activeForm": "Writing tests for admin roles display in status"
+      }
+    ]
+  },
+  {
+    "timestamp": "2025-11-30T19:00:05.420813Z",
+    "session_id": "a8f9ef45-b7b6-43c0-8151-ef1e59e89611",
+    "cwd": "/home/jamesprial/code/shawnbot",
+    "todos": [
+      {
+        "content": "Add admin_role_ids column to database schema",
+        "status": "completed",
+        "activeForm": "Adding admin_role_ids column to database schema"
+      },
+      {
+        "content": "Update GuildSettingsRepository interfaces and methods",
+        "status": "completed",
+        "activeForm": "Updating GuildSettingsRepository interfaces and methods"
+      },
+      {
+        "content": "Add adminRoleIds to DEFAULT_CONFIG in GuildConfigService",
+        "status": "completed",
+        "activeForm": "Adding adminRoleIds to DEFAULT_CONFIG in GuildConfigService"
+      },
+      {
+        "content": "Implement permission check and admin subcommands in afk-config.ts",
+        "status": "completed",
+        "activeForm": "Implementing permission check and admin subcommands in afk-config.ts"
+      },
+      {
+        "content": "Add permission check and admin roles display to afk-status.ts",
+        "status": "in_progress",
+        "activeForm": "Adding permission check and admin roles display to afk-status.ts"
+      }
+    ]
+  },
+  {
+    "timestamp": "2025-11-30T19:00:35.758809Z",
+    "session_id": "a8f9ef45-b7b6-43c0-8151-ef1e59e89611",
+    "cwd": "/home/jamesprial/code/shawnbot",
+    "todos": [
+      {
+        "content": "Add admin_role_ids column to database schema",
+        "status": "completed",
+        "activeForm": "Adding admin_role_ids column to database schema"
+      },
+      {
+        "content": "Update GuildSettingsRepository interfaces and methods",
+        "status": "completed",
+        "activeForm": "Updating GuildSettingsRepository interfaces and methods"
+      },
+      {
+        "content": "Add adminRoleIds to DEFAULT_CONFIG in GuildConfigService",
+        "status": "completed",
+        "activeForm": "Adding adminRoleIds to DEFAULT_CONFIG in GuildConfigService"
+      },
+      {
+        "content": "Implement permission check and admin subcommands in afk-config.ts",
+        "status": "completed",
+        "activeForm": "Implementing permission check and admin subcommands in afk-config.ts"
+      },
+      {
+        "content": "Add permission check and admin roles display to afk-status.ts",
+        "status": "completed",
+        "activeForm": "Adding permission check and admin roles display to afk-status.ts"
+      }
+    ]
+  },
+  {
+    "timestamp": "2025-11-30T19:01:28.876401Z",
+    "session_id": "a8f9ef45-b7b6-43c0-8151-ef1e59e89611",
+    "cwd": "/home/jamesprial/code/shawnbot",
+    "todos": [
+      {
+        "content": "Analyze the admin roles feature requirements and implementation status",
+        "status": "completed",
+        "activeForm": "Analyzing the admin roles feature requirements and implementation status"
+      },
+      {
+        "content": "Write comprehensive tests for admin roles permission checks",
+        "status": "completed",
+        "activeForm": "Writing comprehensive tests for admin roles permission checks"
+      },
+      {
+        "content": "Write tests for adding admin roles via commands",
+        "status": "completed",
+        "activeForm": "Writing tests for adding admin roles via commands"
+      },
+      {
+        "content": "Write tests for removing admin roles via commands",
+        "status": "completed",
+        "activeForm": "Writing tests for removing admin roles via commands"
+      },
+      {
+        "content": "Write tests for admin roles display in status",
+        "status": "completed",
+        "activeForm": "Writing tests for admin roles display in status"
+      }
+    ]
+  },
+  {
+    "timestamp": "2025-11-30T19:02:15.664684Z",
+    "session_id": "a8f9ef45-b7b6-43c0-8151-ef1e59e89611",
+    "cwd": "/home/jamesprial/code/shawnbot",
+    "todos": [
+      {
+        "content": "Create feature branch feat/admin-roles",
+        "status": "completed",
+        "activeForm": "Creating feature branch"
+      },
+      {
+        "content": "Phase 2: Parallel implementation",
+        "status": "completed",
+        "activeForm": "Implementing changes"
+      },
+      {
+        "content": "Phase 3: Parallel review + test",
+        "status": "in_progress",
+        "activeForm": "Reviewing code and running tests"
+      },
+      {
+        "content": "Phase 4: Unit-level verdict",
+        "status": "pending",
+        "activeForm": "Evaluating unit verdicts"
+      },
+      {
+        "content": "Phase 5: Final integration review",
+        "status": "pending",
+        "activeForm": "Running final integration review"
+      },
+      {
+        "content": "Phase 6: Git operations (commit + merge)",
+        "status": "pending",
+        "activeForm": "Committing and merging changes"
+      }
+    ]
+  },
+  {
+    "timestamp": "2025-11-30T19:03:27.626104Z",
+    "session_id": "a8f9ef45-b7b6-43c0-8151-ef1e59e89611",
+    "cwd": "/home/jamesprial/code/shawnbot",
+    "todos": [
+      {
+        "content": "Create feature branch feat/admin-roles",
+        "status": "completed",
+        "activeForm": "Creating feature branch"
+      },
+      {
+        "content": "Phase 2: Parallel implementation",
+        "status": "completed",
+        "activeForm": "Implementing changes"
+      },
+      {
+        "content": "Phase 3: Parallel review + test",
+        "status": "completed",
+        "activeForm": "Reviewing code and running tests"
+      },
+      {
+        "content": "Phase 4: Fix review issues and failing tests",
+        "status": "in_progress",
+        "activeForm": "Fixing issues from review"
+      },
+      {
+        "content": "Phase 5: Final integration review",
+        "status": "pending",
+        "activeForm": "Running final integration review"
+      },
+      {
+        "content": "Phase 6: Git operations (commit + merge)",
+        "status": "pending",
+        "activeForm": "Committing and merging changes"
+      }
+    ]
+  },
+  {
+    "timestamp": "2025-11-30T19:04:11.262903Z",
+    "session_id": "a8f9ef45-b7b6-43c0-8151-ef1e59e89611",
+    "cwd": "/home/jamesprial/code/shawnbot",
+    "todos": [
+      {
+        "content": "Fix GuildConfigService.test.ts - add adminRoleIds: [] to default config expectations",
+        "status": "in_progress",
+        "activeForm": "Fixing GuildConfigService.test.ts"
+      },
+      {
+        "content": "Fix AFKDetectionService.test.ts - add adminRoleIds: [] to all test config objects",
+        "status": "pending",
+        "activeForm": "Fixing AFKDetectionService.test.ts"
+      },
+      {
+        "content": "Rewrite adminRoles.test.ts to test actual production code instead of local helper",
+        "status": "pending",
+        "activeForm": "Rewriting adminRoles.test.ts"
+      }
+    ]
+  },
+  {
+    "timestamp": "2025-11-30T19:05:51.594880Z",
+    "session_id": "a8f9ef45-b7b6-43c0-8151-ef1e59e89611",
+    "cwd": "/home/jamesprial/code/shawnbot",
+    "todos": [
+      {
+        "content": "Fix GuildConfigService.test.ts - add adminRoleIds: [] to default config expectations",
+        "status": "completed",
+        "activeForm": "Fixing GuildConfigService.test.ts"
+      },
+      {
+        "content": "Fix AFKDetectionService.test.ts - add adminRoleIds: [] to all test config objects",
+        "status": "in_progress",
+        "activeForm": "Fixing AFKDetectionService.test.ts"
+      },
+      {
+        "content": "Rewrite adminRoles.test.ts to test actual production code instead of local helper",
+        "status": "pending",
+        "activeForm": "Rewriting adminRoles.test.ts"
+      }
+    ]
+  },
+  {
+    "timestamp": "2025-11-30T19:06:00.255572Z",
+    "session_id": "a8f9ef45-b7b6-43c0-8151-ef1e59e89611",
+    "cwd": "/home/jamesprial/code/shawnbot",
+    "todos": [
+      {
+        "content": "Fix GuildConfigService.test.ts - add adminRoleIds: [] to default config expectations",
+        "status": "completed",
+        "activeForm": "Fixing GuildConfigService.test.ts"
+      },
+      {
+        "content": "Fix AFKDetectionService.test.ts - add adminRoleIds: [] to all test config objects",
+        "status": "completed",
+        "activeForm": "Fixing AFKDetectionService.test.ts"
+      },
+      {
+        "content": "Rewrite adminRoles.test.ts to test actual production code instead of local helper",
+        "status": "in_progress",
+        "activeForm": "Rewriting adminRoles.test.ts"
+      }
+    ]
+  },
+  {
+    "timestamp": "2025-11-30T19:07:08.997630Z",
+    "session_id": "a8f9ef45-b7b6-43c0-8151-ef1e59e89611",
+    "cwd": "/home/jamesprial/code/shawnbot",
+    "todos": [
+      {
+        "content": "Fix GuildConfigService.test.ts - add adminRoleIds: [] to default config expectations",
+        "status": "completed",
+        "activeForm": "Fixing GuildConfigService.test.ts"
+      },
+      {
+        "content": "Fix AFKDetectionService.test.ts - add adminRoleIds: [] to all test config objects",
+        "status": "completed",
+        "activeForm": "Fixing AFKDetectionService.test.ts"
+      },
+      {
+        "content": "Rewrite adminRoles.test.ts to test actual production code instead of local helper",
+        "status": "completed",
+        "activeForm": "Rewriting adminRoles.test.ts"
+      }
+    ]
+  },
+  {
+    "timestamp": "2025-11-30T19:07:40.081087Z",
+    "session_id": "a8f9ef45-b7b6-43c0-8151-ef1e59e89611",
+    "cwd": "/home/jamesprial/code/shawnbot",
+    "todos": [
+      {
+        "content": "Create feature branch feat/admin-roles",
+        "status": "completed",
+        "activeForm": "Creating feature branch"
+      },
+      {
+        "content": "Phase 2: Parallel implementation",
+        "status": "completed",
+        "activeForm": "Implementing changes"
+      },
+      {
+        "content": "Phase 3: Parallel review + test",
+        "status": "completed",
+        "activeForm": "Reviewing code and running tests"
+      },
+      {
+        "content": "Phase 4: Fix review issues and failing tests",
+        "status": "completed",
+        "activeForm": "Fixing issues from review"
+      },
+      {
+        "content": "Phase 5: Final integration review",
+        "status": "in_progress",
+        "activeForm": "Running final integration review"
+      },
+      {
+        "content": "Phase 6: Git operations (commit + merge)",
+        "status": "pending",
+        "activeForm": "Committing and merging changes"
+      }
+    ]
+  },
+  {
+    "timestamp": "2025-11-30T19:12:06.641255Z",
+    "session_id": "a8f9ef45-b7b6-43c0-8151-ef1e59e89611",
+    "cwd": "/home/jamesprial/code/shawnbot",
+    "todos": [
+      {
+        "content": "Create feature branch feat/admin-roles",
+        "status": "completed",
+        "activeForm": "Creating feature branch"
+      },
+      {
+        "content": "Phase 2: Parallel implementation",
+        "status": "completed",
+        "activeForm": "Implementing changes"
+      },
+      {
+        "content": "Phase 3: Parallel review + test",
+        "status": "completed",
+        "activeForm": "Reviewing code and running tests"
+      },
+      {
+        "content": "Phase 4: Fix review issues and failing tests",
+        "status": "completed",
+        "activeForm": "Fixing issues from review"
+      },
+      {
+        "content": "Phase 5: Final integration review",
+        "status": "completed",
+        "activeForm": "Running final integration review"
+      },
+      {
+        "content": "Phase 6: Git operations (commit + merge)",
+        "status": "in_progress",
+        "activeForm": "Committing and merging changes"
+      }
+    ]
   }
 ]

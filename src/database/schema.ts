@@ -9,6 +9,7 @@ export function createTables(db: Database.Database): void {
       warning_seconds_before INTEGER DEFAULT 60,
       warning_channel_id TEXT,
       exempt_role_ids TEXT,
+      admin_role_ids TEXT,
       created_at TEXT DEFAULT CURRENT_TIMESTAMP,
       updated_at TEXT DEFAULT CURRENT_TIMESTAMP
     );

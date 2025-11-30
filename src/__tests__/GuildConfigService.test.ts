@@ -33,6 +33,7 @@ describe('GuildConfigService', () => {
           warningSecondsBefore: 60,
           warningChannelId: null,
           exemptRoleIds: [],
+          adminRoleIds: [],
           createdAt: expect.any(String),
           updatedAt: expect.any(String),
         });
@@ -75,6 +76,7 @@ describe('GuildConfigService', () => {
           warningSecondsBefore: 120,
           warningChannelId: 'channel-123',
           exemptRoleIds: ['role-1', 'role-2'],
+          adminRoleIds: [],
           createdAt: '2024-01-01T00:00:00.000Z',
           updatedAt: '2024-01-02T00:00:00.000Z',
         };
@@ -95,6 +97,7 @@ describe('GuildConfigService', () => {
           warningSecondsBefore: 60,
           warningChannelId: null,
           exemptRoleIds: [],
+          adminRoleIds: [],
           createdAt: '2024-01-01T00:00:00.000Z',
           updatedAt: '2024-01-01T00:00:00.000Z',
         };
@@ -116,6 +119,7 @@ describe('GuildConfigService', () => {
           warningSecondsBefore: 90,
           warningChannelId: 'channel-456',
           exemptRoleIds: ['role-admin'],
+          adminRoleIds: [],
           createdAt: '2024-01-01T00:00:00.000Z',
           updatedAt: '2024-01-01T00:00:00.000Z',
         };
@@ -165,6 +169,7 @@ describe('GuildConfigService', () => {
           warningSecondsBefore: 80,
           warningChannelId: 'channel-1',
           exemptRoleIds: ['role-1'],
+          adminRoleIds: [],
           createdAt: '2024-01-01T00:00:00.000Z',
           updatedAt: '2024-01-01T00:00:00.000Z',
         };
@@ -175,6 +180,7 @@ describe('GuildConfigService', () => {
           warningSecondsBefore: 160,
           warningChannelId: 'channel-2',
           exemptRoleIds: ['role-2'],
+          adminRoleIds: [],
           createdAt: '2024-01-02T00:00:00.000Z',
           updatedAt: '2024-01-02T00:00:00.000Z',
         };
@@ -212,6 +218,7 @@ describe('GuildConfigService', () => {
           warningSecondsBefore: 70,
           warningChannelId: null,
           exemptRoleIds: [],
+          adminRoleIds: [],
           createdAt: '2024-01-01T00:00:00.000Z',
           updatedAt: '2024-01-01T00:00:00.000Z',
         };
@@ -241,6 +248,7 @@ describe('GuildConfigService', () => {
         warningSecondsBefore: 60,
         warningChannelId: null,
         exemptRoleIds: [],
+        adminRoleIds: [],
         createdAt: '2024-01-01T00:00:00.000Z',
         updatedAt: '2024-01-01T12:00:00.000Z',
       };
@@ -264,6 +272,7 @@ describe('GuildConfigService', () => {
         warningSecondsBefore: 90,
         warningChannelId: 'new-channel',
         exemptRoleIds: ['new-role'],
+        adminRoleIds: [],
         createdAt: '2024-01-01T00:00:00.000Z',
         updatedAt: '2024-01-01T13:00:00.000Z',
       };
@@ -294,6 +303,7 @@ describe('GuildConfigService', () => {
         warningSecondsBefore: 100,
         warningChannelId: 'channel-999',
         exemptRoleIds: [],
+        adminRoleIds: [],
         createdAt: '2024-01-01T00:00:00.000Z',
         updatedAt: '2024-01-01T14:00:00.000Z',
       };
@@ -327,6 +337,7 @@ describe('GuildConfigService', () => {
         warningSecondsBefore: 60,
         warningChannelId: null,
         exemptRoleIds: [],
+        adminRoleIds: [],
         createdAt: '2024-01-01T00:00:00.000Z',
         updatedAt: '2024-01-01T15:00:00.000Z',
       };
@@ -351,6 +362,7 @@ describe('GuildConfigService', () => {
         warningSecondsBefore: 60,
         warningChannelId: null,
         exemptRoleIds: newRoles,
+        adminRoleIds: [],
         createdAt: '2024-01-01T00:00:00.000Z',
         updatedAt: '2024-01-01T16:00:00.000Z',
       };
@@ -378,6 +390,7 @@ describe('GuildConfigService', () => {
       const updatedSettings: GuildSettings = {
         guildId,
         ...updates,
+        adminRoleIds: [],
         createdAt: '2024-01-01T00:00:00.000Z',
         updatedAt: '2024-01-01T17:00:00.000Z',
       };
@@ -402,6 +415,7 @@ describe('GuildConfigService', () => {
         warningSecondsBefore: 60,
         warningChannelId: null,
         exemptRoleIds: [],
+        adminRoleIds: [],
         createdAt: '2024-01-01T00:00:00.000Z',
         updatedAt: '2024-01-01T00:00:00.000Z',
       };
@@ -412,6 +426,7 @@ describe('GuildConfigService', () => {
         warningSecondsBefore: 120,
         warningChannelId: 'channel-new',
         exemptRoleIds: ['role-new'],
+        adminRoleIds: [],
         createdAt: '2024-01-01T00:00:00.000Z',
         updatedAt: '2024-01-01T18:00:00.000Z',
       };
@@ -444,6 +459,7 @@ describe('GuildConfigService', () => {
           warningSecondsBefore: 100,
           warningChannelId: null,
           exemptRoleIds: [],
+          adminRoleIds: [],
           createdAt: '2024-01-01T00:00:00.000Z',
           updatedAt: '2024-01-01T00:00:00.000Z',
         };
@@ -472,6 +488,7 @@ describe('GuildConfigService', () => {
           warningSecondsBefore: 80,
           warningChannelId: null,
           exemptRoleIds: [],
+          adminRoleIds: [],
           createdAt: '2024-01-01T00:00:00.000Z',
           updatedAt: '2024-01-01T00:00:00.000Z',
         };
@@ -482,6 +499,7 @@ describe('GuildConfigService', () => {
           warningSecondsBefore: 120,
           warningChannelId: null,
           exemptRoleIds: [],
+          adminRoleIds: [],
           createdAt: '2024-01-02T00:00:00.000Z',
           updatedAt: '2024-01-02T00:00:00.000Z',
         };
@@ -532,6 +550,7 @@ describe('GuildConfigService', () => {
           warningSecondsBefore: 60,
           warningChannelId: null,
           exemptRoleIds: [],
+          adminRoleIds: [],
           createdAt: '2024-01-01T00:00:00.000Z',
           updatedAt: '2024-01-01T00:00:00.000Z',
         });
@@ -571,6 +590,7 @@ describe('GuildConfigService', () => {
           warningSecondsBefore: 70,
           warningChannelId: null,
           exemptRoleIds: [],
+          adminRoleIds: [],
           createdAt: '2024-01-01T00:00:00.000Z',
           updatedAt: '2024-01-01T00:00:00.000Z',
         };

@@ -6,6 +6,7 @@ const DEFAULT_CONFIG: Omit<GuildSettings, 'guildId' | 'createdAt' | 'updatedAt'>
   warningSecondsBefore: 60,
   warningChannelId: null,
   exemptRoleIds: [],
+  adminRoleIds: [],
 };
 
 export class GuildConfigService {

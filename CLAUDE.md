@@ -5,9 +5,8 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 ## Commands
 
 ```bash
-npm run dev      # Run in development mode with tsx (hot reload)
-npm run build    # Compile TypeScript to dist/
-npm start        # Run compiled code from dist/
+npm start        # Run bot with tsx
+npm run dev      # Same as npm start
 npm test         # Run tests in watch mode (vitest)
 npm run test:run # Run tests once
 npm run typecheck # Type check without emitting

@@ -1,15 +1,14 @@
 import {
   SlashCommandBuilder,
-  PermissionFlagsBits,
   ChatInputCommandInteraction,
   EmbedBuilder,
 } from 'discord.js';
 import { GuildConfigService } from '../../services/GuildConfigService';
+import { hasAFKAdminPermission } from '../../utils/permissions';
 
 export const data = new SlashCommandBuilder()
   .setName('afk-status')
-  .setDescription('View AFK kick settings')
-  .setDefaultMemberPermissions(PermissionFlagsBits.ManageChannels);
+  .setDescription('View AFK kick settings');
 
 export async function execute(
   interaction: ChatInputCommandInteraction,
@@ -18,6 +17,14 @@ export async function execute(
   if (!interaction.guildId) {
     await interaction.reply({
       content: 'This command can only be used in a server.',
+      ephemeral: true,
+    });
+    return;
+  }
+
+  if (!hasAFKAdminPermission(interaction, configService)) {
+    await interaction.reply({
+      content: 'You do not have permission to use this command. You need Administrator permission or an admin role.',
       ephemeral: true,
     });
     return;
@@ -43,7 +50,14 @@ export async function execute(
     let exemptRolesDisplay = 'None';
     if (config.exemptRoleIds.length > 0) {
       exemptRolesDisplay = config.exemptRoleIds
-        .map((roleId: string) => `<@&${roleId}>`)
+        .map((roleId) => `<@&${roleId}>`)
+        .join(', ');
+    }
+
+    let adminRolesDisplay = 'None';
+    if (config.adminRoleIds.length > 0) {
+      adminRolesDisplay = config.adminRoleIds
+        .map((roleId) => `<@&${roleId}>`)
         .join(', ');
     }
 
@@ -74,6 +88,11 @@ export async function execute(
         {
           name: 'Exempt Roles',
           value: exemptRolesDisplay,
+          inline: false,
+        },
+        {
+          name: 'Admin Roles',
+          value: adminRolesDisplay,
           inline: false,
         }
       )

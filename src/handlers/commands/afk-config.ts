@@ -1,15 +1,14 @@
 import {
   SlashCommandBuilder,
-  PermissionFlagsBits,
   ChatInputCommandInteraction,
   ChannelType,
 } from 'discord.js';
 import { GuildConfigService } from '../../services/GuildConfigService';
+import { hasAFKAdminPermission } from '../../utils/permissions';
 
 export const data = new SlashCommandBuilder()
   .setName('afk-config')
   .setDescription('Configure AFK kick settings')
-  .setDefaultMemberPermissions(PermissionFlagsBits.Administrator)
   .addSubcommand((subcommand) =>
     subcommand
       .setName('enable')
@@ -84,6 +83,33 @@ export const data = new SlashCommandBuilder()
               .setRequired(true)
           )
       )
+  )
+  .addSubcommandGroup((group) =>
+    group
+      .setName('admin')
+      .setDescription('Manage admin roles')
+      .addSubcommand((subcommand) =>
+        subcommand
+          .setName('add')
+          .setDescription('Add an admin role')
+          .addRoleOption((option) =>
+            option
+              .setName('role')
+              .setDescription('Role that can manage AFK settings')
+              .setRequired(true)
+          )
+      )
+      .addSubcommand((subcommand) =>
+        subcommand
+          .setName('remove')
+          .setDescription('Remove an admin role')
+          .addRoleOption((option) =>
+            option
+              .setName('role')
+              .setDescription('Role to remove from admin list')
+              .setRequired(true)
+          )
+      )
   );
 
 export async function execute(
@@ -98,12 +124,25 @@ export async function execute(
     return;
   }
 
+  if (!hasAFKAdminPermission(interaction, configService)) {
+    await interaction.reply({
+      content: 'You do not have permission to use this command. You need Administrator permission or an admin role.',
+      ephemeral: true,
+    });
+    return;
+  }
+
   const subcommandGroup = interaction.options.getSubcommandGroup();
   const subcommand = interaction.options.getSubcommand();
 
   try {
     if (subcommandGroup === 'exempt') {
       await handleExemptSubcommands(interaction, configService, subcommand);
+      return;
+    }
+
+    if (subcommandGroup === 'admin') {
+      await handleAdminSubcommands(interaction, configService, subcommand);
       return;
     }
 
@@ -272,7 +311,7 @@ async function handleExemptSubcommands(
     }
 
     const updatedExemptRoles = currentConfig.exemptRoleIds.filter(
-      (id: string) => id !== role.id
+      (id) => id !== role.id
     );
     await configService.updateConfig(interaction.guildId!, {
       exemptRoleIds: updatedExemptRoles,
@@ -280,6 +319,55 @@ async function handleExemptSubcommands(
 
     await interaction.reply({
       content: `Role ${role.name} has been removed from AFK kick exemptions.`,
+      ephemeral: true,
+    });
+  }
+}
+
+async function handleAdminSubcommands(
+  interaction: ChatInputCommandInteraction,
+  configService: GuildConfigService,
+  subcommand: string
+): Promise<void> {
+  const role = interaction.options.getRole('role', true);
+  const currentConfig = configService.getConfig(interaction.guildId!);
+
+  if (subcommand === 'add') {
+    if (currentConfig.adminRoleIds.includes(role.id)) {
+      await interaction.reply({
+        content: `Role ${role.name} is already an admin role.`,
+        ephemeral: true,
+      });
+      return;
+    }
+
+    const updatedAdminRoles = [...currentConfig.adminRoleIds, role.id];
+    await configService.updateConfig(interaction.guildId!, {
+      adminRoleIds: updatedAdminRoles,
+    });
+
+    await interaction.reply({
+      content: `Role ${role.name} has been added to AFK admin roles.`,
+      ephemeral: true,
+    });
+  } else if (subcommand === 'remove') {
+    if (!currentConfig.adminRoleIds.includes(role.id)) {
+      await interaction.reply({
+        content: `Role ${role.name} is not in the admin list.`,
+        ephemeral: true,
+      });
+      return;
+    }
+
+    const updatedAdminRoles = currentConfig.adminRoleIds.filter(
+      (id) => id !== role.id
+    );
+    await configService.updateConfig(interaction.guildId!, {
+      adminRoleIds: updatedAdminRoles,
+    });
+
+    await interaction.reply({
+      content: `Role ${role.name} has been removed from AFK admin roles.`,
       ephemeral: true,
     });
   }

@@ -32,6 +32,7 @@ describe('voiceStateUpdate - Threshold Coordination', () => {
     warningSecondsBefore: 60,
     warningChannelId: null,
     exemptRoleIds: [],
+    adminRoleIds: [],
     createdAt: '2024-01-01T00:00:00.000Z',
     updatedAt: '2024-01-01T00:00:00.000Z',
   };

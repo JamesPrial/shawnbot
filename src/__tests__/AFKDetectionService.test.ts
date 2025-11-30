@@ -67,6 +67,7 @@ describe('AFKDetectionService', () => {
           warningSecondsBefore: 60,
           warningChannelId: null,
           exemptRoleIds: [],
+          adminRoleIds: [],
           createdAt: '2024-01-01T00:00:00.000Z',
           updatedAt: '2024-01-01T00:00:00.000Z',
         };
@@ -91,6 +92,7 @@ describe('AFKDetectionService', () => {
           warningSecondsBefore: 60,
           warningChannelId: null,
           exemptRoleIds: [],
+          adminRoleIds: [],
           createdAt: '2024-01-01T00:00:00.000Z',
           updatedAt: '2024-01-01T00:00:00.000Z',
         };
@@ -119,6 +121,7 @@ describe('AFKDetectionService', () => {
           warningSecondsBefore: 60,
           warningChannelId: null,
           exemptRoleIds: [],
+          adminRoleIds: [],
           createdAt: '2024-01-01T00:00:00.000Z',
           updatedAt: '2024-01-01T00:00:00.000Z',
         };
@@ -142,6 +145,7 @@ describe('AFKDetectionService', () => {
           warningSecondsBefore: 60, // 1 minute before
           warningChannelId: 'warning-channel',
           exemptRoleIds: [],
+          adminRoleIds: [],
           createdAt: '2024-01-01T00:00:00.000Z',
           updatedAt: '2024-01-01T00:00:00.000Z',
         };
@@ -171,6 +175,7 @@ describe('AFKDetectionService', () => {
           warningSecondsBefore: 30,
           warningChannelId: null,
           exemptRoleIds: [],
+          adminRoleIds: [],
           createdAt: '2024-01-01T00:00:00.000Z',
           updatedAt: '2024-01-01T00:00:00.000Z',
         };
@@ -222,6 +227,7 @@ describe('AFKDetectionService', () => {
           warningSecondsBefore: 60,
           warningChannelId: null,
           exemptRoleIds: [],
+          adminRoleIds: [],
           createdAt: '2024-01-01T00:00:00.000Z',
           updatedAt: '2024-01-01T00:00:00.000Z',
         };
@@ -254,6 +260,7 @@ describe('AFKDetectionService', () => {
           warningSecondsBefore: 120, // 2 minutes before
           warningChannelId: null,
           exemptRoleIds: [],
+          adminRoleIds: [],
           createdAt: '2024-01-01T00:00:00.000Z',
           updatedAt: '2024-01-01T00:00:00.000Z',
         };
@@ -283,6 +290,7 @@ describe('AFKDetectionService', () => {
           warningSecondsBefore: 60, // Warning at same time as timeout
           warningChannelId: null,
           exemptRoleIds: [],
+          adminRoleIds: [],
           createdAt: '2024-01-01T00:00:00.000Z',
           updatedAt: '2024-01-01T00:00:00.000Z',
         };
@@ -313,6 +321,7 @@ describe('AFKDetectionService', () => {
           warningSecondsBefore: 60,
           warningChannelId: null,
           exemptRoleIds: [],
+          adminRoleIds: [],
           createdAt: '2024-01-01T00:00:00.000Z',
           updatedAt: '2024-01-01T00:00:00.000Z',
         };
@@ -340,6 +349,7 @@ describe('AFKDetectionService', () => {
           warningSecondsBefore: 60,
           warningChannelId: null,
           exemptRoleIds: [],
+          adminRoleIds: [],
           createdAt: '2024-01-01T00:00:00.000Z',
           updatedAt: '2024-01-01T00:00:00.000Z',
         };
@@ -378,6 +388,7 @@ describe('AFKDetectionService', () => {
           warningSecondsBefore: 60,
           warningChannelId: null,
           exemptRoleIds: [],
+          adminRoleIds: [],
           createdAt: '2024-01-01T00:00:00.000Z',
           updatedAt: '2024-01-01T00:00:00.000Z',
         };
@@ -405,6 +416,7 @@ describe('AFKDetectionService', () => {
           warningSecondsBefore: 60,
           warningChannelId: null,
           exemptRoleIds: [],
+          adminRoleIds: [],
           createdAt: '2024-01-01T00:00:00.000Z',
           updatedAt: '2024-01-01T00:00:00.000Z',
         };
@@ -433,6 +445,7 @@ describe('AFKDetectionService', () => {
         warningSecondsBefore: 60,
         warningChannelId: null,
         exemptRoleIds: [],
+        adminRoleIds: [],
         createdAt: '2024-01-01T00:00:00.000Z',
         updatedAt: '2024-01-01T00:00:00.000Z',
       };
@@ -458,6 +471,7 @@ describe('AFKDetectionService', () => {
         warningSecondsBefore: 60,
         warningChannelId: null,
         exemptRoleIds: [],
+        adminRoleIds: [],
         createdAt: '2024-01-01T00:00:00.000Z',
         updatedAt: '2024-01-01T00:00:00.000Z',
       };
@@ -496,6 +510,7 @@ describe('AFKDetectionService', () => {
         warningSecondsBefore: 60,
         warningChannelId: null,
         exemptRoleIds: [],
+        adminRoleIds: [],
         createdAt: '2024-01-01T00:00:00.000Z',
         updatedAt: '2024-01-01T00:00:00.000Z',
       };
@@ -525,6 +540,7 @@ describe('AFKDetectionService', () => {
         warningSecondsBefore: 60,
         warningChannelId: null,
         exemptRoleIds: [],
+        adminRoleIds: [],
         createdAt: '2024-01-01T00:00:00.000Z',
         updatedAt: '2024-01-01T00:00:00.000Z',
       };
@@ -567,6 +583,7 @@ describe('AFKDetectionService', () => {
         warningSecondsBefore: 60,
         warningChannelId: null,
         exemptRoleIds: [],
+        adminRoleIds: [],
         createdAt: '2024-01-01T00:00:00.000Z',
         updatedAt: '2024-01-01T00:00:00.000Z',
       };
@@ -594,6 +611,7 @@ describe('AFKDetectionService', () => {
         warningSecondsBefore: 60,
         warningChannelId: null,
         exemptRoleIds: [],
+        adminRoleIds: [],
         createdAt: '2024-01-01T00:00:00.000Z',
         updatedAt: '2024-01-01T00:00:00.000Z',
       };
@@ -621,6 +639,7 @@ describe('AFKDetectionService', () => {
         warningSecondsBefore: 60,
         warningChannelId: null,
         exemptRoleIds: [],
+        adminRoleIds: [],
         createdAt: '2024-01-01T00:00:00.000Z',
         updatedAt: '2024-01-01T00:00:00.000Z',
       };
@@ -651,6 +670,7 @@ describe('AFKDetectionService', () => {
         warningSecondsBefore: 60,
         warningChannelId: null,
         exemptRoleIds: [],
+        adminRoleIds: [],
         createdAt: '2024-01-01T00:00:00.000Z',
         updatedAt: '2024-01-01T00:00:00.000Z',
       };
@@ -676,6 +696,7 @@ describe('AFKDetectionService', () => {
         warningSecondsBefore: 60,
         warningChannelId: null,
         exemptRoleIds: [],
+        adminRoleIds: [],
         createdAt: '2024-01-01T00:00:00.000Z',
         updatedAt: '2024-01-01T00:00:00.000Z',
       };
@@ -701,6 +722,7 @@ describe('AFKDetectionService', () => {
         warningSecondsBefore: 60,
         warningChannelId: null,
         exemptRoleIds: [],
+        adminRoleIds: [],
         createdAt: '2024-01-01T00:00:00.000Z',
         updatedAt: '2024-01-01T00:00:00.000Z',
       };
@@ -727,6 +749,7 @@ describe('AFKDetectionService', () => {
         warningSecondsBefore: 60,
         warningChannelId: 'warning-channel-id',
         exemptRoleIds: [],
+        adminRoleIds: [],
         createdAt: '2024-01-01T00:00:00.000Z',
         updatedAt: '2024-01-01T00:00:00.000Z',
       };
@@ -753,6 +776,7 @@ describe('AFKDetectionService', () => {
         warningSecondsBefore: 50,
         warningChannelId: null,
         exemptRoleIds: [],
+        adminRoleIds: [],
         createdAt: '2024-01-01T00:00:00.000Z',
         updatedAt: '2024-01-01T00:00:00.000Z',
       };
@@ -784,6 +808,7 @@ describe('AFKDetectionService', () => {
         warningSecondsBefore: 50,
         warningChannelId: null,
         exemptRoleIds: [],
+        adminRoleIds: [],
         createdAt: '2024-01-01T00:00:00.000Z',
         updatedAt: '2024-01-01T00:00:00.000Z',
       };
@@ -816,6 +841,7 @@ describe('AFKDetectionService', () => {
         warningSecondsBefore: 60,
         warningChannelId: null,
         exemptRoleIds: [],
+        adminRoleIds: [],
         createdAt: '2024-01-01T00:00:00.000Z',
         updatedAt: '2024-01-01T00:00:00.000Z',
       };
@@ -860,6 +886,7 @@ describe('AFKDetectionService', () => {
         warningSecondsBefore: 30,
         warningChannelId: null,
         exemptRoleIds: [],
+        adminRoleIds: [],
         createdAt: '2024-01-01T00:00:00.000Z',
         updatedAt: '2024-01-01T00:00:00.000Z',
       };
@@ -904,6 +931,7 @@ describe('AFKDetectionService', () => {
         warningSecondsBefore: 30,
         warningChannelId: null,
         exemptRoleIds: [],
+        adminRoleIds: [],
         createdAt: '2024-01-01T00:00:00.000Z',
         updatedAt: '2024-01-01T00:00:00.000Z',
       };
@@ -950,6 +978,7 @@ describe('AFKDetectionService', () => {
         warningSecondsBefore: 30,
         warningChannelId: null,
         exemptRoleIds: [],
+        adminRoleIds: [],
         createdAt: '2024-01-01T00:00:00.000Z',
         updatedAt: '2024-01-01T00:00:00.000Z',
       };
@@ -987,6 +1016,7 @@ describe('AFKDetectionService', () => {
         warningSecondsBefore: 30,
         warningChannelId: null,
         exemptRoleIds: [],
+        adminRoleIds: [],
         createdAt: '2024-01-01T00:00:00.000Z',
         updatedAt: '2024-01-01T00:00:00.000Z',
       };
@@ -1034,6 +1064,7 @@ describe('AFKDetectionService', () => {
       warningSecondsBefore: 60,
       warningChannelId: null,
       exemptRoleIds: [],
+      adminRoleIds: [],
       createdAt: '2024-01-01T00:00:00.000Z',
       updatedAt: '2024-01-01T00:00:00.000Z',
     });
@@ -1276,6 +1307,7 @@ describe('AFKDetectionService', () => {
       warningSecondsBefore: 60,
       warningChannelId: null,
       exemptRoleIds: [],
+      adminRoleIds: [],
       createdAt: '2024-01-01T00:00:00.000Z',
       updatedAt: '2024-01-01T00:00:00.000Z',
     });
@@ -1388,6 +1420,7 @@ describe('AFKDetectionService', () => {
           warningSecondsBefore: 60,
           warningChannelId: null,
           exemptRoleIds: [],
+          adminRoleIds: [],
           createdAt: '2024-01-01T00:00:00.000Z',
           updatedAt: '2024-01-01T00:00:00.000Z',
         };
