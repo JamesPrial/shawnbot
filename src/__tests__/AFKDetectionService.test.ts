@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { Client, Guild, GuildMember, VoiceState } from 'discord.js';
-import { AFKDetectionService } from '../services/AFKDetectionService';
+import { AFKDetectionService, MIN_USERS_FOR_AFK_TRACKING } from '../services/AFKDetectionService';
 import { WarningService } from '../services/WarningService';
 import { GuildConfigService } from '../services/GuildConfigService';
 import type { GuildSettings } from '../database/repositories/GuildSettingsRepository';
@@ -1008,6 +1008,521 @@ describe('AFKDetectionService', () => {
 
       // Tracking should be removed even though kick failed
       expect(service.isTracking(guildId, userId)).toBe(false);
+    });
+  });
+
+  describe('MIN_USERS_FOR_AFK_TRACKING constant', () => {
+    it('should exist and equal 2', () => {
+      expect(MIN_USERS_FOR_AFK_TRACKING).toBeDefined();
+      expect(MIN_USERS_FOR_AFK_TRACKING).toBe(2);
+    });
+
+    it('should be a number', () => {
+      expect(typeof MIN_USERS_FOR_AFK_TRACKING).toBe('number');
+    });
+
+    it('should be positive', () => {
+      expect(MIN_USERS_FOR_AFK_TRACKING).toBeGreaterThan(0);
+    });
+  });
+
+  describe('stopAllTrackingForChannel', () => {
+    const createEnabledConfig = (guildId: string): GuildSettings => ({
+      guildId,
+      enabled: true,
+      afkTimeoutSeconds: 300,
+      warningSecondsBefore: 60,
+      warningChannelId: null,
+      exemptRoleIds: [],
+      createdAt: '2024-01-01T00:00:00.000Z',
+      updatedAt: '2024-01-01T00:00:00.000Z',
+    });
+
+    describe('when multiple users are in same channel', () => {
+      it('should stop tracking all users in that specific channel', async () => {
+        const guildId = 'bulk-stop-guild';
+        const channelId = 'target-channel';
+        const user1 = 'user-1';
+        const user2 = 'user-2';
+        const user3 = 'user-3';
+
+        const config = createEnabledConfig(guildId);
+        vi.mocked(mockConfigService.getConfig).mockReturnValue(config);
+
+        // Start tracking all three users in the same channel
+        await service.startTracking(guildId, user1, channelId);
+        await service.startTracking(guildId, user2, channelId);
+        await service.startTracking(guildId, user3, channelId);
+
+        // Verify all are being tracked
+        expect(service.isTracking(guildId, user1)).toBe(true);
+        expect(service.isTracking(guildId, user2)).toBe(true);
+        expect(service.isTracking(guildId, user3)).toBe(true);
+
+        // Stop all tracking for the channel
+        service.stopAllTrackingForChannel(guildId, channelId);
+
+        // Verify none are being tracked
+        expect(service.isTracking(guildId, user1)).toBe(false);
+        expect(service.isTracking(guildId, user2)).toBe(false);
+        expect(service.isTracking(guildId, user3)).toBe(false);
+      });
+
+      it('should clear all timers for stopped users', async () => {
+        const guildId = 'clear-timers-guild';
+        const channelId = 'target-channel';
+        const user1 = 'user-1';
+        const user2 = 'user-2';
+
+        const config = createEnabledConfig(guildId);
+        vi.mocked(mockConfigService.getConfig).mockReturnValue(config);
+        vi.mocked(mockWarningService.sendWarning).mockResolvedValue();
+
+        await service.startTracking(guildId, user1, channelId);
+        await service.startTracking(guildId, user2, channelId);
+
+        service.stopAllTrackingForChannel(guildId, channelId);
+
+        // Advance time past when warnings would have fired
+        await vi.advanceTimersByTimeAsync(500000);
+
+        // No warnings should fire since timers were cleared
+        expect(mockWarningService.sendWarning).not.toHaveBeenCalled();
+      });
+
+      it('should log the count of stopped users', async () => {
+        const guildId = 'log-count-guild';
+        const channelId = 'target-channel';
+
+        const config = createEnabledConfig(guildId);
+        vi.mocked(mockConfigService.getConfig).mockReturnValue(config);
+
+        await service.startTracking(guildId, 'user-1', channelId);
+        await service.startTracking(guildId, 'user-2', channelId);
+        await service.startTracking(guildId, 'user-3', channelId);
+
+        service.stopAllTrackingForChannel(guildId, channelId);
+
+        expect(mockLogger.debug).toHaveBeenCalledWith(
+          expect.objectContaining({
+            guildId,
+            channelId,
+            count: 3,
+          }),
+          'Stopped tracking all users in channel'
+        );
+      });
+    });
+
+    describe('when users are in different channels', () => {
+      it('should only stop users in target channel and leave other channels untouched', async () => {
+        const guildId = 'multi-channel-guild';
+        const targetChannel = 'channel-to-stop';
+        const otherChannel = 'other-channel';
+        const userInTarget1 = 'user-target-1';
+        const userInTarget2 = 'user-target-2';
+        const userInOther = 'user-other';
+
+        const config = createEnabledConfig(guildId);
+        vi.mocked(mockConfigService.getConfig).mockReturnValue(config);
+
+        // Start tracking users in different channels
+        await service.startTracking(guildId, userInTarget1, targetChannel);
+        await service.startTracking(guildId, userInTarget2, targetChannel);
+        await service.startTracking(guildId, userInOther, otherChannel);
+
+        // Verify all are tracked
+        expect(service.isTracking(guildId, userInTarget1)).toBe(true);
+        expect(service.isTracking(guildId, userInTarget2)).toBe(true);
+        expect(service.isTracking(guildId, userInOther)).toBe(true);
+
+        // Stop only the target channel
+        service.stopAllTrackingForChannel(guildId, targetChannel);
+
+        // Target channel users should be stopped
+        expect(service.isTracking(guildId, userInTarget1)).toBe(false);
+        expect(service.isTracking(guildId, userInTarget2)).toBe(false);
+
+        // Other channel user should still be tracked
+        expect(service.isTracking(guildId, userInOther)).toBe(true);
+      });
+
+      it('should preserve timers for users in other channels', async () => {
+        const guildId = 'preserve-timers-guild';
+        const targetChannel = 'channel-to-stop';
+        const otherChannel = 'other-channel';
+        const userInOther = 'user-other';
+
+        const config = createEnabledConfig(guildId);
+        vi.mocked(mockConfigService.getConfig).mockReturnValue(config);
+        vi.mocked(mockWarningService.sendWarning).mockResolvedValue();
+
+        await service.startTracking(guildId, 'user-target', targetChannel);
+        await service.startTracking(guildId, userInOther, otherChannel);
+
+        service.stopAllTrackingForChannel(guildId, targetChannel);
+
+        // Advance to warning time for other channel user
+        await vi.advanceTimersByTimeAsync(240000);
+
+        // Warning should still fire for user in other channel
+        expect(mockWarningService.sendWarning).toHaveBeenCalledWith(
+          guildId,
+          userInOther,
+          otherChannel
+        );
+      });
+    });
+
+    describe('when channel has no tracked users', () => {
+      it('should be a no-op and not throw', () => {
+        const guildId = 'empty-channel-guild';
+        const channelId = 'empty-channel';
+
+        expect(() => {
+          service.stopAllTrackingForChannel(guildId, channelId);
+        }).not.toThrow();
+      });
+
+      it('should log count of zero when no users stopped', () => {
+        const guildId = 'empty-log-guild';
+        const channelId = 'empty-channel';
+
+        service.stopAllTrackingForChannel(guildId, channelId);
+
+        expect(mockLogger.debug).toHaveBeenCalledWith(
+          expect.objectContaining({
+            guildId,
+            channelId,
+            count: 0,
+          }),
+          'Stopped tracking all users in channel'
+        );
+      });
+    });
+
+    describe('guild isolation', () => {
+      it('should only affect the specified guild', async () => {
+        const guild1 = 'guild-one';
+        const guild2 = 'guild-two';
+        const channelId = 'same-channel-id';
+        const user1 = 'user-in-guild1';
+        const user2 = 'user-in-guild2';
+
+        const config1 = createEnabledConfig(guild1);
+        const config2 = createEnabledConfig(guild2);
+
+        vi.mocked(mockConfigService.getConfig).mockImplementation((guildId) => {
+          return guildId === guild1 ? config1 : config2;
+        });
+
+        // Track users with same channel ID but different guilds
+        await service.startTracking(guild1, user1, channelId);
+        await service.startTracking(guild2, user2, channelId);
+
+        expect(service.isTracking(guild1, user1)).toBe(true);
+        expect(service.isTracking(guild2, user2)).toBe(true);
+
+        // Stop tracking in guild1 only
+        service.stopAllTrackingForChannel(guild1, channelId);
+
+        // Only guild1 user should be stopped
+        expect(service.isTracking(guild1, user1)).toBe(false);
+        expect(service.isTracking(guild2, user2)).toBe(true);
+      });
+    });
+
+    describe('edge cases', () => {
+      it('should handle stopping same channel multiple times', async () => {
+        const guildId = 'repeat-stop-guild';
+        const channelId = 'channel';
+
+        const config = createEnabledConfig(guildId);
+        vi.mocked(mockConfigService.getConfig).mockReturnValue(config);
+
+        await service.startTracking(guildId, 'user-1', channelId);
+
+        service.stopAllTrackingForChannel(guildId, channelId);
+
+        // Second call should be safe
+        expect(() => {
+          service.stopAllTrackingForChannel(guildId, channelId);
+        }).not.toThrow();
+      });
+
+      it('should handle empty string channel ID', async () => {
+        const guildId = 'empty-channel-id-guild';
+        const channelId = '';
+
+        const config = createEnabledConfig(guildId);
+        vi.mocked(mockConfigService.getConfig).mockReturnValue(config);
+
+        await service.startTracking(guildId, 'user-1', channelId);
+
+        expect(() => {
+          service.stopAllTrackingForChannel(guildId, channelId);
+        }).not.toThrow();
+
+        expect(service.isTracking(guildId, 'user-1')).toBe(false);
+      });
+    });
+  });
+
+  describe('startTrackingAllInChannel', () => {
+    const createEnabledConfig = (guildId: string): GuildSettings => ({
+      guildId,
+      enabled: true,
+      afkTimeoutSeconds: 300,
+      warningSecondsBefore: 60,
+      warningChannelId: null,
+      exemptRoleIds: [],
+      createdAt: '2024-01-01T00:00:00.000Z',
+      updatedAt: '2024-01-01T00:00:00.000Z',
+    });
+
+    describe('when provided with multiple user IDs', () => {
+      it('should start tracking for all provided users', async () => {
+        const guildId = 'bulk-start-guild';
+        const channelId = 'channel-123';
+        const userIds = ['user-1', 'user-2', 'user-3', 'user-4'];
+
+        const config = createEnabledConfig(guildId);
+        vi.mocked(mockConfigService.getConfig).mockReturnValue(config);
+
+        await service.startTrackingAllInChannel(guildId, channelId, userIds);
+
+        // Verify all users are being tracked
+        for (const userId of userIds) {
+          expect(service.isTracking(guildId, userId)).toBe(true);
+        }
+      });
+
+      it('should set up timers for all users', async () => {
+        const guildId = 'timers-for-all-guild';
+        const channelId = 'channel-456';
+        const userIds = ['user-a', 'user-b'];
+
+        const config = createEnabledConfig(guildId);
+        vi.mocked(mockConfigService.getConfig).mockReturnValue(config);
+        vi.mocked(mockWarningService.sendWarning).mockResolvedValue();
+
+        await service.startTrackingAllInChannel(guildId, channelId, userIds);
+
+        // Advance to warning time
+        await vi.advanceTimersByTimeAsync(240000);
+
+        // Both users should receive warnings
+        expect(mockWarningService.sendWarning).toHaveBeenCalledWith(guildId, 'user-a', channelId);
+        expect(mockWarningService.sendWarning).toHaveBeenCalledWith(guildId, 'user-b', channelId);
+      });
+
+      it('should log the user count when starting bulk tracking', async () => {
+        const guildId = 'log-bulk-start-guild';
+        const channelId = 'channel-789';
+        const userIds = ['user-1', 'user-2', 'user-3'];
+
+        const config = createEnabledConfig(guildId);
+        vi.mocked(mockConfigService.getConfig).mockReturnValue(config);
+
+        await service.startTrackingAllInChannel(guildId, channelId, userIds);
+
+        expect(mockLogger.debug).toHaveBeenCalledWith(
+          expect.objectContaining({
+            guildId,
+            channelId,
+            userCount: 3,
+          }),
+          'Starting tracking for all users in channel'
+        );
+      });
+    });
+
+    describe('when provided with empty userIds array', () => {
+      it('should not start tracking any users', async () => {
+        const guildId = 'empty-array-guild';
+        const channelId = 'channel-empty';
+        const userIds: string[] = [];
+
+        const config = createEnabledConfig(guildId);
+        vi.mocked(mockConfigService.getConfig).mockReturnValue(config);
+
+        await service.startTrackingAllInChannel(guildId, channelId, userIds);
+
+        // Should not throw and should log zero count
+        expect(mockLogger.debug).toHaveBeenCalledWith(
+          expect.objectContaining({
+            guildId,
+            channelId,
+            userCount: 0,
+          }),
+          'Starting tracking for all users in channel'
+        );
+      });
+
+      it('should not call startTracking when userIds is empty', async () => {
+        const guildId = 'no-start-guild';
+        const channelId = 'channel-none';
+        const userIds: string[] = [];
+
+        const config = createEnabledConfig(guildId);
+        vi.mocked(mockConfigService.getConfig).mockReturnValue(config);
+
+        await service.startTrackingAllInChannel(guildId, channelId, userIds);
+
+        // Verify no users are being tracked in this guild
+        // We can't easily spy on private methods, but we can verify state
+        expect(service.isTracking(guildId, 'any-user')).toBe(false);
+      });
+    });
+
+    describe('respecting config settings', () => {
+      it('should respect disabled config for all users', async () => {
+        const guildId = 'disabled-bulk-guild';
+        const channelId = 'channel-disabled';
+        const userIds = ['user-1', 'user-2'];
+
+        const disabledConfig: GuildSettings = {
+          guildId,
+          enabled: false,
+          afkTimeoutSeconds: 300,
+          warningSecondsBefore: 60,
+          warningChannelId: null,
+          exemptRoleIds: [],
+          createdAt: '2024-01-01T00:00:00.000Z',
+          updatedAt: '2024-01-01T00:00:00.000Z',
+        };
+
+        vi.mocked(mockConfigService.getConfig).mockReturnValue(disabledConfig);
+
+        await service.startTrackingAllInChannel(guildId, channelId, userIds);
+
+        // None should be tracked due to disabled config
+        expect(service.isTracking(guildId, 'user-1')).toBe(false);
+        expect(service.isTracking(guildId, 'user-2')).toBe(false);
+      });
+    });
+
+    describe('when users already being tracked', () => {
+      it('should restart tracking for already-tracked users', async () => {
+        const guildId = 'restart-bulk-guild';
+        const channelId = 'channel-restart';
+        const userIds = ['user-1', 'user-2'];
+
+        const config = createEnabledConfig(guildId);
+        vi.mocked(mockConfigService.getConfig).mockReturnValue(config);
+        vi.mocked(mockWarningService.sendWarning).mockResolvedValue();
+
+        // Start tracking user-1 first
+        await service.startTracking(guildId, 'user-1', channelId);
+
+        // Advance time partway
+        await vi.advanceTimersByTimeAsync(120000); // 2 minutes
+
+        // Now start tracking all users (including user-1 again)
+        await service.startTrackingAllInChannel(guildId, channelId, userIds);
+
+        // Advance another 2 minutes (would be 4 min total for original user-1 timer)
+        await vi.advanceTimersByTimeAsync(120000);
+
+        // Warning shouldn't fire yet because timer was reset
+        expect(mockWarningService.sendWarning).not.toHaveBeenCalled();
+      });
+    });
+
+    describe('edge cases', () => {
+      it('should handle single user ID', async () => {
+        const guildId = 'single-user-guild';
+        const channelId = 'channel-single';
+        const userIds = ['lonely-user'];
+
+        const config = createEnabledConfig(guildId);
+        vi.mocked(mockConfigService.getConfig).mockReturnValue(config);
+
+        await service.startTrackingAllInChannel(guildId, channelId, userIds);
+
+        expect(service.isTracking(guildId, 'lonely-user')).toBe(true);
+      });
+
+      it('should handle duplicate user IDs in array', async () => {
+        const guildId = 'duplicate-guild';
+        const channelId = 'channel-dup';
+        const userIds = ['user-1', 'user-1', 'user-2'];
+
+        const config = createEnabledConfig(guildId);
+        vi.mocked(mockConfigService.getConfig).mockReturnValue(config);
+
+        await service.startTrackingAllInChannel(guildId, channelId, userIds);
+
+        // Should track both unique users
+        expect(service.isTracking(guildId, 'user-1')).toBe(true);
+        expect(service.isTracking(guildId, 'user-2')).toBe(true);
+      });
+
+      it('should handle large number of users', async () => {
+        const guildId = 'large-guild';
+        const channelId = 'large-channel';
+        const userIds = Array.from({ length: 50 }, (_, i) => `user-${i}`);
+
+        const config = createEnabledConfig(guildId);
+        vi.mocked(mockConfigService.getConfig).mockReturnValue(config);
+
+        await service.startTrackingAllInChannel(guildId, channelId, userIds);
+
+        // Verify a sample of users
+        expect(service.isTracking(guildId, 'user-0')).toBe(true);
+        expect(service.isTracking(guildId, 'user-25')).toBe(true);
+        expect(service.isTracking(guildId, 'user-49')).toBe(true);
+      });
+
+      it('should handle special characters in user IDs', async () => {
+        const guildId = 'special-chars-guild';
+        const channelId = 'channel-special';
+        const userIds = ['user:with:colons', 'user-with-dashes', 'user_with_underscores'];
+
+        const config = createEnabledConfig(guildId);
+        vi.mocked(mockConfigService.getConfig).mockReturnValue(config);
+
+        await service.startTrackingAllInChannel(guildId, channelId, userIds);
+
+        for (const userId of userIds) {
+          expect(service.isTracking(guildId, userId)).toBe(true);
+        }
+      });
+    });
+
+    describe('integration with stopAllTrackingForChannel', () => {
+      it('should allow starting and stopping in succession', async () => {
+        const guildId = 'start-stop-guild';
+        const channelId = 'channel-cycle';
+        const userIds = ['user-1', 'user-2', 'user-3'];
+
+        const config = createEnabledConfig(guildId);
+        vi.mocked(mockConfigService.getConfig).mockReturnValue(config);
+
+        // Start tracking all
+        await service.startTrackingAllInChannel(guildId, channelId, userIds);
+
+        // Verify all tracked
+        for (const userId of userIds) {
+          expect(service.isTracking(guildId, userId)).toBe(true);
+        }
+
+        // Stop all
+        service.stopAllTrackingForChannel(guildId, channelId);
+
+        // Verify none tracked
+        for (const userId of userIds) {
+          expect(service.isTracking(guildId, userId)).toBe(false);
+        }
+
+        // Start again
+        await service.startTrackingAllInChannel(guildId, channelId, userIds);
+
+        // Verify all tracked again
+        for (const userId of userIds) {
+          expect(service.isTracking(guildId, userId)).toBe(true);
+        }
+      });
     });
   });
 });

@@ -8,7 +8,7 @@ import { createTables } from './database/schema';
 import { GuildSettingsRepository } from './database/repositories/GuildSettingsRepository';
 import { GuildConfigService } from './services/GuildConfigService';
 import { WarningService } from './services/WarningService';
-import { AFKDetectionService } from './services/AFKDetectionService';
+import { AFKDetectionService, MIN_USERS_FOR_AFK_TRACKING } from './services/AFKDetectionService';
 import { VoiceMonitorService } from './services/VoiceMonitorService';
 import { SpeakingTracker } from './voice/SpeakingTracker';
 import { VoiceConnectionManager } from './voice/VoiceConnectionManager';
@@ -73,6 +73,23 @@ export async function createBot(): Promise<BotDependencies> {
 
   speakingTracker.on('userStartedSpeaking', async (userId: string, guildId: string) => {
     logger.debug({ userId, guildId }, 'User started speaking, resetting AFK timer');
+
+    try {
+      const guild = await client.guilds.fetch(guildId);
+      const member = await guild.members.fetch(userId);
+
+      if (member.voice.channel) {
+        const nonBotCount = member.voice.channel.members.filter(m => !m.user.bot).size;
+        if (nonBotCount < MIN_USERS_FOR_AFK_TRACKING) {
+          logger.debug({ userId, guildId, nonBotCount }, 'Below threshold, skipping reset');
+          return;
+        }
+      }
+    } catch (error) {
+      logger.error({ error, userId, guildId }, 'Failed to check threshold for reset');
+      return;
+    }
+
     await afkDetectionService.resetTimer(guildId, userId);
   });
 
@@ -84,6 +101,18 @@ export async function createBot(): Promise<BotDependencies> {
       const member = await guild.members.fetch(userId);
 
       if (member.voice.channel) {
+        const nonBotCount = member.voice.channel.members.filter(m => !m.user.bot).size;
+        if (nonBotCount < MIN_USERS_FOR_AFK_TRACKING) {
+          logger.debug({ userId, guildId, nonBotCount }, 'Below threshold, skipping tracking');
+          return;
+        }
+
+        // Skip if already tracking - avoids duplicate starts after threshold events
+        if (afkDetectionService.isTracking(guildId, userId)) {
+          logger.debug({ userId, guildId }, 'Already tracking user, skipping');
+          return;
+        }
+
         await afkDetectionService.startTracking(guildId, userId, member.voice.channel.id);
       }
     } catch (error) {

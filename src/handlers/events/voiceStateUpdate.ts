@@ -1,7 +1,8 @@
-import { VoiceState } from 'discord.js';
+import { VoiceState, VoiceBasedChannel } from 'discord.js';
 import { Logger } from 'pino';
 import type { VoiceMonitorService } from '../../services/VoiceMonitorService';
 import type { AFKDetectionService } from '../../services/AFKDetectionService';
+import { MIN_USERS_FOR_AFK_TRACKING } from '../../services/AFKDetectionService';
 import type { GuildConfigService } from '../../services/GuildConfigService';
 
 export interface VoiceStateHandlerDeps {
@@ -10,6 +11,9 @@ export interface VoiceStateHandlerDeps {
   guildConfig: GuildConfigService;
   logger: Logger;
 }
+
+const countNonBotMembers = (channel: VoiceBasedChannel): number =>
+  channel.members.filter(m => !m.user.bot).size;
 
 export function createVoiceStateUpdateHandler(deps: VoiceStateHandlerDeps) {
   const { voiceMonitor, afkDetection, guildConfig, logger } = deps;
@@ -45,7 +49,18 @@ export function createVoiceStateUpdateHandler(deps: VoiceStateHandlerDeps) {
       logger.debug({ userId, guildId, channelId: newChannel.id }, 'User joined voice channel');
 
       await voiceMonitor.handleUserJoin(newChannel);
-      await afkDetection.startTracking(guildId, userId, newChannel.id);
+
+      const count = countNonBotMembers(newChannel);
+      if (count === MIN_USERS_FOR_AFK_TRACKING) {
+        // Just reached threshold - start tracking all users
+        const userIds = Array.from(newChannel.members.filter(m => !m.user.bot).keys());
+        await afkDetection.startTrackingAllInChannel(guildId, newChannel.id, userIds);
+      } else if (count > MIN_USERS_FOR_AFK_TRACKING) {
+        // Already above threshold - track just the new user
+        await afkDetection.startTracking(guildId, userId, newChannel.id);
+      }
+      // If count < MIN_USERS_FOR_AFK_TRACKING, don't start tracking
+
       return;
     }
 
@@ -53,7 +68,15 @@ export function createVoiceStateUpdateHandler(deps: VoiceStateHandlerDeps) {
     if (oldChannel && !newChannel) {
       logger.debug({ userId, guildId, channelId: oldChannel.id }, 'User left voice channel');
 
-      afkDetection.stopTracking(guildId, userId);
+      const remainingCount = countNonBotMembers(oldChannel);
+      if (remainingCount < MIN_USERS_FOR_AFK_TRACKING) {
+        // Dropped below threshold - stop tracking everyone in channel
+        afkDetection.stopAllTrackingForChannel(guildId, oldChannel.id);
+      } else {
+        // Still above threshold - just stop tracking the leaving user
+        afkDetection.stopTracking(guildId, userId);
+      }
+
       await voiceMonitor.handleUserLeave(guildId, oldChannel.id);
       return;
     }
@@ -65,10 +88,29 @@ export function createVoiceStateUpdateHandler(deps: VoiceStateHandlerDeps) {
         'User switched voice channels'
       );
 
-      afkDetection.stopTracking(guildId, userId);
+      // Apply leave logic to old channel
+      const oldCount = countNonBotMembers(oldChannel);
+      if (oldCount < MIN_USERS_FOR_AFK_TRACKING) {
+        // Dropped below threshold - stop tracking everyone in channel
+        afkDetection.stopAllTrackingForChannel(guildId, oldChannel.id);
+      } else {
+        // Still above threshold - just stop tracking the leaving user
+        afkDetection.stopTracking(guildId, userId);
+      }
       await voiceMonitor.handleUserLeave(guildId, oldChannel.id);
+
+      // Apply join logic to new channel
       await voiceMonitor.handleUserJoin(newChannel);
-      await afkDetection.startTracking(guildId, userId, newChannel.id);
+      const newCount = countNonBotMembers(newChannel);
+      if (newCount === MIN_USERS_FOR_AFK_TRACKING) {
+        // Just reached threshold - start tracking all users
+        const userIds = Array.from(newChannel.members.filter(m => !m.user.bot).keys());
+        await afkDetection.startTrackingAllInChannel(guildId, newChannel.id, userIds);
+      } else if (newCount > MIN_USERS_FOR_AFK_TRACKING) {
+        // Already above threshold - track just the new user
+        await afkDetection.startTracking(guildId, userId, newChannel.id);
+      }
+
       return;
     }
 

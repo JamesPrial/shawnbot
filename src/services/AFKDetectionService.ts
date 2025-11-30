@@ -3,6 +3,8 @@ import type { Logger } from 'pino';
 import { WarningService } from './WarningService';
 import { GuildConfigService } from './GuildConfigService';
 
+export const MIN_USERS_FOR_AFK_TRACKING = 2;
+
 interface UserTrackingState {
   userId: string;
   guildId: string;
@@ -123,6 +125,43 @@ export class AFKDetectionService {
   isTracking(guildId: string, userId: string): boolean {
     const key = this.getTrackingKey(guildId, userId);
     return this.tracking.has(key);
+  }
+
+  stopAllTrackingForChannel(guildId: string, channelId: string): void {
+    const keysToStop: string[] = [];
+
+    for (const [key, state] of this.tracking.entries()) {
+      if (state.guildId === guildId && state.channelId === channelId) {
+        keysToStop.push(key);
+      }
+    }
+
+    for (const key of keysToStop) {
+      const state = this.tracking.get(key);
+      if (state) {
+        this.stopTracking(state.guildId, state.userId);
+      }
+    }
+
+    this.logger.debug(
+      { guildId, channelId, count: keysToStop.length },
+      'Stopped tracking all users in channel'
+    );
+  }
+
+  async startTrackingAllInChannel(
+    guildId: string,
+    channelId: string,
+    userIds: string[]
+  ): Promise<void> {
+    this.logger.debug(
+      { guildId, channelId, userCount: userIds.length },
+      'Starting tracking for all users in channel'
+    );
+
+    for (const userId of userIds) {
+      await this.startTracking(guildId, userId, channelId);
+    }
   }
 
   private async handleWarning(key: string): Promise<void> {
