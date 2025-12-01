@@ -14,6 +14,13 @@ import type { Logger } from 'pino';
 import { SpeakingTracker } from './SpeakingTracker';
 import { Readable } from 'stream';
 
+/**
+ * A minimal valid Opus packet representing silence.
+ * These 3 bytes decode to a 20ms silence frame in Opus format.
+ * Used to initialize Discord voice reception without requiring FFmpeg.
+ */
+const OPUS_SILENCE_FRAME: readonly [0xF8, 0xFF, 0xFE] = [0xF8, 0xFF, 0xFE] as const;
+
 export class VoiceConnectionManager {
   private connections: Map<string, VoiceConnection>;
   private speakingTracker: SpeakingTracker;
@@ -113,26 +120,41 @@ export class VoiceConnectionManager {
   }
 
   private async playSilence(connection: VoiceConnection): Promise<void> {
-    return new Promise((resolve) => {
+    return new Promise((resolve, reject) => {
       const player = createAudioPlayer();
+      let settled = false;
 
-      const silenceBuffer = Buffer.from([0xF8, 0xFF, 0xFE]);
-      const silenceStream = Readable.from(silenceBuffer);
+      const silenceBuffer = Buffer.from(OPUS_SILENCE_FRAME);
+      const silenceStream = Readable.from([silenceBuffer], { objectMode: true });
 
       const resource = createAudioResource(silenceStream, {
-        inputType: StreamType.Arbitrary
+        inputType: StreamType.Opus
       });
 
       player.play(resource);
       connection.subscribe(player);
 
-      player.on(AudioPlayerStatus.Idle, () => {
+      player.on('error', (error) => {
+        if (settled) return;
+        settled = true;
+        const guildId = connection.joinConfig?.guildId ?? 'unknown';
+        this.logger.error({ guildId, error }, 'Error playing silence frame');
         player.stop();
-        this.logger.debug({ guildId: connection.joinConfig.guildId }, 'Silent frame played to initialize voice reception');
+        reject(error);
+      });
+
+      player.on(AudioPlayerStatus.Idle, () => {
+        if (settled) return;
+        settled = true;
+        player.stop();
+        const guildId = connection.joinConfig?.guildId ?? 'unknown';
+        this.logger.debug({ guildId }, 'Silent frame played to initialize voice reception');
         resolve();
       });
 
       setTimeout(() => {
+        if (settled) return;
+        settled = true;
         player.stop();
         resolve();
       }, 100);
