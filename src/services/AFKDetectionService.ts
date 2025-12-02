@@ -2,6 +2,7 @@ import { Client } from 'discord.js';
 import type { Logger } from 'pino';
 import { WarningService } from './WarningService';
 import { GuildConfigService } from './GuildConfigService';
+import { RateLimiter } from '../utils/RateLimiter';
 
 export const MIN_USERS_FOR_AFK_TRACKING = 2;
 
@@ -19,18 +20,21 @@ export class AFKDetectionService {
   private configService: GuildConfigService;
   private client: Client;
   private logger: Logger;
+  private rateLimiter: RateLimiter;
   private tracking: Map<string, UserTrackingState>;
 
   constructor(
     warningService: WarningService,
     configService: GuildConfigService,
     client: Client,
-    logger: Logger
+    logger: Logger,
+    rateLimiter: RateLimiter
   ) {
     this.warningService = warningService;
     this.configService = configService;
     this.client = client;
     this.logger = logger;
+    this.rateLimiter = rateLimiter;
     this.tracking = new Map();
   }
 
@@ -48,7 +52,9 @@ export class AFKDetectionService {
     // Check exempt roles
     if (config.exemptRoleIds.length > 0) {
       try {
+        this.rateLimiter.recordAction();
         const guild = await this.client.guilds.fetch(guildId);
+        this.rateLimiter.recordAction();
         const member = await guild.members.fetch(userId);
         const isExempt = member.roles.cache.some(role =>
           config.exemptRoleIds.includes(role.id)
@@ -195,10 +201,13 @@ export class AFKDetectionService {
     }
 
     try {
+      this.rateLimiter.recordAction();
       const guild = await this.client.guilds.fetch(state.guildId);
+      this.rateLimiter.recordAction();
       const member = await guild.members.fetch(state.userId);
 
       if (member.voice.channel) {
+        this.rateLimiter.recordAction();
         await member.voice.disconnect('AFK timeout');
 
         this.logger.info(

@@ -3,13 +3,15 @@ import { Logger } from 'pino';
 import { VoiceConnectionManager } from '../voice/VoiceConnectionManager';
 import { GuildConfigService } from './GuildConfigService';
 import { MIN_USERS_FOR_AFK_TRACKING } from './AFKDetectionService';
+import { RateLimiter } from '../utils/RateLimiter';
 
 export class VoiceMonitorService {
   constructor(
     private connectionManager: VoiceConnectionManager,
     private guildConfig: GuildConfigService,
     private client: Client,
-    private logger: Logger
+    private logger: Logger,
+    private rateLimiter: RateLimiter
   ) {}
 
   async handleUserJoin(channel: VoiceBasedChannel): Promise<void> {
@@ -54,6 +56,7 @@ export class VoiceMonitorService {
       }
 
       // Fetch all channels in the guild
+      this.rateLimiter.recordAction();
       const channels = await guild.channels.fetch();
 
       // Filter to voice-based channels with 2+ non-bot members
@@ -124,7 +127,9 @@ export class VoiceMonitorService {
 
   private async isChannelEmpty(guildId: string, channelId: string): Promise<boolean> {
     try {
+      this.rateLimiter.recordAction();
       const guild = await this.client.guilds.fetch(guildId);
+      this.rateLimiter.recordAction();
       const channel = await guild.channels.fetch(channelId);
 
       if (!channel?.isVoiceBased()) {

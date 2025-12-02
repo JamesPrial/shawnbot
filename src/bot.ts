@@ -16,12 +16,14 @@ import { createReadyHandler } from './handlers/events/ready';
 import { createVoiceStateUpdateHandler } from './handlers/events/voiceStateUpdate';
 import { createGuildCreateHandler } from './handlers/events/guildCreate';
 import { afkConfigCommand, afkStatusCommand } from './handlers/commands';
+import { RateLimiter } from './utils/RateLimiter';
 
 export interface BotDependencies {
   client: Client;
   database: Database.Database;
   config: EnvConfig;
   logger: Logger;
+  rateLimiter: RateLimiter;
   repository: GuildSettingsRepository;
   guildConfigService: GuildConfigService;
   warningService: WarningService;
@@ -34,6 +36,11 @@ export interface BotDependencies {
 export async function createBot(): Promise<BotDependencies> {
   const config = loadConfig();
   const logger = createLogger;
+  const rateLimiter = new RateLimiter(logger, {
+    warnThreshold: config.RATE_LIMIT_WARN_THRESHOLD,
+    crashThreshold: config.RATE_LIMIT_CRASH_THRESHOLD,
+    windowMs: config.RATE_LIMIT_WINDOW_MS,
+  });
 
   logger.info('Initializing Discord AFK kick bot');
 
@@ -56,27 +63,32 @@ export async function createBot(): Promise<BotDependencies> {
   const voiceConnectionManager = new VoiceConnectionManager(
     speakingTracker,
     client,
-    logger
+    logger,
+    rateLimiter
   );
-  const warningService = new WarningService(client, guildConfigService, logger);
+  const warningService = new WarningService(client, guildConfigService, logger, rateLimiter);
   const afkDetectionService = new AFKDetectionService(
     warningService,
     guildConfigService,
     client,
-    logger
+    logger,
+    rateLimiter
   );
   const voiceMonitorService = new VoiceMonitorService(
     voiceConnectionManager,
     guildConfigService,
     client,
-    logger
+    logger,
+    rateLimiter
   );
 
   speakingTracker.on('userStartedSpeaking', async (userId: string, guildId: string) => {
     logger.debug({ userId, guildId }, 'User started speaking, resetting AFK timer');
 
     try {
+      rateLimiter.recordAction();
       const guild = await client.guilds.fetch(guildId);
+      rateLimiter.recordAction();
       const member = await guild.members.fetch(userId);
 
       if (member.voice.channel) {
@@ -98,7 +110,9 @@ export async function createBot(): Promise<BotDependencies> {
     logger.debug({ userId, guildId }, 'User stopped speaking, starting AFK tracking');
 
     try {
+      rateLimiter.recordAction();
       const guild = await client.guilds.fetch(guildId);
+      rateLimiter.recordAction();
       const member = await guild.members.fetch(userId);
 
       if (member.voice.channel) {
@@ -171,6 +185,7 @@ export async function createBot(): Promise<BotDependencies> {
     database,
     config,
     logger,
+    rateLimiter,
     repository,
     guildConfigService,
     warningService,

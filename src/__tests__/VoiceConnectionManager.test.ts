@@ -38,6 +38,7 @@ describe('VoiceConnectionManager', () => {
   let mockSpeakingTracker: SpeakingTracker;
   let mockClient: Client;
   let mockLogger: any;
+  let mockRateLimiter: any;
   let manager: VoiceConnectionManager;
 
   beforeEach(() => {
@@ -46,6 +47,10 @@ describe('VoiceConnectionManager', () => {
       info: vi.fn(),
       warn: vi.fn(),
       error: vi.fn(),
+    };
+
+    mockRateLimiter = {
+      recordAction: vi.fn(),
     };
 
     mockClient = {} as Client;
@@ -63,7 +68,7 @@ describe('VoiceConnectionManager', () => {
     };
     capturedStreamType = undefined;
 
-    manager = new VoiceConnectionManager(mockSpeakingTracker, mockClient, mockLogger);
+    manager = new VoiceConnectionManager(mockSpeakingTracker, mockClient, mockLogger, mockRateLimiter);
   });
 
   afterEach(() => {

@@ -1,21 +1,25 @@
 import { Client, EmbedBuilder, TextChannel, ChannelType, Guild, GuildBasedChannel } from 'discord.js';
 import type { Logger } from 'pino';
 import { GuildConfigService } from './GuildConfigService';
+import { RateLimiter } from '../utils/RateLimiter';
 
 export class WarningService {
   private client: Client;
   private configService: GuildConfigService;
   private logger: Logger;
+  private rateLimiter: RateLimiter;
 
-  constructor(client: Client, configService: GuildConfigService, logger: Logger) {
+  constructor(client: Client, configService: GuildConfigService, logger: Logger, rateLimiter: RateLimiter) {
     this.client = client;
     this.configService = configService;
     this.logger = logger;
+    this.rateLimiter = rateLimiter;
   }
 
   async sendWarning(guildId: string, userId: string, voiceChannelId: string): Promise<void> {
     try {
       const config = this.configService.getConfig(guildId);
+      this.rateLimiter.recordAction();
       const guild = await this.client.guilds.fetch(guildId);
 
       if (!guild) {
@@ -41,6 +45,7 @@ export class WarningService {
         )
         .setTimestamp();
 
+      this.rateLimiter.recordAction();
       await warningChannel.send({ embeds: [embed] });
 
       this.logger.info(

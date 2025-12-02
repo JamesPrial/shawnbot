@@ -10,6 +10,7 @@ describe('VoiceMonitorService', () => {
   let mockConnectionManager: VoiceConnectionManager;
   let mockGuildConfig: GuildConfigService;
   let mockLogger: any;
+  let mockRateLimiter: any;
   let service: VoiceMonitorService;
 
   beforeEach(() => {
@@ -32,11 +33,16 @@ describe('VoiceMonitorService', () => {
       getConfig: vi.fn(),
     } as unknown as GuildConfigService;
 
+    mockRateLimiter = {
+      recordAction: vi.fn(),
+    };
+
     service = new VoiceMonitorService(
       mockConnectionManager,
       mockGuildConfig,
       mockClient,
-      mockLogger
+      mockLogger,
+      mockRateLimiter
     );
   });
 

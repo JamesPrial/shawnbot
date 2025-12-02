@@ -12,6 +12,7 @@ import {
 import type { VoiceBasedChannel, Client } from 'discord.js';
 import type { Logger } from 'pino';
 import { SpeakingTracker } from './SpeakingTracker';
+import { RateLimiter } from '../utils/RateLimiter';
 import { Readable } from 'stream';
 
 /**
@@ -26,12 +27,14 @@ export class VoiceConnectionManager {
   private speakingTracker: SpeakingTracker;
   private client: Client;
   private logger: Logger;
+  private rateLimiter: RateLimiter;
 
-  constructor(speakingTracker: SpeakingTracker, client: Client, logger: Logger) {
+  constructor(speakingTracker: SpeakingTracker, client: Client, logger: Logger, rateLimiter: RateLimiter) {
     this.connections = new Map();
     this.speakingTracker = speakingTracker;
     this.client = client;
     this.logger = logger;
+    this.rateLimiter = rateLimiter;
   }
 
   public async joinChannel(channel: VoiceBasedChannel): Promise<VoiceConnection> {
@@ -44,6 +47,8 @@ export class VoiceConnectionManager {
     }
 
     this.logger.info({ guildId, channelId: channel.id }, 'Joining voice channel');
+
+    this.rateLimiter.recordAction();
 
     const connection = joinVoiceChannel({
       channelId: channel.id,

@@ -4,11 +4,13 @@ import { AFKDetectionService, MIN_USERS_FOR_AFK_TRACKING } from '../services/AFK
 import { WarningService } from '../services/WarningService';
 import { GuildConfigService } from '../services/GuildConfigService';
 import type { GuildSettings } from '../database/repositories/GuildSettingsRepository';
+import type { RateLimiter } from '../utils/RateLimiter';
 
 describe('AFKDetectionService', () => {
   let mockClient: Client;
   let mockWarningService: WarningService;
   let mockConfigService: GuildConfigService;
+  let mockRateLimiter: RateLimiter;
   let mockLogger: any;
   let service: AFKDetectionService;
 
@@ -41,11 +43,18 @@ describe('AFKDetectionService', () => {
       getConfig: vi.fn(),
     } as unknown as GuildConfigService;
 
+    // Mock the RateLimiter
+    mockRateLimiter = {
+      recordAction: vi.fn(),
+      getActionCount: vi.fn().mockReturnValue(0),
+    } as unknown as RateLimiter;
+
     service = new AFKDetectionService(
       mockWarningService,
       mockConfigService,
       mockClient,
-      mockLogger
+      mockLogger,
+      mockRateLimiter
     );
   });
 
@@ -1555,6 +1564,396 @@ describe('AFKDetectionService', () => {
         for (const userId of userIds) {
           expect(service.isTracking(guildId, userId)).toBe(true);
         }
+      });
+    });
+  });
+
+  describe('RateLimiter integration', () => {
+    const createEnabledConfig = (guildId: string): GuildSettings => ({
+      guildId,
+      enabled: true,
+      afkTimeoutSeconds: 300,
+      warningSecondsBefore: 60,
+      warningChannelId: null,
+      exemptRoleIds: [],
+      adminRoleIds: [],
+      createdAt: '2024-01-01T00:00:00.000Z',
+      updatedAt: '2024-01-01T00:00:00.000Z',
+    });
+
+    describe('startTracking with exempt roles', () => {
+      it('should call recordAction twice when checking exempt roles (guilds.fetch, members.fetch)', async () => {
+        const guildId = 'rate-limit-guild';
+        const userId = 'rate-limit-user';
+        const channelId = 'rate-limit-channel';
+
+        const config: GuildSettings = {
+          guildId,
+          enabled: true,
+          afkTimeoutSeconds: 300,
+          warningSecondsBefore: 60,
+          warningChannelId: null,
+          exemptRoleIds: ['exempt-role-123'], // Non-empty exempt roles triggers API calls
+          adminRoleIds: [],
+          createdAt: '2024-01-01T00:00:00.000Z',
+          updatedAt: '2024-01-01T00:00:00.000Z',
+        };
+
+        const mockMember: Partial<GuildMember> = {
+          roles: {
+            cache: new Map(),
+          } as any,
+        };
+
+        const mockGuild: Partial<Guild> = {
+          members: {
+            fetch: vi.fn().mockResolvedValue(mockMember),
+          } as any,
+        };
+
+        vi.mocked(mockConfigService.getConfig).mockReturnValue(config);
+        vi.mocked(mockClient.guilds.fetch).mockResolvedValue(mockGuild as Guild);
+
+        await service.startTracking(guildId, userId, channelId);
+
+        // Should call recordAction twice: once for guilds.fetch, once for members.fetch
+        expect(mockRateLimiter.recordAction).toHaveBeenCalledTimes(2);
+      });
+
+      it('should call recordAction before guilds.fetch', async () => {
+        const guildId = 'rate-limit-order-guild';
+        const userId = 'rate-limit-order-user';
+        const channelId = 'rate-limit-order-channel';
+
+        const config: GuildSettings = {
+          guildId,
+          enabled: true,
+          afkTimeoutSeconds: 300,
+          warningSecondsBefore: 60,
+          warningChannelId: null,
+          exemptRoleIds: ['exempt-role-456'],
+          adminRoleIds: [],
+          createdAt: '2024-01-01T00:00:00.000Z',
+          updatedAt: '2024-01-01T00:00:00.000Z',
+        };
+
+        const mockMember: Partial<GuildMember> = {
+          roles: {
+            cache: new Map(),
+          } as any,
+        };
+
+        const mockGuild: Partial<Guild> = {
+          members: {
+            fetch: vi.fn().mockResolvedValue(mockMember),
+          } as any,
+        };
+
+        vi.mocked(mockConfigService.getConfig).mockReturnValue(config);
+
+        // Set up verification that recordAction is called before guilds.fetch
+        let recordActionCallCount = 0;
+        vi.mocked(mockRateLimiter.recordAction).mockImplementation(() => {
+          recordActionCallCount++;
+        });
+
+        vi.mocked(mockClient.guilds.fetch).mockImplementation(async () => {
+          // At this point, recordAction should have been called at least once
+          expect(recordActionCallCount).toBeGreaterThanOrEqual(1);
+          return mockGuild as Guild;
+        });
+
+        await service.startTracking(guildId, userId, channelId);
+      });
+
+      it('should not call recordAction when exempt roles list is empty', async () => {
+        const guildId = 'no-exempt-guild';
+        const userId = 'no-exempt-user';
+        const channelId = 'no-exempt-channel';
+
+        const config = createEnabledConfig(guildId);
+        vi.mocked(mockConfigService.getConfig).mockReturnValue(config);
+
+        await service.startTracking(guildId, userId, channelId);
+
+        // Should not call recordAction when there are no exempt roles to check
+        expect(mockRateLimiter.recordAction).not.toHaveBeenCalled();
+      });
+
+      it('should still call recordAction even if exempt role check fails', async () => {
+        const guildId = 'error-exempt-guild';
+        const userId = 'error-exempt-user';
+        const channelId = 'error-exempt-channel';
+        const error = new Error('Failed to fetch guild');
+
+        const config: GuildSettings = {
+          guildId,
+          enabled: true,
+          afkTimeoutSeconds: 300,
+          warningSecondsBefore: 60,
+          warningChannelId: null,
+          exemptRoleIds: ['exempt-role-789'],
+          adminRoleIds: [],
+          createdAt: '2024-01-01T00:00:00.000Z',
+          updatedAt: '2024-01-01T00:00:00.000Z',
+        };
+
+        vi.mocked(mockConfigService.getConfig).mockReturnValue(config);
+        vi.mocked(mockClient.guilds.fetch).mockRejectedValue(error);
+
+        await service.startTracking(guildId, userId, channelId);
+
+        // Should call recordAction once (guilds.fetch) before the error occurs
+        expect(mockRateLimiter.recordAction).toHaveBeenCalledTimes(1);
+      });
+    });
+
+    describe('handleKick', () => {
+      it('should call recordAction three times during kick (guilds.fetch, members.fetch, voice.disconnect)', async () => {
+        const guildId = 'kick-rate-limit-guild';
+        const userId = 'kick-rate-limit-user';
+        const channelId = 'kick-rate-limit-channel';
+
+        const config: GuildSettings = {
+          guildId,
+          enabled: true,
+          afkTimeoutSeconds: 100,
+          warningSecondsBefore: 30,
+          warningChannelId: null,
+          exemptRoleIds: [],
+          adminRoleIds: [],
+          createdAt: '2024-01-01T00:00:00.000Z',
+          updatedAt: '2024-01-01T00:00:00.000Z',
+        };
+
+        const mockDisconnect = vi.fn();
+        const mockVoiceState: Partial<VoiceState> = {
+          channel: { id: channelId } as any,
+          disconnect: mockDisconnect,
+        };
+
+        const mockMember: Partial<GuildMember> = {
+          voice: mockVoiceState as VoiceState,
+        };
+
+        const mockGuild: Partial<Guild> = {
+          members: {
+            fetch: vi.fn().mockResolvedValue(mockMember),
+          } as any,
+        };
+
+        vi.mocked(mockConfigService.getConfig).mockReturnValue(config);
+        vi.mocked(mockClient.guilds.fetch).mockResolvedValue(mockGuild as Guild);
+
+        await service.startTracking(guildId, userId, channelId);
+
+        // Reset mock to only count calls during kick
+        vi.mocked(mockRateLimiter.recordAction).mockClear();
+
+        // Advance time to trigger kick
+        await vi.advanceTimersByTimeAsync(100000);
+        await vi.runAllTimersAsync();
+
+        // Should call recordAction 3 times: guilds.fetch, members.fetch, voice.disconnect
+        expect(mockRateLimiter.recordAction).toHaveBeenCalledTimes(3);
+      });
+
+      it('should call recordAction in correct order during kick', async () => {
+        const guildId = 'kick-order-guild';
+        const userId = 'kick-order-user';
+        const channelId = 'kick-order-channel';
+
+        const config: GuildSettings = {
+          guildId,
+          enabled: true,
+          afkTimeoutSeconds: 100,
+          warningSecondsBefore: 30,
+          warningChannelId: null,
+          exemptRoleIds: [],
+          adminRoleIds: [],
+          createdAt: '2024-01-01T00:00:00.000Z',
+          updatedAt: '2024-01-01T00:00:00.000Z',
+        };
+
+        const mockDisconnect = vi.fn();
+        const mockVoiceState: Partial<VoiceState> = {
+          channel: { id: channelId } as any,
+          disconnect: mockDisconnect,
+        };
+
+        const mockMember: Partial<GuildMember> = {
+          voice: mockVoiceState as VoiceState,
+        };
+
+        const mockGuild: Partial<Guild> = {
+          members: {
+            fetch: vi.fn().mockResolvedValue(mockMember),
+          } as any,
+        };
+
+        vi.mocked(mockConfigService.getConfig).mockReturnValue(config);
+
+        // Track recordAction calls
+        let recordActionCallCount = 0;
+        vi.mocked(mockRateLimiter.recordAction).mockImplementation(() => {
+          recordActionCallCount++;
+        });
+
+        // Verify recordAction called before guilds.fetch
+        vi.mocked(mockClient.guilds.fetch).mockImplementation(async () => {
+          expect(recordActionCallCount).toBeGreaterThanOrEqual(1);
+          return mockGuild as Guild;
+        });
+
+        // Verify recordAction called before members.fetch
+        const originalMembersFetch = mockGuild.members!.fetch as any;
+        mockGuild.members!.fetch = vi.fn().mockImplementation(async () => {
+          expect(recordActionCallCount).toBeGreaterThanOrEqual(2);
+          return mockMember;
+        });
+
+        // Verify recordAction called before voice.disconnect
+        mockDisconnect.mockImplementation(() => {
+          expect(recordActionCallCount).toBeGreaterThanOrEqual(3);
+        });
+
+        await service.startTracking(guildId, userId, channelId);
+
+        // Reset counter for kick phase
+        recordActionCallCount = 0;
+
+        await vi.advanceTimersByTimeAsync(100000);
+        await vi.runAllTimersAsync();
+      });
+
+      it('should call recordAction twice when user already disconnected (no voice.disconnect call)', async () => {
+        const guildId = 'already-gone-guild';
+        const userId = 'already-gone-user';
+        const channelId = 'already-gone-channel';
+
+        const config: GuildSettings = {
+          guildId,
+          enabled: true,
+          afkTimeoutSeconds: 100,
+          warningSecondsBefore: 30,
+          warningChannelId: null,
+          exemptRoleIds: [],
+          adminRoleIds: [],
+          createdAt: '2024-01-01T00:00:00.000Z',
+          updatedAt: '2024-01-01T00:00:00.000Z',
+        };
+
+        const mockVoiceState: Partial<VoiceState> = {
+          channel: null, // User already left
+        };
+
+        const mockMember: Partial<GuildMember> = {
+          voice: mockVoiceState as VoiceState,
+        };
+
+        const mockGuild: Partial<Guild> = {
+          members: {
+            fetch: vi.fn().mockResolvedValue(mockMember),
+          } as any,
+        };
+
+        vi.mocked(mockConfigService.getConfig).mockReturnValue(config);
+        vi.mocked(mockClient.guilds.fetch).mockResolvedValue(mockGuild as Guild);
+
+        await service.startTracking(guildId, userId, channelId);
+
+        // Reset mock to only count calls during kick
+        vi.mocked(mockRateLimiter.recordAction).mockClear();
+
+        await vi.advanceTimersByTimeAsync(100000);
+        await vi.runAllTimersAsync();
+
+        // Should call recordAction only twice: guilds.fetch, members.fetch (no disconnect)
+        expect(mockRateLimiter.recordAction).toHaveBeenCalledTimes(2);
+      });
+
+      it('should call recordAction for guilds.fetch even when members.fetch fails', async () => {
+        const guildId = 'kick-error-guild';
+        const userId = 'kick-error-user';
+        const channelId = 'kick-error-channel';
+        const error = new Error('Member fetch failed');
+
+        const config: GuildSettings = {
+          guildId,
+          enabled: true,
+          afkTimeoutSeconds: 100,
+          warningSecondsBefore: 30,
+          warningChannelId: null,
+          exemptRoleIds: [],
+          adminRoleIds: [],
+          createdAt: '2024-01-01T00:00:00.000Z',
+          updatedAt: '2024-01-01T00:00:00.000Z',
+        };
+
+        const mockGuild: Partial<Guild> = {
+          members: {
+            fetch: vi.fn().mockRejectedValue(error),
+          } as any,
+        };
+
+        vi.mocked(mockConfigService.getConfig).mockReturnValue(config);
+        vi.mocked(mockClient.guilds.fetch).mockResolvedValue(mockGuild as Guild);
+
+        await service.startTracking(guildId, userId, channelId);
+
+        // Reset mock to only count calls during kick
+        vi.mocked(mockRateLimiter.recordAction).mockClear();
+
+        await vi.advanceTimersByTimeAsync(100000);
+        await vi.runAllTimersAsync();
+
+        // Should call recordAction at least once for guilds.fetch before error
+        expect(mockRateLimiter.recordAction).toHaveBeenCalledTimes(2);
+      });
+    });
+
+    describe('resetTimer with exempt roles', () => {
+      it('should call recordAction when resetTimer restarts tracking with exempt roles', async () => {
+        const guildId = 'reset-rate-limit-guild';
+        const userId = 'reset-rate-limit-user';
+        const channelId = 'reset-rate-limit-channel';
+
+        const config: GuildSettings = {
+          guildId,
+          enabled: true,
+          afkTimeoutSeconds: 300,
+          warningSecondsBefore: 60,
+          warningChannelId: null,
+          exemptRoleIds: ['exempt-role-reset'],
+          adminRoleIds: [],
+          createdAt: '2024-01-01T00:00:00.000Z',
+          updatedAt: '2024-01-01T00:00:00.000Z',
+        };
+
+        const mockMember: Partial<GuildMember> = {
+          roles: {
+            cache: new Map(),
+          } as any,
+        };
+
+        const mockGuild: Partial<Guild> = {
+          members: {
+            fetch: vi.fn().mockResolvedValue(mockMember),
+          } as any,
+        };
+
+        vi.mocked(mockConfigService.getConfig).mockReturnValue(config);
+        vi.mocked(mockClient.guilds.fetch).mockResolvedValue(mockGuild as Guild);
+
+        await service.startTracking(guildId, userId, channelId);
+
+        // Reset mock to count only resetTimer calls
+        vi.mocked(mockRateLimiter.recordAction).mockClear();
+
+        await service.resetTimer(guildId, userId);
+
+        // Should call recordAction twice during reset (guilds.fetch, members.fetch)
+        expect(mockRateLimiter.recordAction).toHaveBeenCalledTimes(2);
       });
     });
   });
