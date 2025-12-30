@@ -34,6 +34,7 @@ vi.mock('../utils/permissions');
 
 describe('afk-config command', () => {
   let mockConfigService: GuildConfigService;
+  let mockLogger: any;
 
   beforeEach(() => {
     mockConfigService = {
@@ -41,6 +42,13 @@ describe('afk-config command', () => {
       updateConfig: vi.fn(),
       clearCache: vi.fn(),
     } as unknown as GuildConfigService;
+
+    mockLogger = {
+      error: vi.fn(),
+      warn: vi.fn(),
+      info: vi.fn(),
+      debug: vi.fn(),
+    };
 
     // Reset all mocks
     vi.clearAllMocks();
@@ -112,7 +120,7 @@ describe('afk-config command', () => {
     it('should return an error message and not process command', async () => {
       const interaction = createMockInteraction(null, true);
 
-      await execute(interaction, mockConfigService);
+      await execute(interaction, mockConfigService, mockLogger);
 
       // Verify the exact error message
       expect(interaction.reply).toHaveBeenCalledWith({
@@ -129,7 +137,7 @@ describe('afk-config command', () => {
       // User has admin permissions but is in DM
       const interaction = createMockInteraction(null, true);
 
-      await execute(interaction, mockConfigService);
+      await execute(interaction, mockConfigService, mockLogger);
 
       expect(interaction.reply).toHaveBeenCalledWith({
         content: 'This command can only be used in a server.',
@@ -140,7 +148,7 @@ describe('afk-config command', () => {
     it('should not call permission check when guildId is null', async () => {
       const interaction = createMockInteraction(null, false);
 
-      await execute(interaction, mockConfigService);
+      await execute(interaction, mockConfigService, mockLogger);
 
       // Permission check should not be reached because we return early
       expect(hasAFKAdminPermission).not.toHaveBeenCalled();
@@ -160,7 +168,7 @@ describe('afk-config command', () => {
 
       vi.mocked(hasAFKAdminPermission).mockReturnValue(false);
 
-      await execute(interaction, mockConfigService);
+      await execute(interaction, mockConfigService, mockLogger);
 
       expect(interaction.reply).toHaveBeenCalledWith({
         content: 'You do not have permission to use this command. You need Administrator permission or an admin role.',
@@ -180,7 +188,7 @@ describe('afk-config command', () => {
       vi.mocked(hasAFKAdminPermission).mockReturnValue(true);
       vi.mocked(mockConfigService.updateConfig).mockResolvedValue();
 
-      await execute(interaction, mockConfigService);
+      await execute(interaction, mockConfigService, mockLogger);
 
       // Should process the command, not show permission error
       expect(interaction.reply).not.toHaveBeenCalledWith(
@@ -200,7 +208,7 @@ describe('afk-config command', () => {
       vi.mocked(hasAFKAdminPermission).mockReturnValue(true);
       vi.mocked(mockConfigService.updateConfig).mockResolvedValue();
 
-      await execute(interaction, mockConfigService);
+      await execute(interaction, mockConfigService, mockLogger);
 
       expect(hasAFKAdminPermission).toHaveBeenCalledWith(interaction, mockConfigService);
     });
@@ -223,7 +231,7 @@ describe('afk-config command', () => {
       vi.mocked(hasAFKAdminPermission).mockReturnValue(true);
       vi.mocked(mockConfigService.updateConfig).mockResolvedValue();
 
-      await execute(interaction, mockConfigService);
+      await execute(interaction, mockConfigService, mockLogger);
 
       // Verify updateConfig was called with the narrowed guildId (not interaction.guildId!)
       expect(mockConfigService.updateConfig).toHaveBeenCalledWith(guildId, { enabled: true });
@@ -243,7 +251,7 @@ describe('afk-config command', () => {
       vi.mocked(hasAFKAdminPermission).mockReturnValue(true);
       vi.mocked(mockConfigService.updateConfig).mockResolvedValue();
 
-      await execute(interaction, mockConfigService);
+      await execute(interaction, mockConfigService, mockLogger);
 
       expect(mockConfigService.updateConfig).toHaveBeenCalledWith(guildId, { enabled: true });
     });
@@ -264,7 +272,7 @@ describe('afk-config command', () => {
       vi.mocked(hasAFKAdminPermission).mockReturnValue(true);
       vi.mocked(mockConfigService.updateConfig).mockResolvedValue();
 
-      await execute(interaction, mockConfigService);
+      await execute(interaction, mockConfigService, mockLogger);
 
       expect(mockConfigService.updateConfig).toHaveBeenCalledWith(guildId, { enabled: false });
       expect(interaction.reply).toHaveBeenCalledWith({
@@ -297,7 +305,7 @@ describe('afk-config command', () => {
       vi.mocked(mockConfigService.getConfig).mockReturnValue(config);
       vi.mocked(mockConfigService.updateConfig).mockResolvedValue();
 
-      await execute(interaction, mockConfigService);
+      await execute(interaction, mockConfigService, mockLogger);
 
       // Verify getConfig was called with narrowed guildId (line 216)
       expect(mockConfigService.getConfig).toHaveBeenCalledWith(guildId);
@@ -321,7 +329,7 @@ describe('afk-config command', () => {
       vi.mocked(hasAFKAdminPermission).mockReturnValue(true);
       vi.mocked(mockConfigService.getConfig).mockReturnValue(config);
 
-      await execute(interaction, mockConfigService);
+      await execute(interaction, mockConfigService, mockLogger);
 
       expect(interaction.reply).toHaveBeenCalledWith({
         content: `Timeout (${timeoutSeconds}s) must be greater than warning time (${config.warningSecondsBefore}s).`,
@@ -348,7 +356,7 @@ describe('afk-config command', () => {
       vi.mocked(mockConfigService.getConfig).mockReturnValue(config);
       vi.mocked(mockConfigService.updateConfig).mockResolvedValue();
 
-      await execute(interaction, mockConfigService);
+      await execute(interaction, mockConfigService, mockLogger);
 
       expect(mockConfigService.updateConfig).toHaveBeenCalledWith(guildId, {
         afkTimeoutSeconds: timeoutSeconds,
@@ -379,7 +387,7 @@ describe('afk-config command', () => {
       vi.mocked(mockConfigService.getConfig).mockReturnValue(config);
       vi.mocked(mockConfigService.updateConfig).mockResolvedValue();
 
-      await execute(interaction, mockConfigService);
+      await execute(interaction, mockConfigService, mockLogger);
 
       // Should accept (timeout > warning, not >=)
       expect(mockConfigService.updateConfig).toHaveBeenCalledWith(guildId, {
@@ -409,7 +417,7 @@ describe('afk-config command', () => {
       vi.mocked(mockConfigService.getConfig).mockReturnValue(config);
       vi.mocked(mockConfigService.updateConfig).mockResolvedValue();
 
-      await execute(interaction, mockConfigService);
+      await execute(interaction, mockConfigService, mockLogger);
 
       // Verify getConfig was called with narrowed guildId (line 242)
       expect(mockConfigService.getConfig).toHaveBeenCalledWith(guildId);
@@ -433,7 +441,7 @@ describe('afk-config command', () => {
       vi.mocked(hasAFKAdminPermission).mockReturnValue(true);
       vi.mocked(mockConfigService.getConfig).mockReturnValue(config);
 
-      await execute(interaction, mockConfigService);
+      await execute(interaction, mockConfigService, mockLogger);
 
       expect(interaction.reply).toHaveBeenCalledWith({
         content: `Warning time (${warningSeconds}s) must be less than timeout (${config.afkTimeoutSeconds}s).`,
@@ -459,7 +467,7 @@ describe('afk-config command', () => {
       vi.mocked(mockConfigService.getConfig).mockReturnValue(config);
       vi.mocked(mockConfigService.updateConfig).mockResolvedValue();
 
-      await execute(interaction, mockConfigService);
+      await execute(interaction, mockConfigService, mockLogger);
 
       expect(mockConfigService.updateConfig).toHaveBeenCalledWith(guildId, {
         warningSecondsBefore: warningSeconds,
@@ -489,7 +497,7 @@ describe('afk-config command', () => {
       vi.mocked(mockConfigService.getConfig).mockReturnValue(config);
       vi.mocked(mockConfigService.updateConfig).mockResolvedValue();
 
-      await execute(interaction, mockConfigService);
+      await execute(interaction, mockConfigService, mockLogger);
 
       // Should accept (warning < timeout, not <=)
       expect(mockConfigService.updateConfig).toHaveBeenCalledWith(guildId, {
@@ -517,7 +525,7 @@ describe('afk-config command', () => {
       vi.mocked(hasAFKAdminPermission).mockReturnValue(true);
       vi.mocked(mockConfigService.updateConfig).mockResolvedValue();
 
-      await execute(interaction, mockConfigService);
+      await execute(interaction, mockConfigService, mockLogger);
 
       // Verify updateConfig was called with narrowed guildId (line 268)
       expect(mockConfigService.updateConfig).toHaveBeenCalledWith(guildId, {
@@ -555,7 +563,7 @@ describe('afk-config command', () => {
         vi.mocked(mockConfigService.getConfig).mockReturnValue(config);
         vi.mocked(mockConfigService.updateConfig).mockResolvedValue();
 
-        await execute(interaction, mockConfigService);
+        await execute(interaction, mockConfigService, mockLogger);
 
         // Verify getConfig and updateConfig use narrowed guildId
         expect(mockConfigService.getConfig).toHaveBeenCalledWith(guildId);
@@ -586,7 +594,7 @@ describe('afk-config command', () => {
         vi.mocked(hasAFKAdminPermission).mockReturnValue(true);
         vi.mocked(mockConfigService.getConfig).mockReturnValue(config);
 
-        await execute(interaction, mockConfigService);
+        await execute(interaction, mockConfigService, mockLogger);
 
         expect(interaction.reply).toHaveBeenCalledWith({
           content: `Role ${mockRole.name} is already exempt from AFK kicks.`,
@@ -615,7 +623,7 @@ describe('afk-config command', () => {
         vi.mocked(mockConfigService.getConfig).mockReturnValue(config);
         vi.mocked(mockConfigService.updateConfig).mockResolvedValue();
 
-        await execute(interaction, mockConfigService);
+        await execute(interaction, mockConfigService, mockLogger);
 
         expect(mockConfigService.updateConfig).toHaveBeenCalledWith(guildId, {
           exemptRoleIds: [existingRoleId, newRoleId],
@@ -642,7 +650,7 @@ describe('afk-config command', () => {
         vi.mocked(mockConfigService.getConfig).mockReturnValue(config);
         vi.mocked(mockConfigService.updateConfig).mockResolvedValue();
 
-        await execute(interaction, mockConfigService);
+        await execute(interaction, mockConfigService, mockLogger);
 
         expect(mockConfigService.getConfig).toHaveBeenCalledWith(guildId);
         expect(mockConfigService.updateConfig).toHaveBeenCalledWith(guildId, {
@@ -672,7 +680,7 @@ describe('afk-config command', () => {
         vi.mocked(hasAFKAdminPermission).mockReturnValue(true);
         vi.mocked(mockConfigService.getConfig).mockReturnValue(config);
 
-        await execute(interaction, mockConfigService);
+        await execute(interaction, mockConfigService, mockLogger);
 
         expect(interaction.reply).toHaveBeenCalledWith({
           content: `Role ${mockRole.name} is not in the exempt list.`,
@@ -701,7 +709,7 @@ describe('afk-config command', () => {
         vi.mocked(mockConfigService.getConfig).mockReturnValue(config);
         vi.mocked(mockConfigService.updateConfig).mockResolvedValue();
 
-        await execute(interaction, mockConfigService);
+        await execute(interaction, mockConfigService, mockLogger);
 
         expect(mockConfigService.updateConfig).toHaveBeenCalledWith(guildId, {
           exemptRoleIds: [roleToKeep],
@@ -734,7 +742,7 @@ describe('afk-config command', () => {
         vi.mocked(mockConfigService.getConfig).mockReturnValue(config);
         vi.mocked(mockConfigService.updateConfig).mockResolvedValue();
 
-        await execute(interaction, mockConfigService);
+        await execute(interaction, mockConfigService, mockLogger);
 
         expect(mockConfigService.getConfig).toHaveBeenCalledWith(guildId);
         expect(mockConfigService.updateConfig).toHaveBeenCalledWith(guildId, {
@@ -764,7 +772,7 @@ describe('afk-config command', () => {
         vi.mocked(hasAFKAdminPermission).mockReturnValue(true);
         vi.mocked(mockConfigService.getConfig).mockReturnValue(config);
 
-        await execute(interaction, mockConfigService);
+        await execute(interaction, mockConfigService, mockLogger);
 
         expect(interaction.reply).toHaveBeenCalledWith({
           content: `Role ${mockRole.name} is already an admin role.`,
@@ -793,7 +801,7 @@ describe('afk-config command', () => {
         vi.mocked(mockConfigService.getConfig).mockReturnValue(config);
         vi.mocked(mockConfigService.updateConfig).mockResolvedValue();
 
-        await execute(interaction, mockConfigService);
+        await execute(interaction, mockConfigService, mockLogger);
 
         expect(mockConfigService.updateConfig).toHaveBeenCalledWith(guildId, {
           adminRoleIds: [existingRoleId, newRoleId],
@@ -820,7 +828,7 @@ describe('afk-config command', () => {
         vi.mocked(mockConfigService.getConfig).mockReturnValue(config);
         vi.mocked(mockConfigService.updateConfig).mockResolvedValue();
 
-        await execute(interaction, mockConfigService);
+        await execute(interaction, mockConfigService, mockLogger);
 
         expect(mockConfigService.getConfig).toHaveBeenCalledWith(guildId);
         expect(mockConfigService.updateConfig).toHaveBeenCalledWith(guildId, {
@@ -850,7 +858,7 @@ describe('afk-config command', () => {
         vi.mocked(hasAFKAdminPermission).mockReturnValue(true);
         vi.mocked(mockConfigService.getConfig).mockReturnValue(config);
 
-        await execute(interaction, mockConfigService);
+        await execute(interaction, mockConfigService, mockLogger);
 
         expect(interaction.reply).toHaveBeenCalledWith({
           content: `Role ${mockRole.name} is not in the admin list.`,
@@ -879,7 +887,7 @@ describe('afk-config command', () => {
         vi.mocked(mockConfigService.getConfig).mockReturnValue(config);
         vi.mocked(mockConfigService.updateConfig).mockResolvedValue();
 
-        await execute(interaction, mockConfigService);
+        await execute(interaction, mockConfigService, mockLogger);
 
         expect(mockConfigService.updateConfig).toHaveBeenCalledWith(guildId, {
           adminRoleIds: [roleToKeep],
@@ -906,7 +914,7 @@ describe('afk-config command', () => {
       vi.mocked(hasAFKAdminPermission).mockReturnValue(true);
       vi.mocked(mockConfigService.updateConfig).mockRejectedValue(error);
 
-      await execute(interaction, mockConfigService);
+      await execute(interaction, mockConfigService, mockLogger);
 
       expect(interaction.reply).toHaveBeenCalledWith({
         content: `Error: ${error.message}`,
@@ -928,7 +936,7 @@ describe('afk-config command', () => {
       vi.mocked(hasAFKAdminPermission).mockReturnValue(true);
       vi.mocked(mockConfigService.updateConfig).mockRejectedValue(error);
 
-      await execute(interaction, mockConfigService);
+      await execute(interaction, mockConfigService, mockLogger);
 
       expect(interaction.followUp).toHaveBeenCalledWith({
         content: `Error: ${error.message}`,
@@ -950,7 +958,7 @@ describe('afk-config command', () => {
       vi.mocked(hasAFKAdminPermission).mockReturnValue(true);
       vi.mocked(mockConfigService.updateConfig).mockRejectedValue(error);
 
-      await execute(interaction, mockConfigService);
+      await execute(interaction, mockConfigService, mockLogger);
 
       expect(interaction.followUp).toHaveBeenCalledWith({
         content: `Error: ${error.message}`,
@@ -969,10 +977,10 @@ describe('afk-config command', () => {
       vi.mocked(hasAFKAdminPermission).mockReturnValue(true);
       vi.mocked(mockConfigService.updateConfig).mockRejectedValue(nonError);
 
-      await execute(interaction, mockConfigService);
+      await execute(interaction, mockConfigService, mockLogger);
 
       expect(interaction.reply).toHaveBeenCalledWith({
-        content: 'Error: An unknown error occurred.',
+        content: 'Error: Something went wrong',
         ephemeral: true,
       });
     });
@@ -992,7 +1000,7 @@ describe('afk-config command', () => {
 
       vi.mocked(hasAFKAdminPermission).mockReturnValue(true);
 
-      await execute(interaction, mockConfigService);
+      await execute(interaction, mockConfigService, mockLogger);
 
       expect(interaction.reply).toHaveBeenCalledWith({
         content: 'Unknown subcommand.',
@@ -1026,7 +1034,7 @@ describe('afk-config command', () => {
       vi.mocked(mockConfigService.getConfig).mockReturnValue(config);
       vi.mocked(mockConfigService.updateConfig).mockResolvedValue();
 
-      await execute(interaction, mockConfigService);
+      await execute(interaction, mockConfigService, mockLogger);
 
       // Both getConfig and updateConfig should receive the exact same guildId
       const getConfigCalls = vi.mocked(mockConfigService.getConfig).mock.calls;
@@ -1055,7 +1063,7 @@ describe('afk-config command', () => {
         vi.mocked(hasAFKAdminPermission).mockReturnValue(true);
         vi.mocked(mockConfigService.updateConfig).mockResolvedValue();
 
-        await execute(interaction, mockConfigService);
+        await execute(interaction, mockConfigService, mockLogger);
 
         expect(mockConfigService.updateConfig).toHaveBeenCalledWith(snowflake, { enabled: true });
       }

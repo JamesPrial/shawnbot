@@ -45,10 +45,10 @@ export async function createBot(): Promise<BotDependencies> {
   logger.info('Initializing Discord AFK kick bot');
 
   const database = initDatabase(config.DATABASE_PATH);
-  createTables(database);
+  createTables(database, logger);
   logger.info({ databasePath: config.DATABASE_PATH }, 'Database initialized');
 
-  const repository = new GuildSettingsRepository(database);
+  const repository = new GuildSettingsRepository(database, logger);
 
   const client = new Client({
     intents: [
@@ -90,20 +90,23 @@ export async function createBot(): Promise<BotDependencies> {
       const guild = await client.guilds.fetch(guildId);
       rateLimiter.recordAction();
       const member = await guild.members.fetch(userId);
+      const voiceChannel = member.voice?.channel;
 
-      if (member.voice.channel) {
-        const nonBotCount = member.voice.channel.members.filter(m => !m.user.bot).size;
-        if (nonBotCount < MIN_USERS_FOR_AFK_TRACKING) {
-          logger.debug({ userId, guildId, nonBotCount }, 'Below threshold, skipping reset');
-          return;
-        }
+      if (!voiceChannel) {
+        logger.debug({ userId, guildId }, 'Member not in voice channel, skipping reset');
+        return;
       }
-    } catch (error) {
-      logger.error({ error, userId, guildId }, 'Failed to check threshold for reset');
-      return;
-    }
 
-    await afkDetectionService.resetTimer(guildId, userId);
+      const nonBotCount = voiceChannel.members.filter((m) => !m.user.bot).size;
+      if (nonBotCount < MIN_USERS_FOR_AFK_TRACKING) {
+        logger.debug({ userId, guildId, nonBotCount }, 'Below threshold, skipping reset');
+        return;
+      }
+
+      await afkDetectionService.resetTimer(guildId, userId);
+    } catch (error) {
+      logger.error({ error, userId, guildId }, 'Failed to reset timer after user started speaking');
+    }
   });
 
   speakingTracker.on('userStoppedSpeaking', async (userId: string, guildId: string) => {
@@ -114,22 +117,26 @@ export async function createBot(): Promise<BotDependencies> {
       const guild = await client.guilds.fetch(guildId);
       rateLimiter.recordAction();
       const member = await guild.members.fetch(userId);
+      const voiceChannel = member.voice?.channel;
 
-      if (member.voice.channel) {
-        const nonBotCount = member.voice.channel.members.filter(m => !m.user.bot).size;
-        if (nonBotCount < MIN_USERS_FOR_AFK_TRACKING) {
-          logger.debug({ userId, guildId, nonBotCount }, 'Below threshold, skipping tracking');
-          return;
-        }
-
-        // Skip if already tracking - avoids duplicate starts after threshold events
-        if (afkDetectionService.isTracking(guildId, userId)) {
-          logger.debug({ userId, guildId }, 'Already tracking user, skipping');
-          return;
-        }
-
-        await afkDetectionService.startTracking(guildId, userId, member.voice.channel.id);
+      if (!voiceChannel) {
+        logger.debug({ userId, guildId }, 'Member not in voice channel, skipping tracking');
+        return;
       }
+
+      const nonBotCount = voiceChannel.members.filter((m) => !m.user.bot).size;
+      if (nonBotCount < MIN_USERS_FOR_AFK_TRACKING) {
+        logger.debug({ userId, guildId, nonBotCount }, 'Below threshold, skipping tracking');
+        return;
+      }
+
+      // Skip if already tracking - avoids duplicate starts after threshold events
+      if (afkDetectionService.isTracking(guildId, userId)) {
+        logger.debug({ userId, guildId }, 'Already tracking user, skipping');
+        return;
+      }
+
+      await afkDetectionService.startTracking(guildId, userId, voiceChannel.id);
     } catch (error) {
       logger.error({ error, userId, guildId }, 'Failed to start tracking after user stopped speaking');
     }
@@ -159,9 +166,9 @@ export async function createBot(): Promise<BotDependencies> {
 
     try {
       if (interaction.commandName === afkConfigCommand.data.name) {
-        await afkConfigCommand.execute(interaction, guildConfigService);
+        await afkConfigCommand.execute(interaction, guildConfigService, logger);
       } else if (interaction.commandName === afkStatusCommand.data.name) {
-        await afkStatusCommand.execute(interaction, guildConfigService);
+        await afkStatusCommand.execute(interaction, guildConfigService, logger);
       } else {
         logger.warn({ commandName: interaction.commandName }, 'Unknown command received');
       }

@@ -1,4 +1,5 @@
 import type Database from 'better-sqlite3';
+import type { Logger } from 'pino';
 
 export interface GuildSettings {
   guildId: string;
@@ -26,9 +27,11 @@ interface GuildSettingsRow {
 
 export class GuildSettingsRepository {
   private db: Database.Database;
+  private logger: Logger;
 
-  constructor(db: Database.Database) {
+  constructor(db: Database.Database, logger: Logger) {
     this.db = db;
+    this.logger = logger;
   }
 
   findByGuildId(guildId: string): GuildSettings | null {
@@ -95,13 +98,8 @@ export class GuildSettingsRepository {
   }
 
   private mapRowToSettings(row: GuildSettingsRow): GuildSettings {
-    const exemptRoleIds = row.exempt_role_ids
-      ? JSON.parse(row.exempt_role_ids) as string[]
-      : [];
-
-    const adminRoleIds = row.admin_role_ids
-      ? JSON.parse(row.admin_role_ids) as string[]
-      : [];
+    const exemptRoleIds = this.safeParseJsonArray(row.exempt_role_ids, 'exempt_role_ids');
+    const adminRoleIds = this.safeParseJsonArray(row.admin_role_ids, 'admin_role_ids');
 
     return {
       guildId: row.guild_id,
@@ -114,5 +112,39 @@ export class GuildSettingsRepository {
       createdAt: row.created_at,
       updatedAt: row.updated_at
     };
+  }
+
+  private safeParseJsonArray(json: string | null, fieldName: string): string[] {
+    if (!json) {
+      return [];
+    }
+
+    try {
+      const parsed: unknown = JSON.parse(json);
+
+      if (!Array.isArray(parsed)) {
+        this.logger.warn(
+          { fieldName, value: json, parsedType: typeof parsed },
+          'Expected JSON array but got non-array value, returning empty array'
+        );
+        return [];
+      }
+
+      if (!parsed.every((item): item is string => typeof item === 'string')) {
+        this.logger.warn(
+          { fieldName, value: json, parsedType: 'array' },
+          'JSON array contains non-string values, returning empty array'
+        );
+        return [];
+      }
+
+      return parsed;
+    } catch (error) {
+      this.logger.warn(
+        { fieldName, value: json, error },
+        'Failed to parse JSON array, returning empty array'
+      );
+      return [];
+    }
   }
 }

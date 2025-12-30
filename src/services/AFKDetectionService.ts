@@ -64,19 +64,58 @@ export class AFKDetectionService {
           return;
         }
       } catch (error) {
-        this.logger.error({ error, guildId, userId }, 'Failed to check exempt roles');
+        this.logger.error(
+          { error, guildId, userId },
+          'Failed to check exempt roles'
+        );
+        return;
       }
+    }
+
+    // Validate config before creating timers
+    if (Number.isNaN(config.afkTimeoutSeconds) || Number.isNaN(config.warningSecondsBefore)) {
+      this.logger.error(
+        { guildId, afkTimeoutSeconds: config.afkTimeoutSeconds, warningSecondsBefore: config.warningSecondsBefore },
+        'Invalid config: timeout and warning must be valid numbers'
+      );
+      return;
+    }
+
+    if (config.afkTimeoutSeconds <= 0 || config.warningSecondsBefore < 0) {
+      this.logger.error(
+        { guildId, afkTimeoutSeconds: config.afkTimeoutSeconds, warningSecondsBefore: config.warningSecondsBefore },
+        'Invalid config: timeout must be positive and warning must be non-negative'
+      );
+      return;
+    }
+
+    if (config.warningSecondsBefore >= config.afkTimeoutSeconds) {
+      this.logger.error(
+        { guildId, afkTimeoutSeconds: config.afkTimeoutSeconds, warningSecondsBefore: config.warningSecondsBefore },
+        'Invalid config: warning time must be less than timeout'
+      );
+      return;
     }
 
     const warningTimeMs = (config.afkTimeoutSeconds - config.warningSecondsBefore) * 1000;
     const kickTimeMs = config.afkTimeoutSeconds * 1000;
 
     const warningTimer = setTimeout(() => {
-      this.handleWarning(key);
+      this.handleWarning(key).catch((error) => {
+        this.logger.error(
+          { error, key, guildId, userId },
+          'Unhandled error in warning timer callback'
+        );
+      });
     }, warningTimeMs);
 
     const kickTimer = setTimeout(() => {
-      this.handleKick(key);
+      this.handleKick(key).catch((error) => {
+        this.logger.error(
+          { error, key, guildId, userId },
+          'Unhandled error in kick timer callback'
+        );
+      });
     }, kickTimeMs);
 
     this.tracking.set(key, {

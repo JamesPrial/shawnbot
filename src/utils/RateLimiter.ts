@@ -6,6 +6,23 @@ interface RateLimiterConfig {
   readonly crashThreshold: number;
 }
 
+/**
+ * Default rate limiter configuration.
+ *
+ * These values are calibrated for Discord API rate limits to prevent API bans:
+ *
+ * - `windowMs: 60_000` (1 minute): Discord enforces per-resource rate limits
+ *   typically in 1-minute windows. This matches Discord's rate limit window.
+ *
+ * - `warnThreshold: 20`: Provides early warning when approaching limits.
+ *   Most Discord endpoints allow 5-50 requests per minute. 20 requests/min
+ *   is conservative enough to warn before hitting most limits.
+ *
+ * - `crashThreshold: 50`: Hard limit to prevent API bans. Discord's global
+ *   rate limit is 50 requests/second across all endpoints, but per-endpoint
+ *   limits are lower. Crashing at 50 requests/min (< 1/sec) ensures we stay
+ *   well below both per-endpoint and global limits.
+ */
 const DEFAULT_CONFIG: RateLimiterConfig = {
   windowMs: 60_000,
   warnThreshold: 20,

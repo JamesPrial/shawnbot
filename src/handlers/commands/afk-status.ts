@@ -3,8 +3,10 @@ import {
   ChatInputCommandInteraction,
   EmbedBuilder,
 } from 'discord.js';
+import type { Logger } from 'pino';
 import { GuildConfigService } from '../../services/GuildConfigService';
 import { hasAFKAdminPermission } from '../../utils/permissions';
+import { formatError } from '../../utils/errorUtils';
 
 export const data = new SlashCommandBuilder()
   .setName('afk-status')
@@ -12,7 +14,8 @@ export const data = new SlashCommandBuilder()
 
 export async function execute(
   interaction: ChatInputCommandInteraction,
-  configService: GuildConfigService
+  configService: GuildConfigService,
+  logger: Logger
 ): Promise<void> {
   if (!interaction.guildId) {
     await interaction.reply({
@@ -103,8 +106,8 @@ export async function execute(
       ephemeral: true,
     });
   } catch (error) {
-    console.error('Error executing afk-status command:', error);
-    const errorMessage = error instanceof Error ? error.message : 'An unknown error occurred.';
+    logger.error({ error, guildId: interaction.guildId }, 'Error executing afk-status command');
+    const errorMessage = formatError(error).message;
 
     await interaction.reply({
       content: `Error retrieving AFK status: ${errorMessage}`,

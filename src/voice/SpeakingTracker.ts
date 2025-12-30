@@ -49,12 +49,20 @@ export class SpeakingTracker extends EventEmitter {
 
     receiver.speaking.on('start', (userId: string) => {
       this.logger.debug({ userId, guildId }, 'User started speaking');
-      this.emit('userStartedSpeaking', userId, guildId);
+      try {
+        this.emit('userStartedSpeaking', userId, guildId);
+      } catch (error) {
+        this.logger.error({ error, userId, guildId }, 'Error emitting userStartedSpeaking event');
+      }
     });
 
     receiver.speaking.on('end', (userId: string) => {
       this.logger.debug({ userId, guildId }, 'User stopped speaking');
-      this.emit('userStoppedSpeaking', userId, guildId);
+      try {
+        this.emit('userStoppedSpeaking', userId, guildId);
+      } catch (error) {
+        this.logger.error({ error, userId, guildId }, 'Error emitting userStoppedSpeaking event');
+      }
     });
 
     this.logger.info({ guildId }, 'Voice connection registered for speaking tracking');

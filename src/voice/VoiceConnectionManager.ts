@@ -22,8 +22,17 @@ import { Readable } from 'stream';
  */
 const OPUS_SILENCE_FRAME: readonly [0xF8, 0xFF, 0xFE] = [0xF8, 0xFF, 0xFE] as const;
 
+/**
+ * Stored event listeners for voice connections to enable proper cleanup
+ */
+interface ConnectionEventListeners {
+  onDisconnected: () => Promise<void>;
+  onDestroyed: () => void;
+}
+
 export class VoiceConnectionManager {
   private connections: Map<string, VoiceConnection>;
+  private connectionListeners: Map<string, ConnectionEventListeners>;
   private speakingTracker: SpeakingTracker;
   private client: Client;
   private logger: Logger;
@@ -31,6 +40,7 @@ export class VoiceConnectionManager {
 
   constructor(speakingTracker: SpeakingTracker, client: Client, logger: Logger, rateLimiter: RateLimiter) {
     this.connections = new Map();
+    this.connectionListeners = new Map();
     this.speakingTracker = speakingTracker;
     this.client = client;
     this.logger = logger;
@@ -53,7 +63,7 @@ export class VoiceConnectionManager {
     const connection = joinVoiceChannel({
       channelId: channel.id,
       guildId: guildId,
-      adapterCreator: channel.guild.voiceAdapterCreator as unknown as DiscordGatewayAdapterCreator,
+      adapterCreator: channel.guild.voiceAdapterCreator as DiscordGatewayAdapterCreator,
       selfDeaf: false,
       selfMute: true
     });
@@ -69,7 +79,8 @@ export class VoiceConnectionManager {
 
     this.connections.set(guildId, connection);
 
-    connection.on(VoiceConnectionStatus.Disconnected, async () => {
+    // Store event listener references for proper cleanup
+    const onDisconnected = async (): Promise<void> => {
       try {
         await Promise.race([
           entersState(connection, VoiceConnectionStatus.Signalling, 5_000),
@@ -80,12 +91,17 @@ export class VoiceConnectionManager {
         this.logger.warn({ guildId, error }, 'Voice connection disconnected, cleaning up');
         this.leaveChannel(guildId);
       }
-    });
+    };
 
-    connection.on(VoiceConnectionStatus.Destroyed, () => {
+    const onDestroyed = (): void => {
       this.logger.info({ guildId }, 'Voice connection destroyed');
       this.leaveChannel(guildId);
-    });
+    };
+
+    connection.on(VoiceConnectionStatus.Disconnected, onDisconnected);
+    connection.on(VoiceConnectionStatus.Destroyed, onDestroyed);
+
+    this.connectionListeners.set(guildId, { onDisconnected, onDestroyed });
 
     await this.playSilence(connection);
 
@@ -99,6 +115,15 @@ export class VoiceConnectionManager {
 
     if (connection) {
       this.logger.info({ guildId }, 'Leaving voice channel');
+
+      // Remove event listeners before destroying to prevent memory leaks
+      const listeners = this.connectionListeners.get(guildId);
+      if (listeners) {
+        connection.off(VoiceConnectionStatus.Disconnected, listeners.onDisconnected);
+        connection.off(VoiceConnectionStatus.Destroyed, listeners.onDestroyed);
+        this.connectionListeners.delete(guildId);
+      }
+
       this.speakingTracker.unregisterConnection(guildId);
       connection.destroy();
       this.connections.delete(guildId);
@@ -142,8 +167,12 @@ export class VoiceConnectionManager {
       player.on('error', (error) => {
         if (settled) return;
         settled = true;
-        const guildId = connection.joinConfig?.guildId ?? 'unknown';
-        this.logger.error({ guildId, error }, 'Error playing silence frame');
+        const guildId = connection.joinConfig?.guildId;
+        if (!guildId) {
+          this.logger.error({ error }, 'Error playing silence frame: guildId missing from connection.joinConfig');
+        } else {
+          this.logger.error({ guildId, error }, 'Error playing silence frame');
+        }
         player.stop();
         reject(error);
       });
@@ -152,8 +181,12 @@ export class VoiceConnectionManager {
         if (settled) return;
         settled = true;
         player.stop();
-        const guildId = connection.joinConfig?.guildId ?? 'unknown';
-        this.logger.debug({ guildId }, 'Silent frame played to initialize voice reception');
+        const guildId = connection.joinConfig?.guildId;
+        if (!guildId) {
+          this.logger.debug('Silent frame played to initialize voice reception (guildId missing from connection.joinConfig)');
+        } else {
+          this.logger.debug({ guildId }, 'Silent frame played to initialize voice reception');
+        }
         resolve();
       });
 

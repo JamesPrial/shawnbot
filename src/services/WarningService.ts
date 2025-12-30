@@ -1,4 +1,4 @@
-import { Client, EmbedBuilder, TextChannel, ChannelType, Guild, GuildBasedChannel } from 'discord.js';
+import { Client, EmbedBuilder, TextChannel, ChannelType, Guild, GuildBasedChannel, PermissionFlagsBits } from 'discord.js';
 import type { Logger } from 'pino';
 import { GuildConfigService } from './GuildConfigService';
 import { RateLimiter } from '../utils/RateLimiter';
@@ -31,6 +31,16 @@ export class WarningService {
 
       if (!warningChannel) {
         this.logger.warn({ guildId }, 'No warning channel found');
+        return;
+      }
+
+      // Check if bot has SEND_MESSAGES permission in the warning channel
+      const botPermissions = warningChannel.permissionsFor(guild.members.me);
+      if (!botPermissions?.has(PermissionFlagsBits.SendMessages)) {
+        this.logger.warn(
+          { guildId, channelId: warningChannel.id },
+          'Bot lacks SEND_MESSAGES permission in warning channel'
+        );
         return;
       }
 

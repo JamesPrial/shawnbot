@@ -1,17 +1,31 @@
-import { describe, it, expect, beforeEach, afterEach } from 'vitest';
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import Database from 'better-sqlite3';
+import type { Logger } from 'pino';
 import { GuildSettingsRepository } from '../database/repositories/GuildSettingsRepository';
 import { createTables } from '../database/schema';
 
 describe('GuildSettingsRepository', () => {
   let db: Database.Database;
   let repository: GuildSettingsRepository;
+  let mockLogger: Logger;
 
   beforeEach(() => {
+    // Create a mock logger
+    mockLogger = {
+      debug: vi.fn(),
+      info: vi.fn(),
+      warn: vi.fn(),
+      error: vi.fn(),
+      fatal: vi.fn(),
+      trace: vi.fn(),
+      child: vi.fn(() => mockLogger),
+      level: 'info',
+    } as unknown as Logger;
+
     // Create an in-memory SQLite database for each test
     db = new Database(':memory:');
-    createTables(db);
-    repository = new GuildSettingsRepository(db);
+    createTables(db, mockLogger);
+    repository = new GuildSettingsRepository(db, mockLogger);
   });
 
   afterEach(() => {
@@ -506,6 +520,431 @@ describe('GuildSettingsRepository', () => {
 
       const result = repository.findByGuildId(guildId);
       expect(result?.enabled).toBe(true);
+    });
+  });
+
+  describe('safe JSON parsing', () => {
+    it('should handle malformed JSON gracefully for exempt_role_ids', () => {
+      const guildId = 'malformed-json-exempt';
+
+      // Insert malformed JSON directly into database
+      db.prepare(`
+        INSERT INTO guild_settings (guild_id, exempt_role_ids)
+        VALUES (?, ?)
+      `).run(guildId, '{invalid json}');
+
+      const result = repository.findByGuildId(guildId);
+
+      // Should return empty array and log warning
+      expect(result?.exemptRoleIds).toEqual([]);
+      expect(mockLogger.warn).toHaveBeenCalled();
+    });
+
+    it('should handle malformed JSON gracefully for admin_role_ids', () => {
+      const guildId = 'malformed-json-admin';
+
+      // Insert malformed JSON directly into database
+      db.prepare(`
+        INSERT INTO guild_settings (guild_id, admin_role_ids)
+        VALUES (?, ?)
+      `).run(guildId, '[not, valid, json]');
+
+      const result = repository.findByGuildId(guildId);
+
+      // Should return empty array and log warning
+      expect(result?.adminRoleIds).toEqual([]);
+      expect(mockLogger.warn).toHaveBeenCalled();
+    });
+
+    it('should handle non-array JSON for exempt_role_ids', () => {
+      const guildId = 'non-array-exempt';
+
+      // Insert valid JSON but not an array
+      db.prepare(`
+        INSERT INTO guild_settings (guild_id, exempt_role_ids)
+        VALUES (?, ?)
+      `).run(guildId, '{"key": "value"}');
+
+      const result = repository.findByGuildId(guildId);
+
+      // Should return empty array and log warning
+      expect(result?.exemptRoleIds).toEqual([]);
+      expect(mockLogger.warn).toHaveBeenCalledWith(
+        expect.objectContaining({
+          fieldName: 'exempt_role_ids',
+        }),
+        expect.stringContaining('non-array')
+      );
+    });
+
+    it('should handle array with non-string values', () => {
+      const guildId = 'mixed-types-array';
+
+      // Insert array with mixed types
+      db.prepare(`
+        INSERT INTO guild_settings (guild_id, exempt_role_ids)
+        VALUES (?, ?)
+      `).run(guildId, '[123, "valid", null, true]');
+
+      const result = repository.findByGuildId(guildId);
+
+      // Should return empty array and log warning
+      expect(result?.exemptRoleIds).toEqual([]);
+      expect(mockLogger.warn).toHaveBeenCalledWith(
+        expect.objectContaining({
+          fieldName: 'exempt_role_ids',
+        }),
+        expect.stringContaining('non-string')
+      );
+    });
+
+    it('should successfully parse valid JSON arrays', () => {
+      const guildId = 'valid-json';
+      const roleIds = ['role-1', 'role-2', 'role-3'];
+
+      // Insert valid JSON array
+      db.prepare(`
+        INSERT INTO guild_settings (guild_id, exempt_role_ids, admin_role_ids)
+        VALUES (?, ?, ?)
+      `).run(guildId, JSON.stringify(roleIds), JSON.stringify(['admin-1']));
+
+      const result = repository.findByGuildId(guildId);
+
+      // Should successfully parse both arrays without warnings
+      expect(result?.exemptRoleIds).toEqual(roleIds);
+      expect(result?.adminRoleIds).toEqual(['admin-1']);
+    });
+  });
+
+  describe('safeParseJsonArray - comprehensive unit tests', () => {
+    // These tests directly test the safeParseJsonArray method to ensure all edge cases are covered
+
+    beforeEach(() => {
+      // Reset mock logger before each test in this suite
+      vi.clearAllMocks();
+    });
+
+    describe('when input is null or undefined', () => {
+      it('should return empty array for null input without logging', () => {
+        // This proves null database values are safely handled
+        const result = (repository as any).safeParseJsonArray(null, 'test_field');
+
+        expect(result).toEqual([]);
+        expect(result).toHaveLength(0);
+        expect(mockLogger.warn).not.toHaveBeenCalled();
+      });
+
+      it('should return empty array for undefined input without logging', () => {
+        // This proves undefined values (from optional fields) are safely handled
+        const result = (repository as any).safeParseJsonArray(undefined, 'test_field');
+
+        expect(result).toEqual([]);
+        expect(mockLogger.warn).not.toHaveBeenCalled();
+      });
+    });
+
+    describe('when input is valid JSON array', () => {
+      it('should parse single-element array correctly', () => {
+        const validJson = '["role-123"]';
+        const result = (repository as any).safeParseJsonArray(validJson, 'exempt_role_ids');
+
+        expect(result).toEqual(['role-123']);
+        expect(result).toHaveLength(1);
+        expect(mockLogger.warn).not.toHaveBeenCalled();
+      });
+
+      it('should parse multi-element array correctly', () => {
+        const validJson = '["role-1", "role-2", "role-3"]';
+        const result = (repository as any).safeParseJsonArray(validJson, 'exempt_role_ids');
+
+        expect(result).toEqual(['role-1', 'role-2', 'role-3']);
+        expect(result).toHaveLength(3);
+        expect(mockLogger.warn).not.toHaveBeenCalled();
+      });
+
+      it('should parse empty array correctly', () => {
+        const validJson = '[]';
+        const result = (repository as any).safeParseJsonArray(validJson, 'exempt_role_ids');
+
+        expect(result).toEqual([]);
+        expect(mockLogger.warn).not.toHaveBeenCalled();
+      });
+
+      it('should preserve string values without type coercion', () => {
+        // This proves that string "0" is not coerced to number 0, etc.
+        const validJson = '["123", "0", "", "null", "false"]';
+        const result = (repository as any).safeParseJsonArray(validJson, 'test_field');
+
+        expect(result).toEqual(['123', '0', '', 'null', 'false']);
+        expect(result[0]).toBe('123'); // String, not number 123
+        expect(result[1]).toBe('0'); // String "0", not number 0
+        expect(result[2]).toBe(''); // Empty string, not falsy value
+        expect(result[3]).toBe('null'); // String "null", not null
+        expect(result[4]).toBe('false'); // String "false", not boolean false
+        expect(mockLogger.warn).not.toHaveBeenCalled();
+      });
+
+      it('should handle special characters in strings', () => {
+        const validJson = '["role-!@#$%^&*()", "role-with-\\"quotes\\"", "role\\twith\\ttabs"]';
+        const result = (repository as any).safeParseJsonArray(validJson, 'test_field');
+
+        expect(result).toHaveLength(3);
+        expect(result[0]).toBe('role-!@#$%^&*()');
+        expect(mockLogger.warn).not.toHaveBeenCalled();
+      });
+
+      it('should handle very large arrays without error', () => {
+        // This proves the function can handle realistic large datasets (e.g., servers with many roles)
+        const largeArray = Array.from({ length: 1000 }, (_, i) => `role-${i}`);
+        const largeJson = JSON.stringify(largeArray);
+        const result = (repository as any).safeParseJsonArray(largeJson, 'exempt_role_ids');
+
+        expect(result).toEqual(largeArray);
+        expect(result).toHaveLength(1000);
+        expect(result[0]).toBe('role-0');
+        expect(result[999]).toBe('role-999');
+        expect(mockLogger.warn).not.toHaveBeenCalled();
+      });
+    });
+
+    describe('when input is invalid/corrupted JSON', () => {
+      it('should return empty array and log warning for malformed JSON (missing bracket)', () => {
+        const invalidJson = '["role-1", "role-2"'; // Missing closing bracket
+        const result = (repository as any).safeParseJsonArray(invalidJson, 'exempt_role_ids');
+
+        expect(result).toEqual([]);
+        expect(mockLogger.warn).toHaveBeenCalledOnce();
+        expect(mockLogger.warn).toHaveBeenCalledWith(
+          expect.objectContaining({
+            fieldName: 'exempt_role_ids',
+            value: invalidJson,
+            error: expect.any(Error),
+          }),
+          'Failed to parse JSON array, returning empty array'
+        );
+      });
+
+      it('should return empty array and log warning for completely invalid JSON', () => {
+        const invalidJson = 'not json at all';
+        const result = (repository as any).safeParseJsonArray(invalidJson, 'exempt_role_ids');
+
+        expect(result).toEqual([]);
+        expect(mockLogger.warn).toHaveBeenCalledOnce();
+        const logCall = (mockLogger.warn as any).mock.calls[0];
+        expect(logCall[0]).toHaveProperty('fieldName', 'exempt_role_ids');
+        expect(logCall[0]).toHaveProperty('error');
+      });
+
+      it('should return empty array for truncated JSON', () => {
+        const truncatedJson = '["role-1", "role-2", "role-3"';
+        const result = (repository as any).safeParseJsonArray(truncatedJson, 'admin_role_ids');
+
+        expect(result).toEqual([]);
+        expect(mockLogger.warn).toHaveBeenCalledOnce();
+        expect((mockLogger.warn as any).mock.calls[0][0].fieldName).toBe('admin_role_ids');
+      });
+
+      it('should return empty array for JSON with unescaped quotes', () => {
+        const invalidJson = '["role-with"quotes"]';
+        const result = (repository as any).safeParseJsonArray(invalidJson, 'test_field');
+
+        expect(result).toEqual([]);
+        expect(mockLogger.warn).toHaveBeenCalledOnce();
+      });
+
+      it('should return empty array for JSON with trailing comma', () => {
+        // Trailing commas are invalid in JSON (unlike JavaScript)
+        const invalidJson = '["role-1", "role-2",]';
+        const result = (repository as any).safeParseJsonArray(invalidJson, 'test_field');
+
+        expect(result).toEqual([]);
+        expect(mockLogger.warn).toHaveBeenCalledOnce();
+      });
+
+      it('should handle binary/garbage data gracefully', () => {
+        // This simulates database corruption with binary data
+        const corruptedData = '\x00\x01\x02\x03\x04';
+        const result = (repository as any).safeParseJsonArray(corruptedData, 'exempt_role_ids');
+
+        expect(result).toEqual([]);
+        expect(mockLogger.warn).toHaveBeenCalledOnce();
+      });
+
+      it('should include the actual JSON.parse error message in log', () => {
+        const invalidJson = '{"broken": json}';
+        (repository as any).safeParseJsonArray(invalidJson, 'test_field');
+
+        expect(mockLogger.warn).toHaveBeenCalledOnce();
+        const logCall = (mockLogger.warn as any).mock.calls[0];
+        expect(logCall[0].error).toBeDefined();
+        expect(logCall[0].error instanceof Error).toBe(true);
+        expect(logCall[0].error.message.length).toBeGreaterThan(0);
+      });
+    });
+
+    describe('when input is valid JSON but not an array', () => {
+      it('should return empty array and log warning for JSON object', () => {
+        const jsonObject = '{"key": "value"}';
+        const result = (repository as any).safeParseJsonArray(jsonObject, 'exempt_role_ids');
+
+        expect(result).toEqual([]);
+        expect(mockLogger.warn).toHaveBeenCalledOnce();
+        expect(mockLogger.warn).toHaveBeenCalledWith(
+          expect.objectContaining({
+            fieldName: 'exempt_role_ids',
+            value: jsonObject,
+            parsedType: 'object',
+          }),
+          expect.stringContaining('non-array')
+        );
+      });
+
+      it('should return empty array and log warning for JSON string', () => {
+        const jsonString = '"just a string"';
+        const result = (repository as any).safeParseJsonArray(jsonString, 'exempt_role_ids');
+
+        expect(result).toEqual([]);
+        expect(mockLogger.warn).toHaveBeenCalledOnce();
+        expect(mockLogger.warn).toHaveBeenCalledWith(
+          expect.objectContaining({
+            parsedType: 'string',
+          }),
+          expect.any(String)
+        );
+      });
+
+      it('should return empty array and log warning for JSON number', () => {
+        const jsonNumber = '42';
+        const result = (repository as any).safeParseJsonArray(jsonNumber, 'exempt_role_ids');
+
+        expect(result).toEqual([]);
+        expect(mockLogger.warn).toHaveBeenCalledOnce();
+        expect(mockLogger.warn).toHaveBeenCalledWith(
+          expect.objectContaining({
+            parsedType: 'number',
+          }),
+          expect.any(String)
+        );
+      });
+
+      it('should return empty array and log warning for JSON boolean true', () => {
+        const jsonBoolean = 'true';
+        const result = (repository as any).safeParseJsonArray(jsonBoolean, 'exempt_role_ids');
+
+        expect(result).toEqual([]);
+        expect(mockLogger.warn).toHaveBeenCalledOnce();
+        expect(mockLogger.warn).toHaveBeenCalledWith(
+          expect.objectContaining({
+            parsedType: 'boolean',
+          }),
+          expect.any(String)
+        );
+      });
+
+      it('should return empty array and log warning for JSON boolean false', () => {
+        const jsonBoolean = 'false';
+        const result = (repository as any).safeParseJsonArray(jsonBoolean, 'exempt_role_ids');
+
+        expect(result).toEqual([]);
+        expect(mockLogger.warn).toHaveBeenCalledOnce();
+      });
+
+      it('should return empty array and log warning for JSON null', () => {
+        // This is the JSON string "null", not actual null input
+        const jsonNull = 'null';
+        const result = (repository as any).safeParseJsonArray(jsonNull, 'exempt_role_ids');
+
+        expect(result).toEqual([]);
+        expect(mockLogger.warn).toHaveBeenCalledOnce();
+        expect(mockLogger.warn).toHaveBeenCalledWith(
+          expect.objectContaining({
+            parsedType: 'object', // typeof null === 'object' in JavaScript
+          }),
+          expect.any(String)
+        );
+      });
+
+      it('should return empty array and log warning for nested array', () => {
+        // Nested arrays are arrays, but not arrays of strings
+        const nestedArray = '[["inner1", "inner2"], ["inner3"]]';
+        const result = (repository as any).safeParseJsonArray(nestedArray, 'exempt_role_ids');
+
+        expect(result).toEqual([]);
+        expect(mockLogger.warn).toHaveBeenCalledOnce();
+        expect(mockLogger.warn).toHaveBeenCalledWith(
+          expect.objectContaining({
+            fieldName: 'exempt_role_ids',
+          }),
+          expect.stringContaining('non-string')
+        );
+      });
+    });
+
+    describe('edge cases', () => {
+      it('should handle empty string input', () => {
+        // Empty string is falsy, so returns early without logging
+        const emptyString = '';
+        const result = (repository as any).safeParseJsonArray(emptyString, 'exempt_role_ids');
+
+        expect(result).toEqual([]);
+        expect(mockLogger.warn).not.toHaveBeenCalled();
+      });
+
+      it('should handle whitespace-only input', () => {
+        const whitespace = '   \n\t  ';
+        const result = (repository as any).safeParseJsonArray(whitespace, 'exempt_role_ids');
+
+        expect(result).toEqual([]);
+        expect(mockLogger.warn).toHaveBeenCalledOnce();
+      });
+
+      it('should handle array with only numeric strings', () => {
+        // Discord IDs can be large numbers represented as strings
+        const numericStrings = '["123456789012345678", "987654321098765432"]';
+        const result = (repository as any).safeParseJsonArray(numericStrings, 'exempt_role_ids');
+
+        expect(result).toEqual(['123456789012345678', '987654321098765432']);
+        expect(result[0]).toBe('123456789012345678'); // String, not number
+        expect(mockLogger.warn).not.toHaveBeenCalled();
+      });
+
+      it('should handle array with unicode characters', () => {
+        const unicodeJson = '["role-😀", "role-日本語", "role-🎵"]';
+        const result = (repository as any).safeParseJsonArray(unicodeJson, 'exempt_role_ids');
+
+        expect(result).toEqual(['role-😀', 'role-日本語', 'role-🎵']);
+        expect(mockLogger.warn).not.toHaveBeenCalled();
+      });
+
+      it('should reject array with numbers (not strings)', () => {
+        const numbersArray = '[123, 456, 789]';
+        const result = (repository as any).safeParseJsonArray(numbersArray, 'exempt_role_ids');
+
+        expect(result).toEqual([]);
+        expect(mockLogger.warn).toHaveBeenCalledOnce();
+        expect(mockLogger.warn).toHaveBeenCalledWith(
+          expect.objectContaining({
+            fieldName: 'exempt_role_ids',
+          }),
+          expect.stringContaining('non-string')
+        );
+      });
+
+      it('should reject array with mixed types', () => {
+        const mixedArray = '["valid", 123, null, true, "also-valid"]';
+        const result = (repository as any).safeParseJsonArray(mixedArray, 'exempt_role_ids');
+
+        expect(result).toEqual([]);
+        expect(mockLogger.warn).toHaveBeenCalledOnce();
+      });
+
+      it('should reject array with objects as elements', () => {
+        const objectsArray = '[{"id": "role-1"}, {"id": "role-2"}]';
+        const result = (repository as any).safeParseJsonArray(objectsArray, 'exempt_role_ids');
+
+        expect(result).toEqual([]);
+        expect(mockLogger.warn).toHaveBeenCalledOnce();
+      });
     });
   });
 });

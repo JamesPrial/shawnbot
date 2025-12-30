@@ -19,28 +19,29 @@ export function createVoiceStateUpdateHandler(deps: VoiceStateHandlerDeps) {
   const { voiceMonitor, afkDetection, guildConfig, logger } = deps;
 
   return async (oldState: VoiceState, newState: VoiceState): Promise<void> => {
-    const userId = newState.member?.user.id || oldState.member?.user.id;
-    const guildId = newState.guild.id;
+    try {
+      const userId = newState.member?.user.id || oldState.member?.user.id;
+      const guildId = newState.guild.id;
 
-    if (!userId) {
-      logger.debug('No userId found in voice state update');
-      return;
-    }
+      if (!userId) {
+        logger.debug('No userId found in voice state update');
+        return;
+      }
 
-    const isBot = newState.member?.user.bot || oldState.member?.user.bot;
-    if (isBot) {
-      logger.debug({ userId, guildId }, 'Skipping bot user');
-      return;
-    }
+      const isBot = newState.member?.user.bot || oldState.member?.user.bot;
+      if (isBot) {
+        logger.debug({ userId, guildId }, 'Skipping bot user');
+        return;
+      }
 
-    const config = guildConfig.getConfig(guildId);
-    if (!config.enabled) {
-      logger.debug({ guildId }, 'Guild monitoring not enabled');
-      return;
-    }
+      const config = guildConfig.getConfig(guildId);
+      if (!config.enabled) {
+        logger.debug({ guildId }, 'Guild monitoring not enabled');
+        return;
+      }
 
-    const oldChannel = oldState.channel;
-    const newChannel = newState.channel;
+      const oldChannel = oldState.channel;
+      const newChannel = newState.channel;
 
     // User joined a channel
     if (!oldChannel && newChannel) {
@@ -112,7 +113,18 @@ export function createVoiceStateUpdateHandler(deps: VoiceStateHandlerDeps) {
       return;
     }
 
-    // Other state changes (mute, deafen, etc.) - no action needed
-    logger.debug({ userId, guildId }, 'Voice state updated (no channel change)');
+      // Other state changes (mute, deafen, etc.) - no action needed
+      logger.debug({ userId, guildId }, 'Voice state updated (no channel change)');
+    } catch (error) {
+      const userId = newState.member?.user.id || oldState.member?.user.id;
+      const guildId = newState.guild.id;
+      const oldChannelId = oldState.channel?.id;
+      const newChannelId = newState.channel?.id;
+
+      logger.error(
+        { error, userId, guildId, oldChannelId, newChannelId },
+        'Error handling voice state update'
+      );
+    }
   };
 }

@@ -3,8 +3,10 @@ import {
   ChatInputCommandInteraction,
   ChannelType,
 } from 'discord.js';
+import type { Logger } from 'pino';
 import { GuildConfigService } from '../../services/GuildConfigService';
 import { hasAFKAdminPermission } from '../../utils/permissions';
+import { formatError } from '../../utils/errorUtils';
 
 export const data = new SlashCommandBuilder()
   .setName('afk-config')
@@ -114,7 +116,8 @@ export const data = new SlashCommandBuilder()
 
 export async function execute(
   interaction: ChatInputCommandInteraction,
-  configService: GuildConfigService
+  configService: GuildConfigService,
+  logger: Logger
 ): Promise<void> {
   if (!interaction.guildId) {
     await interaction.reply({
@@ -171,8 +174,8 @@ export async function execute(
         });
     }
   } catch (error) {
-    console.error('Error executing afk-config command:', error);
-    const errorMessage = error instanceof Error ? error.message : 'An unknown error occurred.';
+    logger.error({ error, guildId, subcommand: interaction.options.getSubcommand() }, 'Error executing afk-config command');
+    const errorMessage = formatError(error).message;
 
     if (interaction.replied || interaction.deferred) {
       await interaction.followUp({

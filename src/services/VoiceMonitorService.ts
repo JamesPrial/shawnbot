@@ -4,6 +4,7 @@ import { VoiceConnectionManager } from '../voice/VoiceConnectionManager';
 import { GuildConfigService } from './GuildConfigService';
 import { MIN_USERS_FOR_AFK_TRACKING } from './AFKDetectionService';
 import { RateLimiter } from '../utils/RateLimiter';
+import { formatError } from '../utils/errorUtils';
 
 export class VoiceMonitorService {
   constructor(
@@ -93,7 +94,7 @@ export class VoiceMonitorService {
     } catch (error) {
       this.logger.error(
         {
-          error: error instanceof Error ? { message: error.message, stack: error.stack } : error,
+          error: formatError(error),
           guildId: guild.id,
           guildName: guild.name
         },
@@ -112,7 +113,7 @@ export class VoiceMonitorService {
       } catch (error) {
         this.logger.error(
           {
-            error: error instanceof Error ? { message: error.message, stack: error.stack } : error,
+            error: formatError(error),
             guildId,
             guildName: guild.name
           },
@@ -149,7 +150,7 @@ export class VoiceMonitorService {
     } catch (error) {
       this.logger.error(
         {
-          error: error instanceof Error ? { message: error.message, stack: error.stack } : error,
+          error: formatError(error),
           guildId,
           channelId
         },

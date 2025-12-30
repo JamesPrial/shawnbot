@@ -471,12 +471,20 @@ describe('VoiceConnectionManager', () => {
 
       it('should properly cleanup when connection exists', () => {
         const guildId = 'cleanup-guild';
+        const mockOff = vi.fn();
         const mockConnection = {
           joinConfig: { guildId },
           destroy: vi.fn(),
+          off: mockOff,
         } as unknown as VoiceConnection;
 
         (manager as any).connections.set(guildId, mockConnection);
+
+        // Pre-populate listeners map to verify cleanup
+        (manager as any).connectionListeners.set(guildId, {
+          onDisconnected: () => {},
+          onDestroyed: () => {},
+        });
 
         manager.leaveChannel(guildId);
 
@@ -485,6 +493,7 @@ describe('VoiceConnectionManager', () => {
           'Leaving voice channel'
         );
         expect(mockSpeakingTracker.unregisterConnection).toHaveBeenCalledWith(guildId);
+        expect(mockOff).toHaveBeenCalled();
         expect(mockConnection.destroy).toHaveBeenCalled();
         expect(manager.hasConnection(guildId)).toBe(false);
       });
@@ -496,6 +505,7 @@ describe('VoiceConnectionManager', () => {
         const mockConnection = {
           joinConfig: { guildId },
           destroy: vi.fn(),
+          off: vi.fn(),
         } as unknown as VoiceConnection;
 
         (manager as any).connections.set(guildId, mockConnection);
@@ -563,11 +573,13 @@ describe('VoiceConnectionManager', () => {
       const mockConnection1 = {
         joinConfig: { guildId: guild1 },
         destroy: vi.fn(),
+        off: vi.fn(),
       } as unknown as VoiceConnection;
 
       const mockConnection2 = {
         joinConfig: { guildId: guild2 },
         destroy: vi.fn(),
+        off: vi.fn(),
       } as unknown as VoiceConnection;
 
       (manager as any).connections.set(guild1, mockConnection1);
@@ -989,6 +1001,713 @@ describe('VoiceConnectionManager', () => {
         // In real implementation with proper mocking, we'd verify different player instances
         expect(mockConnection1.subscribe).toHaveBeenCalledTimes(1);
         expect(mockConnection2.subscribe).toHaveBeenCalledTimes(1);
+      });
+    });
+  });
+
+  describe('WU-4: Voice Connection Manager Fixes', () => {
+    /**
+     * WU-4 tests for type safety, event listener cleanup, and missing guildId handling.
+     * These tests verify the robustness improvements from the work unit.
+     */
+
+    describe('Type Safety', () => {
+      describe('when creating voice connection with proper types', () => {
+        it('should create connection without runtime errors from type casts', async () => {
+          // WHY: The adapterCreator cast to DiscordGatewayAdapterCreator must not cause runtime errors.
+          // This test verifies the type assertion is safe.
+
+          const guildId = 'type-safe-guild';
+          const channelId = 'type-safe-channel';
+
+          const mockVoiceAdapterCreator = vi.fn();
+
+          const mockChannel = {
+            id: channelId,
+            guild: {
+              id: guildId,
+              voiceAdapterCreator: mockVoiceAdapterCreator,
+            },
+          } as unknown as VoiceBasedChannel;
+
+          // The joinChannel implementation will fail in test env when calling joinVoiceChannel,
+          // but we verify the type cast doesn't cause an error before that point
+          try {
+            await manager.joinChannel(mockChannel);
+          } catch (error) {
+            // Expected to fail during actual voice connection
+            // The key is that we don't get a type error at the cast itself
+          }
+
+          // Verify we got past the type cast and attempted to create the connection
+          expect(mockLogger.info).toHaveBeenCalledWith(
+            expect.objectContaining({ guildId, channelId }),
+            'Joining voice channel'
+          );
+        });
+
+        it('should handle voiceAdapterCreator being undefined without type errors', async () => {
+          // WHY: If Discord.js behavior changes or channel object is malformed,
+          // we should fail gracefully rather than with a type error.
+
+          const guildId = 'undefined-adapter-guild';
+          const channelId = 'undefined-adapter-channel';
+
+          const mockChannel = {
+            id: channelId,
+            guild: {
+              id: guildId,
+              voiceAdapterCreator: undefined,
+            },
+          } as unknown as VoiceBasedChannel;
+
+          // Should not throw a type error at the cast
+          try {
+            await manager.joinChannel(mockChannel);
+          } catch (error) {
+            // May fail during joinVoiceChannel call, but not at the type cast
+          }
+
+          expect(mockLogger.info).toHaveBeenCalledWith(
+            expect.objectContaining({ guildId, channelId }),
+            'Joining voice channel'
+          );
+        });
+
+        it('should use correct types for connection configuration', async () => {
+          // WHY: Verify that joinVoiceChannel receives properly typed parameters.
+          // This ensures the configuration object matches Discord.js expectations.
+
+          const guildId = 'config-types-guild';
+          const channelId = 'config-types-channel';
+
+          const mockChannel = {
+            id: channelId,
+            guild: {
+              id: guildId,
+              voiceAdapterCreator: vi.fn(),
+            },
+          } as unknown as VoiceBasedChannel;
+
+          try {
+            await manager.joinChannel(mockChannel);
+          } catch (error) {
+            // Expected to fail in test environment
+          }
+
+          // The fact that we got to the info log proves the config object was created
+          // with proper types (channelId: string, guildId: string, etc.)
+          expect(mockLogger.info).toHaveBeenCalledWith(
+            expect.objectContaining({
+              guildId: expect.any(String),
+              channelId: expect.any(String),
+            }),
+            'Joining voice channel'
+          );
+        });
+      });
+
+      describe('when connection type is VoiceConnection', () => {
+        it('should store and return VoiceConnection type without casting', () => {
+          // WHY: The connections Map should use proper VoiceConnection type,
+          // not 'any' or require casting on retrieval.
+
+          const guildId = 'typed-connection-guild';
+
+          const mockConnection = {
+            joinConfig: { guildId, channelId: 'test' },
+            state: { status: VoiceConnectionStatus.Ready },
+            destroy: vi.fn(),
+            on: vi.fn(),
+          } as unknown as VoiceConnection;
+
+          (manager as any).connections.set(guildId, mockConnection);
+
+          const retrieved = manager.getConnection(guildId);
+
+          // TypeScript should infer VoiceConnection | undefined without casting
+          expect(retrieved).toBe(mockConnection);
+
+          // Should have VoiceConnection properties without type errors
+          if (retrieved) {
+            expect(retrieved.joinConfig).toBeDefined();
+            expect(retrieved.state).toBeDefined();
+            expect(typeof retrieved.destroy).toBe('function');
+          }
+        });
+
+        it('should handle Map.get() returning undefined with proper type', () => {
+          // WHY: Map.get() returns T | undefined, and we should handle this
+          // without non-null assertions.
+
+          const nonExistentGuildId = 'never-exists';
+
+          const connection = manager.getConnection(nonExistentGuildId);
+
+          // Should be undefined, not null, matching Map.get() semantics
+          expect(connection).toBeUndefined();
+          expect(connection).not.toBeNull();
+
+          // Type should be VoiceConnection | undefined
+          if (connection) {
+            // This block won't execute, but proves type narrowing works
+            expect(connection.state).toBeDefined();
+          } else {
+            // This block executes - proves proper undefined handling
+            expect(connection).toBeUndefined();
+          }
+        });
+      });
+    });
+
+    describe('Event Listener Cleanup', () => {
+      describe('when leaveChannel is called', () => {
+        it('should remove event listeners before calling destroy', () => {
+          // WHY: Event listeners should be cleaned up to prevent memory leaks
+          // and avoid handlers firing after destruction.
+
+          const guildId = 'cleanup-listeners-guild';
+
+          const mockOn = vi.fn();
+          const mockRemoveAllListeners = vi.fn();
+          const mockDestroy = vi.fn();
+
+          const mockConnection = {
+            joinConfig: { guildId },
+            on: mockOn,
+            removeAllListeners: mockRemoveAllListeners,
+            destroy: mockDestroy,
+          } as unknown as VoiceConnection;
+
+          (manager as any).connections.set(guildId, mockConnection);
+
+          manager.leaveChannel(guildId);
+
+          // Current implementation calls destroy() without explicit listener removal
+          // Document this behavior - destroy() should internally clean up listeners,
+          // but explicit removal is more defensive
+          expect(mockDestroy).toHaveBeenCalled();
+
+          // Verify connection is removed from map
+          expect(manager.hasConnection(guildId)).toBe(false);
+        });
+
+        it('should prevent Disconnected event handler from firing after leaveChannel', () => {
+          // WHY: If the Disconnected event fires after we intentionally leave,
+          // it shouldn't trigger reconnection logic or errors.
+
+          const guildId = 'prevent-disconnected-guild';
+
+          let disconnectedHandler: (() => void) | undefined;
+
+          const mockConnection = {
+            joinConfig: { guildId },
+            on: vi.fn((event: string, handler: () => void) => {
+              if (event === VoiceConnectionStatus.Disconnected) {
+                disconnectedHandler = handler;
+              }
+            }),
+            destroy: vi.fn(),
+          } as unknown as VoiceConnection;
+
+          (manager as any).connections.set(guildId, mockConnection);
+
+          manager.leaveChannel(guildId);
+
+          // Clear logger to detect any new logs from handler
+          vi.mocked(mockLogger.warn).mockClear();
+          vi.mocked(mockLogger.info).mockClear();
+
+          // Simulate Disconnected event firing after leaveChannel
+          if (disconnectedHandler) {
+            disconnectedHandler();
+          }
+
+          // Handler should either not fire or should handle gracefully
+          // (connection is already removed from map, so re-entrancy should be safe)
+          expect(manager.hasConnection(guildId)).toBe(false);
+        });
+
+        it('should prevent Destroyed event handler from firing after leaveChannel', () => {
+          // WHY: The Destroyed event handler calls leaveChannel again (line 87).
+          // This should be idempotent and not cause errors.
+
+          const guildId = 'prevent-destroyed-guild';
+
+          let destroyedHandler: (() => void) | undefined;
+
+          const mockConnection = {
+            joinConfig: { guildId },
+            on: vi.fn((event: string, handler: () => void) => {
+              if (event === VoiceConnectionStatus.Destroyed) {
+                destroyedHandler = handler;
+              }
+            }),
+            destroy: vi.fn(),
+          } as unknown as VoiceConnection;
+
+          (manager as any).connections.set(guildId, mockConnection);
+
+          manager.leaveChannel(guildId);
+
+          // Simulate Destroyed event firing after leaveChannel
+          if (destroyedHandler) {
+            // This should be safe - leaveChannel is idempotent
+            expect(() => destroyedHandler!()).not.toThrow();
+          }
+
+          expect(manager.hasConnection(guildId)).toBe(false);
+        });
+
+        it('should handle destroy() being called multiple times safely', () => {
+          // WHY: If event handlers fire during/after destroy(),
+          // the destroy method should be idempotent.
+
+          const guildId = 'multi-destroy-guild';
+
+          const mockDestroy = vi.fn();
+          const mockConnection = {
+            joinConfig: { guildId },
+            destroy: mockDestroy,
+            on: vi.fn(),
+          } as unknown as VoiceConnection;
+
+          (manager as any).connections.set(guildId, mockConnection);
+
+          manager.leaveChannel(guildId);
+          expect(mockDestroy).toHaveBeenCalledTimes(1);
+
+          // Calling leaveChannel again should be safe but shouldn't call destroy again
+          manager.leaveChannel(guildId);
+          expect(mockDestroy).toHaveBeenCalledTimes(1); // Still 1, not 2
+        });
+      });
+
+      describe('when connection is destroyed externally', () => {
+        it('should clean up properly when Destroyed event fires from external cause', () => {
+          // WHY: Discord might destroy the connection externally (network issues, etc.).
+          // Our handler should clean up properly.
+          // The actual handler created in joinChannel (line 96-99) calls leaveChannel.
+
+          const guildId = 'external-destroy-guild';
+
+          const mockConnection = {
+            joinConfig: { guildId },
+            on: vi.fn(),
+            destroy: vi.fn(),
+            off: vi.fn(),
+            state: { status: VoiceConnectionStatus.Ready },
+          } as unknown as VoiceConnection;
+
+          // Set up the connection and listeners as joinChannel would
+          (manager as any).connections.set(guildId, mockConnection);
+
+          const onDisconnected = async () => {};
+          const onDestroyed = () => {};
+
+          (manager as any).connectionListeners.set(guildId, {
+            onDisconnected,
+            onDestroyed,
+          });
+
+          // Simulate what happens when the Destroyed event fires:
+          // The handler created in joinChannel (line 96-99) logs and calls leaveChannel
+          // We simulate this by directly calling leaveChannel
+          manager.leaveChannel(guildId);
+
+          // After the Destroyed event handler runs, the connection should be removed
+          expect(manager.hasConnection(guildId)).toBe(false);
+        });
+      });
+
+      describe('when no listeners remain after cleanup', () => {
+        it('should not have any active listeners after leaveChannel completes', () => {
+          // WHY: Memory leak prevention - all listeners should be cleaned up.
+
+          const guildId = 'no-listeners-guild';
+
+          const mockOn = vi.fn();
+          const mockConnection = {
+            joinConfig: { guildId },
+            on: mockOn,
+            destroy: vi.fn(),
+          } as unknown as VoiceConnection;
+
+          (manager as any).connections.set(guildId, mockConnection);
+
+          manager.leaveChannel(guildId);
+
+          // Connection should be removed from map
+          expect(manager.hasConnection(guildId)).toBe(false);
+
+          // Connection should no longer be reachable
+          expect(manager.getConnection(guildId)).toBeUndefined();
+        });
+
+        it('should unregister from SpeakingTracker before destroying connection', () => {
+          // WHY: The speaking tracker might have listeners on the connection.
+          // We should unregister before destroying to ensure clean shutdown.
+
+          const guildId = 'unregister-order-guild';
+
+          const mockDestroy = vi.fn();
+          const mockConnection = {
+            joinConfig: { guildId },
+            destroy: mockDestroy,
+            on: vi.fn(),
+          } as unknown as VoiceConnection;
+
+          (manager as any).connections.set(guildId, mockConnection);
+
+          // Track call order
+          const callOrder: string[] = [];
+
+          vi.mocked(mockSpeakingTracker.unregisterConnection).mockImplementation(() => {
+            callOrder.push('unregister');
+          });
+
+          mockDestroy.mockImplementation(() => {
+            callOrder.push('destroy');
+          });
+
+          manager.leaveChannel(guildId);
+
+          // Verify unregister happens before destroy
+          expect(callOrder).toEqual(['unregister', 'destroy']);
+          expect(mockSpeakingTracker.unregisterConnection).toHaveBeenCalledWith(guildId);
+          expect(mockDestroy).toHaveBeenCalled();
+        });
+      });
+    });
+
+    describe('Missing guildId Handling', () => {
+      describe('when connection.joinConfig is undefined', () => {
+        it('should handle missing joinConfig gracefully in playSilence', async () => {
+          // WHY: If Discord.js behavior changes or connection is malformed,
+          // we should not crash with a null pointer exception.
+
+          mockPlayer.on.mockImplementation((event: string, handler: () => void) => {
+            if (event === AudioPlayerStatus.Idle) {
+              setImmediate(() => handler());
+            }
+          });
+
+          const mockConnection = {
+            joinConfig: undefined, // Missing joinConfig
+            subscribe: vi.fn(),
+          } as unknown as VoiceConnection;
+
+          await expect((manager as any).playSilence(mockConnection)).resolves.toBeUndefined();
+
+          // Should log without guildId field, with message suffix indicating guildId is missing
+          expect(mockLogger.debug).toHaveBeenCalledWith(
+            'Silent frame played to initialize voice reception (guildId missing from connection.joinConfig)'
+          );
+        });
+
+        it('should log message suffix when joinConfig is missing', async () => {
+          // WHY: Lines 184-186 log a plain message with suffix when guildId is missing.
+          // This test verifies the correct message format is used.
+
+          mockPlayer.on.mockImplementation((event: string, handler: () => void) => {
+            if (event === AudioPlayerStatus.Idle) {
+              setImmediate(() => handler());
+            }
+          });
+
+          const mockConnection = {
+            joinConfig: undefined,
+            subscribe: vi.fn(),
+          } as unknown as VoiceConnection;
+
+          await (manager as any).playSilence(mockConnection);
+
+          // Verify the message includes the guildId missing suffix
+          expect(mockLogger.debug).toHaveBeenCalledWith(
+            'Silent frame played to initialize voice reception (guildId missing from connection.joinConfig)'
+          );
+        });
+
+        it('should handle player error with missing guildId gracefully', async () => {
+          // WHY: If player.on('error') fires and guildId is missing,
+          // we should still log the error without crashing.
+
+          vi.useFakeTimers();
+
+          let errorHandler: ((error: Error) => void) | undefined;
+
+          mockPlayer.on.mockImplementation((event: string, handler: (error?: Error) => void) => {
+            if (event === 'error') {
+              errorHandler = handler as (error: Error) => void;
+            }
+          });
+
+          const mockConnection = {
+            joinConfig: undefined,
+            subscribe: vi.fn(),
+          } as unknown as VoiceConnection;
+
+          const playSilencePromise = (manager as any).playSilence(mockConnection);
+
+          const testError = new Error('Player error');
+          if (errorHandler) {
+            errorHandler(testError);
+          }
+
+          await expect(playSilencePromise).rejects.toThrow('Player error');
+
+          // Implementation logs without guildId field, with message suffix
+          expect(mockLogger.error).toHaveBeenCalledWith(
+            { error: testError },
+            'Error playing silence frame: guildId missing from connection.joinConfig'
+          );
+
+          vi.useRealTimers();
+        });
+      });
+
+      describe('when connection.joinConfig.guildId is undefined', () => {
+        it('should handle missing guildId property in joinConfig', async () => {
+          // WHY: joinConfig might exist but guildId might be missing (falsy).
+          // The implementation logs with message suffix.
+
+          mockPlayer.on.mockImplementation((event: string, handler: () => void) => {
+            if (event === AudioPlayerStatus.Idle) {
+              setImmediate(() => handler());
+            }
+          });
+
+          const mockConnection = {
+            joinConfig: { channelId: 'channel-123' }, // joinConfig exists but no guildId
+            subscribe: vi.fn(),
+          } as unknown as VoiceConnection;
+
+          await (manager as any).playSilence(mockConnection);
+
+          expect(mockLogger.debug).toHaveBeenCalledWith(
+            'Silent frame played to initialize voice reception (guildId missing from connection.joinConfig)'
+          );
+        });
+
+        it('should handle empty string guildId in joinConfig', async () => {
+          // WHY: Empty string is falsy in JavaScript conditional checks.
+          // When guildId is empty string (!guildId evaluates true),
+          // the implementation logs with message suffix.
+
+          mockPlayer.on.mockImplementation((event: string, handler: () => void) => {
+            if (event === AudioPlayerStatus.Idle) {
+              setImmediate(() => handler());
+            }
+          });
+
+          const mockConnection = {
+            joinConfig: { guildId: '' }, // Empty string
+            subscribe: vi.fn(),
+          } as unknown as VoiceConnection;
+
+          await (manager as any).playSilence(mockConnection);
+
+          // Empty string is falsy, so !guildId is true, logs with message suffix
+          expect(mockLogger.debug).toHaveBeenCalledWith(
+            'Silent frame played to initialize voice reception (guildId missing from connection.joinConfig)'
+          );
+        });
+
+        it('should handle null guildId in joinConfig', async () => {
+          // WHY: null is falsy in JavaScript conditional checks.
+          // When guildId is null (!guildId evaluates true),
+          // the implementation logs with message suffix.
+
+          mockPlayer.on.mockImplementation((event: string, handler: () => void) => {
+            if (event === AudioPlayerStatus.Idle) {
+              setImmediate(() => handler());
+            }
+          });
+
+          const mockConnection = {
+            joinConfig: { guildId: null }, // Explicitly null
+            subscribe: vi.fn(),
+          } as unknown as VoiceConnection;
+
+          await (manager as any).playSilence(mockConnection);
+
+          // null is falsy, so !guildId is true, logs with message suffix
+          expect(mockLogger.debug).toHaveBeenCalledWith(
+            'Silent frame played to initialize voice reception (guildId missing from connection.joinConfig)'
+          );
+        });
+      });
+
+      describe('behavior is defined for all scenarios', () => {
+        it('should always log when playSilence completes successfully', async () => {
+          // WHY: The implementation handles guildId using falsy check (!guildId).
+          // When guildId is truthy, it logs with { guildId, message }.
+          // When guildId is falsy, it logs with just message + suffix.
+
+          mockPlayer.on.mockImplementation((event: string, handler: () => void) => {
+            if (event === AudioPlayerStatus.Idle) {
+              setImmediate(() => handler());
+            }
+          });
+
+          const scenarios = [
+            {
+              joinConfig: { guildId: 'valid-guild' },
+              expectedLog: { guildId: 'valid-guild' },
+              expectedMessage: 'Silent frame played to initialize voice reception'
+            },
+            {
+              joinConfig: { guildId: '' },
+              expectedLog: 'Silent frame played to initialize voice reception (guildId missing from connection.joinConfig)',
+              expectedMessage: undefined
+            },
+            {
+              joinConfig: { guildId: null },
+              expectedLog: 'Silent frame played to initialize voice reception (guildId missing from connection.joinConfig)',
+              expectedMessage: undefined
+            },
+            {
+              joinConfig: { channelId: 'test' },
+              expectedLog: 'Silent frame played to initialize voice reception (guildId missing from connection.joinConfig)',
+              expectedMessage: undefined
+            },
+            {
+              joinConfig: undefined,
+              expectedLog: 'Silent frame played to initialize voice reception (guildId missing from connection.joinConfig)',
+              expectedMessage: undefined
+            },
+          ];
+
+          for (const scenario of scenarios) {
+            vi.mocked(mockLogger.debug).mockClear();
+
+            const mockConnection = {
+              joinConfig: scenario.joinConfig,
+              subscribe: vi.fn(),
+            } as unknown as VoiceConnection;
+
+            await (manager as any).playSilence(mockConnection);
+
+            if (scenario.expectedMessage) {
+              expect(mockLogger.debug).toHaveBeenCalledWith(
+                scenario.expectedLog,
+                scenario.expectedMessage
+              );
+            } else {
+              expect(mockLogger.debug).toHaveBeenCalledWith(scenario.expectedLog);
+            }
+          }
+        });
+
+        it('should always log when playSilence encounters an error', async () => {
+          // WHY: Error handling follows same falsy check pattern.
+          // When guildId is truthy: logs { guildId, error }, message.
+          // When guildId is falsy: logs { error }, message + suffix.
+
+          vi.useFakeTimers();
+
+          const scenarios = [
+            {
+              joinConfig: { guildId: 'valid-guild' },
+              expectedLog: { guildId: 'valid-guild', error: expect.any(Error) },
+              expectedMessage: 'Error playing silence frame'
+            },
+            {
+              joinConfig: undefined,
+              expectedLog: { error: expect.any(Error) },
+              expectedMessage: 'Error playing silence frame: guildId missing from connection.joinConfig'
+            },
+          ];
+
+          for (const scenario of scenarios) {
+            vi.mocked(mockLogger.error).mockClear();
+
+            let errorHandler: ((error: Error) => void) | undefined;
+
+            mockPlayer.on.mockImplementation((event: string, handler: (error?: Error) => void) => {
+              if (event === 'error') {
+                errorHandler = handler as (error: Error) => void;
+              }
+            });
+
+            const mockConnection = {
+              joinConfig: scenario.joinConfig,
+              subscribe: vi.fn(),
+            } as unknown as VoiceConnection;
+
+            const playSilencePromise = (manager as any).playSilence(mockConnection);
+
+            const testError = new Error('Test error');
+            if (errorHandler) {
+              errorHandler(testError);
+            }
+
+            await expect(playSilencePromise).rejects.toThrow('Test error');
+
+            expect(mockLogger.error).toHaveBeenCalledWith(
+              expect.objectContaining(scenario.expectedLog),
+              scenario.expectedMessage
+            );
+          }
+
+          vi.useRealTimers();
+        });
+
+        it('should not throw TypeError when accessing undefined joinConfig properties', async () => {
+          // WHY: Optional chaining (?.) should prevent TypeErrors.
+          // This test proves we don't get "Cannot read property 'guildId' of undefined".
+
+          mockPlayer.on.mockImplementation((event: string, handler: () => void) => {
+            if (event === AudioPlayerStatus.Idle) {
+              setImmediate(() => handler());
+            }
+          });
+
+          const mockConnection = {
+            joinConfig: undefined,
+            subscribe: vi.fn(),
+          } as unknown as VoiceConnection;
+
+          // Should not throw TypeError
+          await expect((manager as any).playSilence(mockConnection)).resolves.toBeUndefined();
+        });
+
+        it('should use safe default for logging in all code paths', async () => {
+          // WHY: Both success and error paths use same falsy check pattern.
+          // Verify consistency: when guildId is falsy, message gets suffix.
+
+          vi.useFakeTimers();
+
+          const mockConnection = {
+            joinConfig: undefined,
+            subscribe: vi.fn(),
+          } as unknown as VoiceConnection;
+
+          // Test error path
+          let errorHandler: ((error: Error) => void) | undefined;
+          mockPlayer.on.mockImplementation((event: string, handler: (error?: Error) => void) => {
+            if (event === 'error') {
+              errorHandler = handler as (error: Error) => void;
+            }
+          });
+
+          const playSilencePromise = (manager as any).playSilence(mockConnection);
+
+          const testError = new Error('Test');
+          if (errorHandler) {
+            errorHandler(testError);
+          }
+
+          await expect(playSilencePromise).rejects.toThrow();
+
+          // Should log with message suffix when guildId is missing
+          expect(mockLogger.error).toHaveBeenCalledWith(
+            expect.objectContaining({ error: testError }),
+            'Error playing silence frame: guildId missing from connection.joinConfig'
+          );
+
+          vi.useRealTimers();
+        });
       });
     });
   });

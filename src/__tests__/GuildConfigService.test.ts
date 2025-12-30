@@ -2,6 +2,18 @@ import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { GuildConfigService } from '../services/GuildConfigService';
 import type { GuildSettingsRepository, GuildSettings } from '../database/repositories/GuildSettingsRepository';
 
+// Mock the logger module
+vi.mock('../utils/logger', () => ({
+  logger: {
+    error: vi.fn(),
+    debug: vi.fn(),
+    info: vi.fn(),
+    warn: vi.fn(),
+  },
+}));
+
+import { logger } from '../utils/logger';
+
 describe('GuildConfigService', () => {
   let mockRepository: GuildSettingsRepository;
   let service: GuildConfigService;
@@ -15,6 +27,9 @@ describe('GuildConfigService', () => {
     } as unknown as GuildSettingsRepository;
 
     service = new GuildConfigService(mockRepository);
+
+    // Clear all mock calls before each test
+    vi.clearAllMocks();
   });
 
   describe('getConfig', () => {
@@ -630,6 +645,972 @@ describe('GuildConfigService', () => {
           service.clearCache();
           service.clearCache();
           service.clearCache();
+        }).not.toThrow();
+      });
+    });
+  });
+
+  describe('LRU cache eviction', () => {
+    describe('when cache exceeds max size', () => {
+      it('should evict the oldest entry when max size is reached', () => {
+        // Create service with small cache size for easy testing
+        const smallCacheService = new GuildConfigService(mockRepository, 3);
+
+        const createSettings = (guildId: string): GuildSettings => ({
+          guildId,
+          enabled: true,
+          afkTimeoutSeconds: 300,
+          warningSecondsBefore: 60,
+          warningChannelId: null,
+          exemptRoleIds: [],
+          adminRoleIds: [],
+          createdAt: '2024-01-01T00:00:00.000Z',
+          updatedAt: '2024-01-01T00:00:00.000Z',
+        });
+
+        let callCount = 0;
+        vi.mocked(mockRepository.findByGuildId).mockImplementation((id) => {
+          callCount++;
+          return createSettings(id);
+        });
+
+        // Fill cache to max capacity (3 entries)
+        smallCacheService.getConfig('guild-1');
+        smallCacheService.getConfig('guild-2');
+        smallCacheService.getConfig('guild-3');
+        const initialCallCount = callCount;
+
+        // Verify all 3 are in cache (no additional DB calls on re-fetch)
+        smallCacheService.getConfig('guild-1');
+        smallCacheService.getConfig('guild-2');
+        smallCacheService.getConfig('guild-3');
+        expect(callCount).toBe(initialCallCount); // No new DB calls
+
+        // Add 4th entry - should evict guild-1 (oldest/least recently used)
+        const beforeGuild4CallCount = callCount;
+        smallCacheService.getConfig('guild-4');
+        expect(callCount).toBe(beforeGuild4CallCount + 1); // One more DB call for guild-4
+
+        // Verify guild-2, guild-3, guild-4 are still cached (don't check guild-1 as it was evicted)
+        const beforeFinalCheckCount = callCount;
+        smallCacheService.getConfig('guild-2');
+        smallCacheService.getConfig('guild-3');
+        smallCacheService.getConfig('guild-4');
+        expect(callCount).toBe(beforeFinalCheckCount); // No new DB calls (all cached)
+      });
+
+      it('should evict the correct entry when cache is filled sequentially', () => {
+        // This test verifies that eviction follows insertion order when no accesses occur
+        const smallCacheService = new GuildConfigService(mockRepository, 2);
+
+        const createSettings = (guildId: string): GuildSettings => ({
+          guildId,
+          enabled: true,
+          afkTimeoutSeconds: 300,
+          warningSecondsBefore: 60,
+          warningChannelId: null,
+          exemptRoleIds: [],
+          adminRoleIds: [],
+          createdAt: '2024-01-01T00:00:00.000Z',
+          updatedAt: '2024-01-01T00:00:00.000Z',
+        });
+
+        let callCount = 0;
+        vi.mocked(mockRepository.findByGuildId).mockImplementation((id) => {
+          callCount++;
+          return createSettings(id);
+        });
+
+        // Add first entry
+        smallCacheService.getConfig('first');
+        // Add second entry
+        smallCacheService.getConfig('second');
+        const callCountBefore = callCount;
+
+        // Add third entry - should evict 'first'
+        smallCacheService.getConfig('third');
+        expect(callCount).toBe(callCountBefore + 1); // One more call for 'third'
+
+        // 'second' and 'third' should still be cached (don't check 'first' as it was evicted)
+        const callCountBeforeFinal = callCount;
+        smallCacheService.getConfig('second');
+        smallCacheService.getConfig('third');
+        expect(callCount).toBe(callCountBeforeFinal); // No new DB calls
+      });
+
+      it('should handle eviction when cache size is 1', () => {
+        // Edge case: cache that can only hold one entry
+        const tinyCache = new GuildConfigService(mockRepository, 1);
+
+        const createSettings = (guildId: string): GuildSettings => ({
+          guildId,
+          enabled: false,
+          afkTimeoutSeconds: 300,
+          warningSecondsBefore: 60,
+          warningChannelId: null,
+          exemptRoleIds: [],
+          adminRoleIds: [],
+          createdAt: '2024-01-01T00:00:00.000Z',
+          updatedAt: '2024-01-01T00:00:00.000Z',
+        });
+
+        let callCount = 0;
+        vi.mocked(mockRepository.findByGuildId).mockImplementation((id) => {
+          callCount++;
+          return createSettings(id);
+        });
+
+        // Add first entry
+        tinyCache.getConfig('only-one');
+        const callCountAfterFirst = callCount;
+
+        // Verify it's cached
+        tinyCache.getConfig('only-one');
+        expect(callCount).toBe(callCountAfterFirst); // No new DB call
+
+        // Add second entry - should evict first
+        tinyCache.getConfig('only-two');
+        expect(callCount).toBe(callCountAfterFirst + 1); // One more DB call
+
+        // First should be gone - accessing it hits DB
+        const callCountBeforeCheck = callCount;
+        tinyCache.getConfig('only-one');
+        expect(callCount).toBe(callCountBeforeCheck + 1); // Hit DB (was evicted)
+
+        // Second should now be evicted since we just accessed 'only-one'
+        const callCountBeforeFinal = callCount;
+        tinyCache.getConfig('only-two');
+        expect(callCount).toBe(callCountBeforeFinal + 1); // Hit DB (was evicted)
+      });
+    });
+
+    describe('when accessing an entry updates its recency', () => {
+      it('should prevent eviction of recently accessed entries', () => {
+        // This test proves that accessing an entry moves it to the "most recently used" position
+        const smallCacheService = new GuildConfigService(mockRepository, 3);
+
+        const createSettings = (guildId: string): GuildSettings => ({
+          guildId,
+          enabled: true,
+          afkTimeoutSeconds: 300,
+          warningSecondsBefore: 60,
+          warningChannelId: null,
+          exemptRoleIds: [],
+          adminRoleIds: [],
+          createdAt: '2024-01-01T00:00:00.000Z',
+          updatedAt: '2024-01-01T00:00:00.000Z',
+        });
+
+        let callCount = 0;
+        vi.mocked(mockRepository.findByGuildId).mockImplementation((id) => {
+          callCount++;
+          return createSettings(id);
+        });
+
+        // Fill cache: guild-1, guild-2, guild-3 (in that order)
+        smallCacheService.getConfig('guild-1');
+        smallCacheService.getConfig('guild-2');
+        smallCacheService.getConfig('guild-3');
+        const afterFillCount = callCount;
+
+        // Access guild-1 again - this should move it to "most recently used"
+        smallCacheService.getConfig('guild-1');
+        expect(callCount).toBe(afterFillCount); // No DB call (was cached)
+
+        // Now the LRU order should be: guild-2 (oldest), guild-3, guild-1 (newest)
+
+        // Add guild-4 - should evict guild-2, not guild-1
+        const beforeGuild4Count = callCount;
+        smallCacheService.getConfig('guild-4');
+        expect(callCount).toBe(beforeGuild4Count + 1); // One new DB call
+
+        // Verify guild-1, guild-3, guild-4 are still cached (don't check guild-2 as it was evicted)
+        const beforeFinalCheckCount = callCount;
+        smallCacheService.getConfig('guild-1');
+        smallCacheService.getConfig('guild-3');
+        smallCacheService.getConfig('guild-4');
+        expect(callCount).toBe(beforeFinalCheckCount); // No new DB calls
+      });
+
+      it('should update recency on multiple sequential accesses', () => {
+        const smallCacheService = new GuildConfigService(mockRepository, 3);
+
+        const createSettings = (guildId: string): GuildSettings => ({
+          guildId,
+          enabled: false,
+          afkTimeoutSeconds: 300,
+          warningSecondsBefore: 60,
+          warningChannelId: null,
+          exemptRoleIds: [],
+          adminRoleIds: [],
+          createdAt: '2024-01-01T00:00:00.000Z',
+          updatedAt: '2024-01-01T00:00:00.000Z',
+        });
+
+        let callCount = 0;
+        vi.mocked(mockRepository.findByGuildId).mockImplementation((id) => {
+          callCount++;
+          return createSettings(id);
+        });
+
+        // Fill cache: A, B, C
+        smallCacheService.getConfig('A');
+        smallCacheService.getConfig('B');
+        smallCacheService.getConfig('C');
+        const afterFillCount = callCount;
+
+        // Access pattern: A, A, A (repeatedly accessing oldest entry)
+        smallCacheService.getConfig('A');
+        smallCacheService.getConfig('A');
+        smallCacheService.getConfig('A');
+        expect(callCount).toBe(afterFillCount); // No new DB calls
+
+        // LRU order should now be: B (oldest), C, A (newest)
+
+        // Add D - should evict B
+        const beforeDCount = callCount;
+        smallCacheService.getConfig('D');
+        expect(callCount).toBe(beforeDCount + 1); // One new DB call
+
+        // A, C, D should be cached (don't check B as it was evicted)
+        const beforeFinalCheckCount = callCount;
+        smallCacheService.getConfig('A');
+        smallCacheService.getConfig('C');
+        smallCacheService.getConfig('D');
+        expect(callCount).toBe(beforeFinalCheckCount); // No new DB calls
+      });
+
+      it('should preserve cache size limit while updating recency', () => {
+        // Ensures that accessing entries doesn't somehow allow cache to grow beyond max size
+        const smallCacheService = new GuildConfigService(mockRepository, 2);
+
+        const createSettings = (guildId: string): GuildSettings => ({
+          guildId,
+          enabled: true,
+          afkTimeoutSeconds: 300,
+          warningSecondsBefore: 60,
+          warningChannelId: null,
+          exemptRoleIds: [],
+          adminRoleIds: [],
+          createdAt: '2024-01-01T00:00:00.000Z',
+          updatedAt: '2024-01-01T00:00:00.000Z',
+        });
+
+        let callCount = 0;
+        vi.mocked(mockRepository.findByGuildId).mockImplementation((id) => {
+          callCount++;
+          return createSettings(id);
+        });
+
+        // Add entries with lots of accesses in between
+        smallCacheService.getConfig('X');
+        smallCacheService.getConfig('X'); // Access again
+        smallCacheService.getConfig('Y');
+        smallCacheService.getConfig('Y'); // Access again
+        const beforeXAccessCount = callCount;
+        smallCacheService.getConfig('X'); // Access X again
+        expect(callCount).toBe(beforeXAccessCount); // No new DB call
+
+        // At this point, cache should still only have 2 entries: X and Y
+
+        // Add Z - should evict Y (since X was accessed most recently)
+        const beforeZCount = callCount;
+        smallCacheService.getConfig('Z');
+        expect(callCount).toBe(beforeZCount + 1); // One new DB call
+
+        // X and Z should be cached (don't check Y as it was evicted)
+        const beforeFinalCheckCount = callCount;
+        smallCacheService.getConfig('X');
+        smallCacheService.getConfig('Z');
+        expect(callCount).toBe(beforeFinalCheckCount); // No new DB calls
+      });
+    });
+
+    describe('when setting an existing entry updates its recency', () => {
+      it('should move updated entry to most recently used position', () => {
+        // This tests that calling updateConfig on an existing cached entry updates its LRU position
+        const smallCacheService = new GuildConfigService(mockRepository, 3);
+
+        const createSettings = (guildId: string, enabled: boolean = false): GuildSettings => ({
+          guildId,
+          enabled,
+          afkTimeoutSeconds: 300,
+          warningSecondsBefore: 60,
+          warningChannelId: null,
+          exemptRoleIds: [],
+          adminRoleIds: [],
+          createdAt: '2024-01-01T00:00:00.000Z',
+          updatedAt: '2024-01-01T00:00:00.000Z',
+        });
+
+        let callCount = 0;
+        const mockImpl = (id: string) => {
+          callCount++;
+          // Return different enabled states for clarity
+          if (id === 'guild-1') return createSettings(id, true); // Updated state
+          if (id === 'guild-2') return createSettings(id, false);
+          if (id === 'guild-3') return createSettings(id, false);
+          return createSettings(id, true);
+        };
+
+        vi.mocked(mockRepository.findByGuildId).mockImplementation(mockImpl);
+        vi.mocked(mockRepository.upsert).mockImplementation(() => {
+          // upsert succeeds silently
+        });
+
+        // Fill cache: guild-1, guild-2, guild-3
+        smallCacheService.getConfig('guild-1');
+        smallCacheService.getConfig('guild-2');
+        smallCacheService.getConfig('guild-3');
+        const afterFillCount = callCount;
+
+        // Update guild-1 (oldest entry) - should move it to newest
+        smallCacheService.updateConfig('guild-1', { enabled: true });
+        // updateConfig calls findByGuildId once after upsert
+        expect(callCount).toBe(afterFillCount + 1);
+
+        // LRU order should now be: guild-2 (oldest), guild-3, guild-1 (newest)
+
+        // Add guild-4 - should evict guild-2, not guild-1
+        const beforeGuild4Count = callCount;
+        smallCacheService.getConfig('guild-4');
+        expect(callCount).toBe(beforeGuild4Count + 1);
+
+        // Verify that guild-1, guild-3, guild-4 are still cached without accessing guild-2
+        // (accessing guild-2 would re-add it to cache and potentially evict something else)
+        const beforeFinalCheckCount = callCount;
+        smallCacheService.getConfig('guild-1');
+        smallCacheService.getConfig('guild-3');
+        smallCacheService.getConfig('guild-4');
+        expect(callCount).toBe(beforeFinalCheckCount); // No new DB calls - all should be cached
+      });
+
+      it('should not increase cache size when updating existing entry', () => {
+        // Ensures that updateConfig on a cached entry doesn't add a duplicate
+        const smallCacheService = new GuildConfigService(mockRepository, 2);
+
+        const createSettings = (guildId: string, timeout: number = 300): GuildSettings => ({
+          guildId,
+          enabled: false,
+          afkTimeoutSeconds: timeout,
+          warningSecondsBefore: 60,
+          warningChannelId: null,
+          exemptRoleIds: [],
+          adminRoleIds: [],
+          createdAt: '2024-01-01T00:00:00.000Z',
+          updatedAt: '2024-01-01T00:00:00.000Z',
+        });
+
+        let callCount = 0;
+        const mockImpl = (id: string) => {
+          callCount++;
+          if (id === 'guild-A') return createSettings(id, 600); // Assume updated state
+          if (id === 'guild-B') return createSettings(id, 300);
+          return createSettings(id, 600);
+        };
+
+        vi.mocked(mockRepository.findByGuildId).mockImplementation(mockImpl);
+        vi.mocked(mockRepository.upsert).mockImplementation(() => {
+          // upsert succeeds silently
+        });
+
+        // Fill cache to capacity
+        smallCacheService.getConfig('guild-A');
+        smallCacheService.getConfig('guild-B');
+        const afterFillCount = callCount;
+
+        // Update guild-A
+        smallCacheService.updateConfig('guild-A', { afkTimeoutSeconds: 600 });
+        // updateConfig calls findByGuildId once after upsert
+        expect(callCount).toBe(afterFillCount + 1);
+
+        // Cache should still only have 2 entries (A and B)
+        // Add guild-C - should evict guild-B (since A was just updated)
+        const beforeGuildCCount = callCount;
+        smallCacheService.getConfig('guild-C');
+        expect(callCount).toBe(beforeGuildCCount + 1); // One new DB call
+
+        // Verify that guild-A and guild-C are still cached without accessing guild-B
+        // (accessing guild-B would re-add it to cache and potentially evict something else)
+        const beforeFinalCheckCount = callCount;
+        smallCacheService.getConfig('guild-A');
+        smallCacheService.getConfig('guild-C');
+        expect(callCount).toBe(beforeFinalCheckCount); // No new DB calls
+      });
+
+      it('should add new entry to cache when updating non-cached guild', () => {
+        // When updateConfig is called on a guild not in cache, it should be added
+        const smallCacheService = new GuildConfigService(mockRepository, 2);
+
+        const createSettings = (guildId: string): GuildSettings => ({
+          guildId,
+          enabled: true,
+          afkTimeoutSeconds: 300,
+          warningSecondsBefore: 60,
+          warningChannelId: null,
+          exemptRoleIds: [],
+          adminRoleIds: [],
+          createdAt: '2024-01-01T00:00:00.000Z',
+          updatedAt: '2024-01-01T00:00:00.000Z',
+        });
+
+        vi.mocked(mockRepository.findByGuildId).mockImplementation((id) => createSettings(id));
+
+        // Update a guild that's not in cache yet
+        smallCacheService.updateConfig('new-guild', { enabled: true });
+
+        vi.mocked(mockRepository.findByGuildId).mockClear();
+
+        // Should now be cached
+        smallCacheService.getConfig('new-guild');
+        expect(mockRepository.findByGuildId).not.toHaveBeenCalled();
+      });
+    });
+  });
+
+  describe('upsert error handling', () => {
+    describe('when repository.upsert throws an error', () => {
+      it('should log the error with context', () => {
+        const guildId = 'error-guild';
+        const updates = { enabled: true, afkTimeoutSeconds: 500 };
+        const dbError = new Error('Database connection failed');
+
+        vi.mocked(mockRepository.upsert).mockImplementation(() => {
+          throw dbError;
+        });
+
+        expect(() => {
+          service.updateConfig(guildId, updates);
+        }).toThrow();
+
+        // Verify error was logged with full context
+        expect(logger.error).toHaveBeenCalledWith(
+          { error: dbError, guildId, updates },
+          'Failed to upsert guild settings to database'
+        );
+        expect(logger.error).toHaveBeenCalledTimes(1);
+      });
+
+      it('should rethrow error with additional context', () => {
+        const guildId = 'failing-guild';
+        const updates = { warningSecondsBefore: 120 };
+        const originalError = new Error('Constraint violation');
+
+        vi.mocked(mockRepository.upsert).mockImplementation(() => {
+          throw originalError;
+        });
+
+        expect(() => {
+          service.updateConfig(guildId, updates);
+        }).toThrow(
+          `Failed to update guild settings for guild ${guildId}: ${originalError.message}`
+        );
+      });
+
+      it('should handle non-Error thrown objects gracefully', () => {
+        // Edge case: something throws a non-Error object
+        const guildId = 'weird-error-guild';
+        const updates = { enabled: false };
+
+        vi.mocked(mockRepository.upsert).mockImplementation(() => {
+          // eslint-disable-next-line no-throw-literal
+          throw 'string error'; // Intentionally throwing a string
+        });
+
+        expect(() => {
+          service.updateConfig(guildId, updates);
+        }).toThrow(`Failed to update guild settings for guild ${guildId}: string error`);
+
+        // Should still log the error
+        expect(logger.error).toHaveBeenCalled();
+      });
+
+      it('should handle undefined error message', () => {
+        const guildId = 'no-message-guild';
+        const updates = { afkTimeoutSeconds: 999 };
+
+        vi.mocked(mockRepository.upsert).mockImplementation(() => {
+          const errorWithoutMessage = new Error();
+          errorWithoutMessage.message = '';
+          throw errorWithoutMessage;
+        });
+
+        expect(() => {
+          service.updateConfig(guildId, updates);
+        }).toThrow(`Failed to update guild settings for guild ${guildId}:`);
+      });
+
+      it('should not update cache when upsert fails', () => {
+        // This is critical: if DB update fails, cache must not be updated with stale data
+        const guildId = 'cache-integrity-guild';
+        const initialSettings: GuildSettings = {
+          guildId,
+          enabled: false,
+          afkTimeoutSeconds: 300,
+          warningSecondsBefore: 60,
+          warningChannelId: null,
+          exemptRoleIds: [],
+          adminRoleIds: [],
+          createdAt: '2024-01-01T00:00:00.000Z',
+          updatedAt: '2024-01-01T00:00:00.000Z',
+        };
+
+        // First, populate cache with initial settings
+        vi.mocked(mockRepository.findByGuildId).mockReturnValue(initialSettings);
+        const cachedBefore = service.getConfig(guildId);
+        expect(cachedBefore.enabled).toBe(false);
+
+        // Now make upsert fail
+        vi.mocked(mockRepository.upsert).mockImplementation(() => {
+          throw new Error('Database locked');
+        });
+
+        // Attempt to update - should throw
+        expect(() => {
+          service.updateConfig(guildId, { enabled: true });
+        }).toThrow('Database locked');
+
+        // Clear the mock to ensure next call doesn't hit DB
+        vi.mocked(mockRepository.findByGuildId).mockClear();
+
+        // Cache should still have the OLD value (enabled: false)
+        const cachedAfter = service.getConfig(guildId);
+        expect(mockRepository.findByGuildId).not.toHaveBeenCalled(); // Proves it came from cache
+        expect(cachedAfter.enabled).toBe(false); // Proves cache wasn't corrupted
+        expect(cachedAfter).toEqual(initialSettings);
+      });
+
+      it('should allow subsequent successful updates after a failed update', () => {
+        const guildId = 'retry-guild';
+        const successfulSettings: GuildSettings = {
+          guildId,
+          enabled: true,
+          afkTimeoutSeconds: 400,
+          warningSecondsBefore: 80,
+          warningChannelId: null,
+          exemptRoleIds: [],
+          adminRoleIds: [],
+          createdAt: '2024-01-01T00:00:00.000Z',
+          updatedAt: '2024-01-01T01:00:00.000Z',
+        };
+
+        // First update fails
+        vi.mocked(mockRepository.upsert).mockImplementationOnce(() => {
+          throw new Error('Temporary failure');
+        });
+
+        expect(() => {
+          service.updateConfig(guildId, { enabled: true });
+        }).toThrow('Temporary failure');
+
+        // Second update succeeds
+        vi.mocked(mockRepository.upsert).mockImplementationOnce(() => {
+          // Success (no throw)
+        });
+        vi.mocked(mockRepository.findByGuildId).mockReturnValue(successfulSettings);
+
+        const result = service.updateConfig(guildId, { enabled: true });
+
+        expect(result).toEqual(successfulSettings);
+        expect(logger.error).toHaveBeenCalledTimes(1); // Only the first failure was logged
+      });
+    });
+
+    describe('when repository.upsert succeeds but findByGuildId returns null', () => {
+      it('should throw error indicating retrieval failure', () => {
+        // This tests the second error condition in updateConfig
+        const guildId = 'retrieval-fail-guild';
+
+        // upsert succeeds (doesn't throw)
+        vi.mocked(mockRepository.upsert).mockImplementation(() => {
+          // Success
+        });
+
+        // But findByGuildId returns null (should never happen, but we handle it)
+        vi.mocked(mockRepository.findByGuildId).mockReturnValue(null);
+
+        expect(() => {
+          service.updateConfig(guildId, { enabled: true });
+        }).toThrow(`Failed to retrieve updated config for guild ${guildId}`);
+
+        // This error should NOT be logged to logger.error (it's a different code path)
+        expect(logger.error).not.toHaveBeenCalled();
+      });
+
+      it('should not update cache when retrieval fails', () => {
+        const guildId = 'retrieval-cache-test';
+        const initialSettings: GuildSettings = {
+          guildId,
+          enabled: false,
+          afkTimeoutSeconds: 300,
+          warningSecondsBefore: 60,
+          warningChannelId: null,
+          exemptRoleIds: [],
+          adminRoleIds: [],
+          createdAt: '2024-01-01T00:00:00.000Z',
+          updatedAt: '2024-01-01T00:00:00.000Z',
+        };
+
+        // Populate cache
+        vi.mocked(mockRepository.findByGuildId).mockReturnValue(initialSettings);
+        service.getConfig(guildId);
+
+        // Make retrieval fail after successful upsert
+        vi.mocked(mockRepository.findByGuildId).mockReturnValue(null);
+
+        expect(() => {
+          service.updateConfig(guildId, { enabled: true });
+        }).toThrow('Failed to retrieve updated config');
+
+        // Cache should still have old value
+        vi.mocked(mockRepository.findByGuildId).mockClear();
+        vi.mocked(mockRepository.findByGuildId).mockReturnValue(initialSettings);
+
+        const cached = service.getConfig(guildId);
+        // If this didn't hit the DB, cache wasn't corrupted
+        // If it did hit the DB, that's also acceptable behavior
+        // The key is that we didn't cache a null/undefined value
+        expect(cached).toEqual(initialSettings);
+      });
+    });
+
+    describe('error handling edge cases', () => {
+      it('should log all fields in updates object, including arrays', () => {
+        const guildId = 'complex-update-guild';
+        const complexUpdates = {
+          enabled: true,
+          afkTimeoutSeconds: 600,
+          exemptRoleIds: ['role-1', 'role-2', 'role-3'],
+          warningChannelId: 'channel-999',
+        };
+        const error = new Error('Complex update failed');
+
+        vi.mocked(mockRepository.upsert).mockImplementation(() => {
+          throw error;
+        });
+
+        expect(() => {
+          service.updateConfig(guildId, complexUpdates);
+        }).toThrow();
+
+        // Verify the complete updates object was logged
+        expect(logger.error).toHaveBeenCalledWith(
+          { error, guildId, updates: complexUpdates },
+          'Failed to upsert guild settings to database'
+        );
+      });
+
+      it('should handle errors during updates with partial config changes', () => {
+        const guildId = 'partial-error-guild';
+        const partialUpdate = { warningSecondsBefore: 30 }; // Only updating one field
+
+        vi.mocked(mockRepository.upsert).mockImplementation(() => {
+          throw new Error('Partial update failed');
+        });
+
+        expect(() => {
+          service.updateConfig(guildId, partialUpdate);
+        }).toThrow('Partial update failed');
+
+        expect(logger.error).toHaveBeenCalledWith(
+          expect.objectContaining({
+            guildId,
+            updates: partialUpdate,
+          }),
+          'Failed to upsert guild settings to database'
+        );
+      });
+    });
+  });
+
+  describe('onGuildDelete', () => {
+    describe('when guild exists in cache', () => {
+      it('should clear cache entry for specified guild', () => {
+        const guildId = 'guild-to-delete';
+        const settings: GuildSettings = {
+          guildId,
+          enabled: true,
+          afkTimeoutSeconds: 500,
+          warningSecondsBefore: 100,
+          warningChannelId: 'channel-123',
+          exemptRoleIds: ['role-1'],
+          adminRoleIds: [],
+          createdAt: '2024-01-01T00:00:00.000Z',
+          updatedAt: '2024-01-01T00:00:00.000Z',
+        };
+
+        vi.mocked(mockRepository.findByGuildId).mockReturnValue(settings);
+
+        // Populate cache
+        service.getConfig(guildId);
+
+        // Verify it's cached
+        vi.mocked(mockRepository.findByGuildId).mockClear();
+        service.getConfig(guildId);
+        expect(mockRepository.findByGuildId).not.toHaveBeenCalled();
+
+        // Delete guild
+        service.onGuildDelete(guildId);
+
+        // Should hit database on next access (cache was cleared)
+        vi.mocked(mockRepository.findByGuildId).mockReturnValue(settings);
+        service.getConfig(guildId);
+        expect(mockRepository.findByGuildId).toHaveBeenCalledWith(guildId);
+      });
+
+      it('should log debug message when clearing cache', () => {
+        const guildId = 'logged-delete-guild';
+        const settings: GuildSettings = {
+          guildId,
+          enabled: false,
+          afkTimeoutSeconds: 300,
+          warningSecondsBefore: 60,
+          warningChannelId: null,
+          exemptRoleIds: [],
+          adminRoleIds: [],
+          createdAt: '2024-01-01T00:00:00.000Z',
+          updatedAt: '2024-01-01T00:00:00.000Z',
+        };
+
+        vi.mocked(mockRepository.findByGuildId).mockReturnValue(settings);
+
+        // Populate cache
+        service.getConfig(guildId);
+
+        vi.clearAllMocks();
+
+        // Delete guild
+        service.onGuildDelete(guildId);
+
+        // Verify debug log was called
+        expect(logger.debug).toHaveBeenCalledWith(
+          { guildId },
+          'Cleared guild config cache on guild delete'
+        );
+        expect(logger.debug).toHaveBeenCalledTimes(1);
+      });
+
+      it('should only clear specified guild, not affect other cached guilds', () => {
+        const guild1 = 'keep-this-guild';
+        const guild2 = 'delete-this-guild';
+        const guild3 = 'also-keep-this';
+
+        const createSettings = (guildId: string): GuildSettings => ({
+          guildId,
+          enabled: true,
+          afkTimeoutSeconds: 300,
+          warningSecondsBefore: 60,
+          warningChannelId: null,
+          exemptRoleIds: [],
+          adminRoleIds: [],
+          createdAt: '2024-01-01T00:00:00.000Z',
+          updatedAt: '2024-01-01T00:00:00.000Z',
+        });
+
+        vi.mocked(mockRepository.findByGuildId).mockImplementation((id) => createSettings(id));
+
+        // Populate cache with 3 guilds
+        service.getConfig(guild1);
+        service.getConfig(guild2);
+        service.getConfig(guild3);
+
+        // Delete only guild2
+        service.onGuildDelete(guild2);
+
+        vi.mocked(mockRepository.findByGuildId).mockClear();
+
+        // guild1 and guild3 should still be cached
+        service.getConfig(guild1);
+        service.getConfig(guild3);
+        expect(mockRepository.findByGuildId).not.toHaveBeenCalled();
+
+        // guild2 should hit database
+        service.getConfig(guild2);
+        expect(mockRepository.findByGuildId).toHaveBeenCalledWith(guild2);
+        expect(mockRepository.findByGuildId).toHaveBeenCalledTimes(1);
+      });
+    });
+
+    describe('when guild does not exist in cache', () => {
+      it('should not throw error when deleting non-existent cache entry', () => {
+        const guildId = 'never-cached-guild';
+
+        expect(() => {
+          service.onGuildDelete(guildId);
+        }).not.toThrow();
+      });
+
+      it('should still log debug message even when guild not in cache', () => {
+        const guildId = 'uncached-delete-guild';
+
+        service.onGuildDelete(guildId);
+
+        // Should log regardless of whether guild was in cache
+        expect(logger.debug).toHaveBeenCalledWith(
+          { guildId },
+          'Cleared guild config cache on guild delete'
+        );
+      });
+
+      it('should be idempotent - can be called multiple times safely', () => {
+        const guildId = 'idempotent-delete-guild';
+
+        expect(() => {
+          service.onGuildDelete(guildId);
+          service.onGuildDelete(guildId);
+          service.onGuildDelete(guildId);
+        }).not.toThrow();
+
+        // Should log each time
+        expect(logger.debug).toHaveBeenCalledTimes(3);
+      });
+    });
+
+    describe('integration with other cache operations', () => {
+      it('should allow re-caching after deletion', () => {
+        const guildId = 'recache-after-delete';
+        const settings: GuildSettings = {
+          guildId,
+          enabled: true,
+          afkTimeoutSeconds: 400,
+          warningSecondsBefore: 80,
+          warningChannelId: null,
+          exemptRoleIds: [],
+          adminRoleIds: [],
+          createdAt: '2024-01-01T00:00:00.000Z',
+          updatedAt: '2024-01-01T00:00:00.000Z',
+        };
+
+        vi.mocked(mockRepository.findByGuildId).mockReturnValue(settings);
+
+        // Cache it
+        service.getConfig(guildId);
+
+        // Delete it
+        service.onGuildDelete(guildId);
+
+        // Re-cache it
+        service.getConfig(guildId);
+
+        vi.mocked(mockRepository.findByGuildId).mockClear();
+
+        // Should be cached again
+        service.getConfig(guildId);
+        expect(mockRepository.findByGuildId).not.toHaveBeenCalled();
+      });
+
+      it('should interact correctly with clearCache method', () => {
+        const guildId1 = 'guild-delete-test';
+        const guildId2 = 'guild-clear-test';
+
+        const createSettings = (guildId: string): GuildSettings => ({
+          guildId,
+          enabled: false,
+          afkTimeoutSeconds: 300,
+          warningSecondsBefore: 60,
+          warningChannelId: null,
+          exemptRoleIds: [],
+          adminRoleIds: [],
+          createdAt: '2024-01-01T00:00:00.000Z',
+          updatedAt: '2024-01-01T00:00:00.000Z',
+        });
+
+        vi.mocked(mockRepository.findByGuildId).mockImplementation((id) => createSettings(id));
+
+        // Cache both
+        service.getConfig(guildId1);
+        service.getConfig(guildId2);
+
+        // Use onGuildDelete on first
+        service.onGuildDelete(guildId1);
+
+        // Use clearCache on second
+        service.clearCache(guildId2);
+
+        vi.mocked(mockRepository.findByGuildId).mockClear();
+
+        // Both should hit database (both cache clearing methods work)
+        service.getConfig(guildId1);
+        service.getConfig(guildId2);
+        expect(mockRepository.findByGuildId).toHaveBeenCalledTimes(2);
+      });
+
+      it('should not interfere with LRU eviction logic', () => {
+        // Ensures that onGuildDelete works correctly with the LRU cache implementation
+        const smallCacheService = new GuildConfigService(mockRepository, 3);
+
+        const createSettings = (guildId: string): GuildSettings => ({
+          guildId,
+          enabled: true,
+          afkTimeoutSeconds: 300,
+          warningSecondsBefore: 60,
+          warningChannelId: null,
+          exemptRoleIds: [],
+          adminRoleIds: [],
+          createdAt: '2024-01-01T00:00:00.000Z',
+          updatedAt: '2024-01-01T00:00:00.000Z',
+        });
+
+        vi.mocked(mockRepository.findByGuildId).mockImplementation((id) => createSettings(id));
+
+        // Fill cache: A, B, C
+        smallCacheService.getConfig('A');
+        smallCacheService.getConfig('B');
+        smallCacheService.getConfig('C');
+
+        // Delete B (middle entry)
+        smallCacheService.onGuildDelete('B');
+
+        // Now cache only has A and C (2 entries)
+        // Add D - should not evict anything (cache size < max)
+        smallCacheService.getConfig('D');
+
+        vi.mocked(mockRepository.findByGuildId).mockClear();
+
+        // A, C, and D should all be cached
+        smallCacheService.getConfig('A');
+        smallCacheService.getConfig('C');
+        smallCacheService.getConfig('D');
+        expect(mockRepository.findByGuildId).not.toHaveBeenCalled();
+
+        // B should not be cached (was deleted)
+        smallCacheService.getConfig('B');
+        expect(mockRepository.findByGuildId).toHaveBeenCalledWith('B');
+      });
+    });
+
+    describe('edge cases', () => {
+      it('should handle deleting guild with empty string ID', () => {
+        // Edge case: what if someone passes an empty string?
+        expect(() => {
+          service.onGuildDelete('');
+        }).not.toThrow();
+
+        expect(logger.debug).toHaveBeenCalledWith(
+          { guildId: '' },
+          'Cleared guild config cache on guild delete'
+        );
+      });
+
+      it('should handle deleting guild immediately after creation', () => {
+        const guildId = 'immediately-deleted';
+
+        // Get default config (not cached because it's a default)
+        vi.mocked(mockRepository.findByGuildId).mockReturnValue(null);
+        service.getConfig(guildId);
+
+        // Immediately delete (should not error even though nothing was cached)
+        expect(() => {
+          service.onGuildDelete(guildId);
+        }).not.toThrow();
+      });
+
+      it('should handle deleting guild with special characters in ID', () => {
+        // Discord IDs are numeric, but test robustness
+        const weirdGuildId = 'guild-with-special-!@#$%^&*()-chars';
+
+        expect(() => {
+          service.onGuildDelete(weirdGuildId);
         }).not.toThrow();
       });
     });

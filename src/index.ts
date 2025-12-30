@@ -6,7 +6,7 @@ import { commands } from './handlers/commands';
 async function main(): Promise<void> {
   const config = loadConfig();
 
-  const { client, logger, voiceConnectionManager, speakingTracker } = await createBot();
+  const { client, logger, voiceConnectionManager, speakingTracker, database } = await createBot();
 
   logger.info('Registering slash commands with Discord API');
 
@@ -36,6 +36,7 @@ async function main(): Promise<void> {
       speakingTracker.clear();
       voiceConnectionManager.disconnectAll();
       client.destroy();
+      database.close();
       logger.info('Bot shutdown complete');
       process.exit(0);
     } catch (error) {
@@ -49,6 +50,7 @@ async function main(): Promise<void> {
 }
 
 main().catch((error) => {
+  // Logger may not be initialized yet, so use console.error for fatal startup errors
   console.error('Fatal error starting bot:', error);
   process.exit(1);
 });
