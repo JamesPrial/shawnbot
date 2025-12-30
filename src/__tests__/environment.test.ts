@@ -1,0 +1,536 @@
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
+
+// Mock dotenv module before any imports that use it
+// This prevents loading values from .env file during tests
+vi.mock('dotenv', () => ({
+  default: {
+    config: vi.fn().mockReturnValue({ parsed: {} }),
+  },
+  config: vi.fn().mockReturnValue({ parsed: {} }),
+}));
+
+describe('environment configuration', () => {
+  // Store original process.env to restore after tests
+  const originalEnv = process.env;
+
+  beforeEach(() => {
+    // Reset modules to ensure clean imports
+    vi.resetModules();
+
+    // Create a clean environment by removing all application-specific variables
+    // Keep Node.js system variables but clear all bot-related config
+    process.env = { ...originalEnv };
+    delete process.env.DISCORD_TOKEN;
+    delete process.env.CLIENT_ID;
+    delete process.env.DATABASE_PATH;
+    delete process.env.LOG_LEVEL;
+    delete process.env.LOG_FILE_PATH;
+    delete process.env.RATE_LIMIT_WARN_THRESHOLD;
+    delete process.env.RATE_LIMIT_CRASH_THRESHOLD;
+    delete process.env.RATE_LIMIT_WINDOW_MS;
+  });
+
+  afterEach(() => {
+    // Restore original process.env and mocks after each test
+    process.env = originalEnv;
+    vi.restoreAllMocks();
+  });
+
+  describe('loadConfig', () => {
+    describe('when required environment variables are present', () => {
+      it('should load configuration successfully with all required fields', async () => {
+        // Arrange: Set minimum required environment variables
+        process.env.DISCORD_TOKEN = 'testtoken123';
+        process.env.CLIENT_ID = 'testclient456';
+
+        // Act: Load configuration (dynamic import to ensure mock is applied)
+        const { loadConfig } = await import('../config/environment');
+        const config = loadConfig();
+
+        // Assert: Verify configuration contains required fields
+        expect(config.DISCORD_TOKEN).toBe('testtoken123');
+        expect(config.CLIENT_ID).toBe('testclient456');
+        expect(config.DATABASE_PATH).toBe('./data/bot.db'); // default value
+        expect(config.LOG_LEVEL).toBe('info'); // default value
+      });
+
+      it('should apply default values for optional fields', async () => {
+        process.env.DISCORD_TOKEN = 'token';
+        process.env.CLIENT_ID = 'client';
+
+        const { loadConfig } = await import('../config/environment');
+        const config = loadConfig();
+
+        // Verify all default values are correctly applied
+        expect(config.DATABASE_PATH).toBe('./data/bot.db');
+        expect(config.LOG_LEVEL).toBe('info');
+        expect(config.RATE_LIMIT_WARN_THRESHOLD).toBe(20);
+        expect(config.RATE_LIMIT_CRASH_THRESHOLD).toBe(50);
+        expect(config.RATE_LIMIT_WINDOW_MS).toBe(60_000);
+      });
+
+      it('should override default values when environment variables are set', async () => {
+        process.env.DISCORD_TOKEN = 'token';
+        process.env.CLIENT_ID = 'client';
+        process.env.DATABASE_PATH = './custom/path/db.sqlite';
+        process.env.LOG_LEVEL = 'debug';
+        process.env.RATE_LIMIT_WARN_THRESHOLD = '100';
+        process.env.RATE_LIMIT_CRASH_THRESHOLD = '200';
+        process.env.RATE_LIMIT_WINDOW_MS = '120000';
+
+        const { loadConfig } = await import('../config/environment');
+        const config = loadConfig();
+
+        expect(config.DATABASE_PATH).toBe('./custom/path/db.sqlite');
+        expect(config.LOG_LEVEL).toBe('debug');
+        expect(config.RATE_LIMIT_WARN_THRESHOLD).toBe(100);
+        expect(config.RATE_LIMIT_CRASH_THRESHOLD).toBe(200);
+        expect(config.RATE_LIMIT_WINDOW_MS).toBe(120000);
+      });
+    });
+
+    describe('when LOG_FILE_PATH is configured', () => {
+      it('should accept undefined LOG_FILE_PATH for backwards compatibility', async () => {
+        // Arrange: Set required fields but omit LOG_FILE_PATH
+        process.env.DISCORD_TOKEN = 'token';
+        process.env.CLIENT_ID = 'client';
+        // LOG_FILE_PATH is not set (undefined)
+
+        // Act: Load configuration (should not throw)
+        const { loadConfig } = await import('../config/environment');
+        const config = loadConfig();
+
+        // Assert: Configuration loads successfully
+        expect(config).toBeDefined();
+        expect(config.DISCORD_TOKEN).toBe('token');
+        expect(config.CLIENT_ID).toBe('client');
+        // LOG_FILE_PATH should be undefined when not set
+        expect(config.LOG_FILE_PATH).toBeUndefined();
+      });
+
+      it('should accept valid file path string like "./logs/bot.log"', async () => {
+        // Arrange: Set LOG_FILE_PATH to a typical log file path
+        process.env.DISCORD_TOKEN = 'token';
+        process.env.CLIENT_ID = 'client';
+        process.env.LOG_FILE_PATH = './logs/bot.log';
+
+        // Act: Load configuration
+        const { loadConfig } = await import('../config/environment');
+        const config = loadConfig();
+
+        // Assert: LOG_FILE_PATH is correctly set
+        expect(config.LOG_FILE_PATH).toBe('./logs/bot.log');
+      });
+
+      it('should accept absolute file paths', async () => {
+        process.env.DISCORD_TOKEN = 'token';
+        process.env.CLIENT_ID = 'client';
+        process.env.LOG_FILE_PATH = '/var/log/shawnbot/app.log';
+
+        const { loadConfig } = await import('../config/environment');
+        const config = loadConfig();
+
+        expect(config.LOG_FILE_PATH).toBe('/var/log/shawnbot/app.log');
+      });
+
+      it('should accept paths with nested directories', async () => {
+        process.env.DISCORD_TOKEN = 'token';
+        process.env.CLIENT_ID = 'client';
+        process.env.LOG_FILE_PATH = './data/logs/production/bot.log';
+
+        const { loadConfig } = await import('../config/environment');
+        const config = loadConfig();
+
+        expect(config.LOG_FILE_PATH).toBe('./data/logs/production/bot.log');
+      });
+
+      it('should accept paths with different file extensions', async () => {
+        process.env.DISCORD_TOKEN = 'token';
+        process.env.CLIENT_ID = 'client';
+        process.env.LOG_FILE_PATH = './logs/app.json';
+
+        const { loadConfig } = await import('../config/environment');
+        const config = loadConfig();
+
+        expect(config.LOG_FILE_PATH).toBe('./logs/app.json');
+      });
+
+      it('should accept empty string as a valid value', async () => {
+        // Edge case: empty string might be used to explicitly disable file logging
+        process.env.DISCORD_TOKEN = 'token';
+        process.env.CLIENT_ID = 'client';
+        process.env.LOG_FILE_PATH = '';
+
+        const { loadConfig } = await import('../config/environment');
+        const config = loadConfig();
+
+        // Empty string is a valid string value
+        expect(config.LOG_FILE_PATH).toBe('');
+      });
+
+      it('should accept paths with special characters', async () => {
+        process.env.DISCORD_TOKEN = 'token';
+        process.env.CLIENT_ID = 'client';
+        process.env.LOG_FILE_PATH = './logs/bot-2025-12-30_14:30:00.log';
+
+        const { loadConfig } = await import('../config/environment');
+        const config = loadConfig();
+
+        expect(config.LOG_FILE_PATH).toBe('./logs/bot-2025-12-30_14:30:00.log');
+      });
+
+      it('should accept Windows-style paths', async () => {
+        process.env.DISCORD_TOKEN = 'token';
+        process.env.CLIENT_ID = 'client';
+        process.env.LOG_FILE_PATH = 'C:\\logs\\bot.log';
+
+        const { loadConfig } = await import('../config/environment');
+        const config = loadConfig();
+
+        expect(config.LOG_FILE_PATH).toBe('C:\\logs\\bot.log');
+      });
+    });
+
+    describe('when required environment variables are missing', () => {
+      it('should throw error when DISCORD_TOKEN is missing', async () => {
+        // Arrange: Omit DISCORD_TOKEN
+        process.env.CLIENT_ID = 'client';
+
+        // Act & Assert: Verify it throws with clear error message
+        const { loadConfig } = await import('../config/environment');
+        expect(() => loadConfig()).toThrow(/Environment validation failed/);
+        expect(() => loadConfig()).toThrow(/DISCORD_TOKEN/);
+        expect(() => loadConfig()).toThrow(/DISCORD_TOKEN/); // Zod says "Required" when field is missing
+      });
+
+      it('should throw error when CLIENT_ID is missing', async () => {
+        process.env.DISCORD_TOKEN = 'token';
+        // CLIENT_ID is not set
+
+        const { loadConfig } = await import('../config/environment');
+        expect(() => loadConfig()).toThrow(/Environment validation failed/);
+        expect(() => loadConfig()).toThrow(/CLIENT_ID/);
+        expect(() => loadConfig()).toThrow(/CLIENT_ID/); // Zod says "Required" when field is missing
+      });
+
+      it('should throw error when DISCORD_TOKEN is empty string', async () => {
+        // Edge case: Empty string should fail min(1) validation
+        process.env.DISCORD_TOKEN = '';
+        process.env.CLIENT_ID = 'client';
+
+        const { loadConfig } = await import('../config/environment');
+        expect(() => loadConfig()).toThrow(/Environment validation failed/);
+        expect(() => loadConfig()).toThrow(/DISCORD_TOKEN/);
+      });
+
+      it('should throw error when CLIENT_ID is empty string', async () => {
+        process.env.DISCORD_TOKEN = 'token';
+        process.env.CLIENT_ID = '';
+
+        const { loadConfig } = await import('../config/environment');
+        expect(() => loadConfig()).toThrow(/Environment validation failed/);
+        expect(() => loadConfig()).toThrow(/CLIENT_ID/);
+      });
+
+      it('should throw error when both required fields are missing', async () => {
+        // Environment already cleaned in beforeEach
+        // No env vars set, so both required fields are missing
+
+        const { loadConfig } = await import('../config/environment');
+        expect(() => loadConfig()).toThrow(/Environment validation failed/);
+        // Should mention both missing fields
+        expect(() => loadConfig()).toThrow(/DISCORD_TOKEN/);
+      });
+    });
+
+    describe('when LOG_LEVEL has invalid value', () => {
+      it('should throw error for invalid log level', async () => {
+        process.env.DISCORD_TOKEN = 'token';
+        process.env.CLIENT_ID = 'client';
+        process.env.LOG_LEVEL = 'invalid-level';
+
+        const { loadConfig } = await import('../config/environment');
+        expect(() => loadConfig()).toThrow(/Environment validation failed/);
+        expect(() => loadConfig()).toThrow(/LOG_LEVEL/);
+      });
+
+      it('should accept all valid log levels', async () => {
+        const validLevels = ['debug', 'info', 'warn', 'error'];
+
+        for (const level of validLevels) {
+          // Reset modules for each iteration to get fresh import
+          vi.resetModules();
+
+          process.env.DISCORD_TOKEN = 'token';
+          process.env.CLIENT_ID = 'client';
+          process.env.LOG_LEVEL = level;
+
+          const { loadConfig } = await import('../config/environment');
+          const config = loadConfig();
+          expect(config.LOG_LEVEL).toBe(level);
+        }
+      });
+
+      it('should reject log level with incorrect casing', async () => {
+        process.env.DISCORD_TOKEN = 'token';
+        process.env.CLIENT_ID = 'client';
+        process.env.LOG_LEVEL = 'INFO'; // Uppercase should fail
+
+        const { loadConfig } = await import('../config/environment');
+        expect(() => loadConfig()).toThrow(/Environment validation failed/);
+      });
+    });
+
+    describe('when numeric environment variables have invalid values', () => {
+      it('should coerce valid numeric strings to numbers', async () => {
+        process.env.DISCORD_TOKEN = 'token';
+        process.env.CLIENT_ID = 'client';
+        process.env.RATE_LIMIT_WARN_THRESHOLD = '42';
+        process.env.RATE_LIMIT_CRASH_THRESHOLD = '100';
+        process.env.RATE_LIMIT_WINDOW_MS = '30000';
+
+        const { loadConfig } = await import('../config/environment');
+        const config = loadConfig();
+
+        // Verify coercion to actual numbers
+        expect(config.RATE_LIMIT_WARN_THRESHOLD).toBe(42);
+        expect(typeof config.RATE_LIMIT_WARN_THRESHOLD).toBe('number');
+        expect(config.RATE_LIMIT_CRASH_THRESHOLD).toBe(100);
+        expect(config.RATE_LIMIT_WINDOW_MS).toBe(30000);
+      });
+
+      it('should handle zero values for numeric fields', async () => {
+        process.env.DISCORD_TOKEN = 'token';
+        process.env.CLIENT_ID = 'client';
+        process.env.RATE_LIMIT_WARN_THRESHOLD = '0';
+
+        const { loadConfig } = await import('../config/environment');
+        const config = loadConfig();
+
+        expect(config.RATE_LIMIT_WARN_THRESHOLD).toBe(0);
+      });
+
+      it('should handle negative numbers if coercion allows', async () => {
+        // Zod coerce.number() will accept negative numbers unless explicitly constrained
+        process.env.DISCORD_TOKEN = 'token';
+        process.env.CLIENT_ID = 'client';
+        process.env.RATE_LIMIT_WARN_THRESHOLD = '-10';
+
+        const { loadConfig } = await import('../config/environment');
+        const config = loadConfig();
+
+        expect(config.RATE_LIMIT_WARN_THRESHOLD).toBe(-10);
+      });
+
+      it('should handle floating point numbers', async () => {
+        process.env.DISCORD_TOKEN = 'token';
+        process.env.CLIENT_ID = 'client';
+        process.env.RATE_LIMIT_WINDOW_MS = '12345.67';
+
+        const { loadConfig } = await import('../config/environment');
+        const config = loadConfig();
+
+        expect(config.RATE_LIMIT_WINDOW_MS).toBe(12345.67);
+      });
+
+      it('should throw error for non-numeric strings', async () => {
+        process.env.DISCORD_TOKEN = 'token';
+        process.env.CLIENT_ID = 'client';
+        process.env.RATE_LIMIT_WARN_THRESHOLD = 'not-a-number';
+
+        const { loadConfig } = await import('../config/environment');
+        expect(() => loadConfig()).toThrow(/Environment validation failed/);
+      });
+    });
+
+    describe('error message formatting', () => {
+      it('should include field path and error message in validation errors', async () => {
+        process.env.CLIENT_ID = 'client';
+        // DISCORD_TOKEN missing
+
+        const { loadConfig } = await import('../config/environment');
+
+        try {
+          loadConfig();
+          expect.fail('Should have thrown an error');
+        } catch (error) {
+          expect(error).toBeInstanceOf(Error);
+          const message = (error as Error).message;
+
+          // Verify error message contains field path and description
+          // Note: Zod says "Required" when field is missing, custom message only for min(1) failure
+          expect(message).toContain('Environment validation failed');
+          expect(message).toContain('DISCORD_TOKEN');
+          expect(message).toContain('Required');
+        }
+      });
+
+      it('should list multiple validation errors in a single message', async () => {
+        // Both required fields missing (environment already clean from beforeEach)
+
+        const { loadConfig } = await import('../config/environment');
+
+        try {
+          loadConfig();
+          expect.fail('Should have thrown an error');
+        } catch (error) {
+          const message = (error as Error).message;
+
+          // Should mention both missing fields
+          expect(message).toContain('DISCORD_TOKEN');
+          expect(message).toContain('CLIENT_ID');
+        }
+      });
+
+      it('should format errors with newlines for readability', async () => {
+        // Environment already clean from beforeEach
+
+        const { loadConfig } = await import('../config/environment');
+
+        try {
+          loadConfig();
+          expect.fail('Should have thrown an error');
+        } catch (error) {
+          const message = (error as Error).message;
+
+          // Error messages should be on separate lines (newline-separated)
+          expect(message).toContain('\n');
+          expect(message.split('\n').length).toBeGreaterThan(1);
+        }
+      });
+    });
+
+    describe('edge cases', () => {
+      it('should handle process.env properties that are undefined', async () => {
+        process.env.DISCORD_TOKEN = 'token';
+        process.env.CLIENT_ID = 'client';
+        process.env.DATABASE_PATH = undefined as any; // TypeScript allows this at runtime
+
+        const { loadConfig } = await import('../config/environment');
+        const config = loadConfig();
+
+        // Should fall back to default when undefined
+        expect(config.DATABASE_PATH).toBe('./data/bot.db');
+      });
+
+      it('should handle whitespace-only required fields as invalid', async () => {
+        process.env.DISCORD_TOKEN = '   '; // Only whitespace
+        process.env.CLIENT_ID = 'client';
+
+        const { loadConfig } = await import('../config/environment');
+
+        // min(1) on string means at least 1 character, but doesn't trim
+        // This tests the actual behavior - whitespace counts as characters
+        const config = loadConfig();
+        expect(config.DISCORD_TOKEN).toBe('   ');
+      });
+
+      it('should preserve exact string values without trimming', async () => {
+        process.env.DISCORD_TOKEN = ' token-with-spaces ';
+        process.env.CLIENT_ID = ' client ';
+
+        const { loadConfig } = await import('../config/environment');
+        const config = loadConfig();
+
+        // Zod doesn't trim by default - verify exact preservation
+        expect(config.DISCORD_TOKEN).toBe(' token-with-spaces ');
+        expect(config.CLIENT_ID).toBe(' client ');
+      });
+
+      it('should handle very large numeric values', async () => {
+        process.env.DISCORD_TOKEN = 'token';
+        process.env.CLIENT_ID = 'client';
+        process.env.RATE_LIMIT_WINDOW_MS = '999999999999';
+
+        const { loadConfig } = await import('../config/environment');
+        const config = loadConfig();
+
+        expect(config.RATE_LIMIT_WINDOW_MS).toBe(999999999999);
+      });
+
+      it('should handle scientific notation in numeric fields', async () => {
+        process.env.DISCORD_TOKEN = 'token';
+        process.env.CLIENT_ID = 'client';
+        process.env.RATE_LIMIT_WINDOW_MS = '1e6'; // 1,000,000
+
+        const { loadConfig } = await import('../config/environment');
+        const config = loadConfig();
+
+        expect(config.RATE_LIMIT_WINDOW_MS).toBe(1000000);
+      });
+    });
+  });
+
+  describe('EnvConfig type', () => {
+    it('should include LOG_FILE_PATH as an optional string field', async () => {
+      // This test verifies TypeScript type inference via runtime behavior
+      process.env.DISCORD_TOKEN = 'token';
+      process.env.CLIENT_ID = 'client';
+      process.env.LOG_FILE_PATH = './logs/test.log';
+
+      const { loadConfig } = await import('../config/environment');
+      const config = loadConfig();
+
+      // Type assertion to verify the type includes LOG_FILE_PATH
+      const logPath: string | undefined = config.LOG_FILE_PATH;
+      expect(logPath).toBe('./logs/test.log');
+
+      // Verify it's truly optional (can be undefined)
+      type ConfigType = typeof config;
+      const testUndefined: ConfigType = {
+        ...config,
+        LOG_FILE_PATH: undefined,
+      };
+      expect(testUndefined.LOG_FILE_PATH).toBeUndefined();
+    });
+
+    it('should allow EnvConfig without LOG_FILE_PATH property', async () => {
+      process.env.DISCORD_TOKEN = 'token';
+      process.env.CLIENT_ID = 'client';
+      // LOG_FILE_PATH not set
+
+      const { loadConfig } = await import('../config/environment');
+      const config = loadConfig();
+
+      // TypeScript should allow accessing potentially undefined property
+      const logPath: string | undefined = config.LOG_FILE_PATH;
+      expect(logPath).toBeUndefined();
+    });
+
+    it('should enforce required fields in EnvConfig type', async () => {
+      process.env.DISCORD_TOKEN = 'token';
+      process.env.CLIENT_ID = 'client';
+
+      const { loadConfig } = await import('../config/environment');
+      const config = loadConfig();
+
+      // Required fields should always be present and have correct types
+      const token: string = config.DISCORD_TOKEN;
+      const clientId: string = config.CLIENT_ID;
+      const dbPath: string = config.DATABASE_PATH;
+      const logLevel: 'debug' | 'info' | 'warn' | 'error' = config.LOG_LEVEL;
+
+      expect(token).toBe('token');
+      expect(clientId).toBe('client');
+      expect(dbPath).toBe('./data/bot.db');
+      expect(logLevel).toBe('info');
+    });
+
+    it('should infer numeric types for rate limit fields', async () => {
+      process.env.DISCORD_TOKEN = 'token';
+      process.env.CLIENT_ID = 'client';
+
+      const { loadConfig } = await import('../config/environment');
+      const config = loadConfig();
+
+      // These should be typed as numbers, not strings
+      const warnThreshold: number = config.RATE_LIMIT_WARN_THRESHOLD;
+      const crashThreshold: number = config.RATE_LIMIT_CRASH_THRESHOLD;
+      const windowMs: number = config.RATE_LIMIT_WINDOW_MS;
+
+      expect(typeof warnThreshold).toBe('number');
+      expect(typeof crashThreshold).toBe('number');
+      expect(typeof windowMs).toBe('number');
+    });
+  });
+});

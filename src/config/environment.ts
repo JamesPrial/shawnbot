@@ -8,6 +8,7 @@ const environmentSchema = z.object({
   CLIENT_ID: z.string().min(1, 'Client ID is required'),
   DATABASE_PATH: z.string().default('./data/bot.db'),
   LOG_LEVEL: logLevelSchema.default('info'),
+  LOG_FILE_PATH: z.string().optional(),
   RATE_LIMIT_WARN_THRESHOLD: z.coerce.number().default(20),
   RATE_LIMIT_CRASH_THRESHOLD: z.coerce.number().default(50),
   RATE_LIMIT_WINDOW_MS: z.coerce.number().default(60_000),
