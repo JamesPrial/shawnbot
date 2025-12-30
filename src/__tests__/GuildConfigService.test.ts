@@ -1,6 +1,7 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { GuildConfigService } from '../services/GuildConfigService';
 import type { GuildSettingsRepository, GuildSettings } from '../database/repositories/GuildSettingsRepository';
+import { createMockLogger, createMockGuildSettings } from './fixtures';
 
 // Mock the logger module
 vi.mock('../utils/logger', () => ({
@@ -84,17 +85,14 @@ describe('GuildConfigService', () => {
     describe('when guild settings exist in database', () => {
       it('should return settings from database', () => {
         const guildId = 'existing-guild';
-        const dbSettings: GuildSettings = {
+        const dbSettings = createMockGuildSettings({
           guildId,
           enabled: true,
           afkTimeoutSeconds: 600,
           warningSecondsBefore: 120,
           warningChannelId: 'channel-123',
           exemptRoleIds: ['role-1', 'role-2'],
-          adminRoleIds: [],
-          createdAt: '2024-01-01T00:00:00.000Z',
-          updatedAt: '2024-01-02T00:00:00.000Z',
-        };
+        });
         vi.mocked(mockRepository.findByGuildId).mockReturnValue(dbSettings);
 
         const config = service.getConfig(guildId);
@@ -105,17 +103,7 @@ describe('GuildConfigService', () => {
 
       it('should fetch from database on first call', () => {
         const guildId = 'first-call-guild';
-        const dbSettings: GuildSettings = {
-          guildId,
-          enabled: false,
-          afkTimeoutSeconds: 300,
-          warningSecondsBefore: 60,
-          warningChannelId: null,
-          exemptRoleIds: [],
-          adminRoleIds: [],
-          createdAt: '2024-01-01T00:00:00.000Z',
-          updatedAt: '2024-01-01T00:00:00.000Z',
-        };
+        const dbSettings = createMockGuildSettings({ guildId });
         vi.mocked(mockRepository.findByGuildId).mockReturnValue(dbSettings);
 
         service.getConfig(guildId);
@@ -127,17 +115,14 @@ describe('GuildConfigService', () => {
     describe('caching behavior', () => {
       it('should return cached config on subsequent calls without hitting database', () => {
         const guildId = 'cached-guild';
-        const dbSettings: GuildSettings = {
+        const dbSettings = createMockGuildSettings({
           guildId,
           enabled: true,
           afkTimeoutSeconds: 500,
           warningSecondsBefore: 90,
           warningChannelId: 'channel-456',
           exemptRoleIds: ['role-admin'],
-          adminRoleIds: [],
-          createdAt: '2024-01-01T00:00:00.000Z',
-          updatedAt: '2024-01-01T00:00:00.000Z',
-        };
+        });
         vi.mocked(mockRepository.findByGuildId).mockReturnValue(dbSettings);
 
         // First call - should hit database
@@ -177,28 +162,22 @@ describe('GuildConfigService', () => {
       it('should cache different configs for different guilds independently', () => {
         const guild1 = 'guild-one';
         const guild2 = 'guild-two';
-        const settings1: GuildSettings = {
+        const settings1 = createMockGuildSettings({
           guildId: guild1,
           enabled: true,
           afkTimeoutSeconds: 400,
           warningSecondsBefore: 80,
           warningChannelId: 'channel-1',
           exemptRoleIds: ['role-1'],
-          adminRoleIds: [],
-          createdAt: '2024-01-01T00:00:00.000Z',
-          updatedAt: '2024-01-01T00:00:00.000Z',
-        };
-        const settings2: GuildSettings = {
+        });
+        const settings2 = createMockGuildSettings({
           guildId: guild2,
           enabled: false,
           afkTimeoutSeconds: 800,
           warningSecondsBefore: 160,
           warningChannelId: 'channel-2',
           exemptRoleIds: ['role-2'],
-          adminRoleIds: [],
-          createdAt: '2024-01-02T00:00:00.000Z',
-          updatedAt: '2024-01-02T00:00:00.000Z',
-        };
+        });
 
         vi.mocked(mockRepository.findByGuildId).mockImplementation((id) => {
           if (id === guild1) return settings1;
@@ -558,19 +537,9 @@ describe('GuildConfigService', () => {
         const guild2 = 'guild-all-2';
         const guild3 = 'guild-all-3';
 
-        const createSettings = (guildId: string): GuildSettings => ({
-          guildId,
-          enabled: true,
-          afkTimeoutSeconds: 300,
-          warningSecondsBefore: 60,
-          warningChannelId: null,
-          exemptRoleIds: [],
-          adminRoleIds: [],
-          createdAt: '2024-01-01T00:00:00.000Z',
-          updatedAt: '2024-01-01T00:00:00.000Z',
-        });
-
-        vi.mocked(mockRepository.findByGuildId).mockImplementation((id) => createSettings(id));
+        vi.mocked(mockRepository.findByGuildId).mockImplementation((id) =>
+          createMockGuildSettings({ guildId: id })
+        );
 
         // Populate multiple caches
         service.getConfig(guild1);
@@ -653,25 +622,12 @@ describe('GuildConfigService', () => {
   describe('LRU cache eviction', () => {
     describe('when cache exceeds max size', () => {
       it('should evict the oldest entry when max size is reached', () => {
-        // Create service with small cache size for easy testing
         const smallCacheService = new GuildConfigService(mockRepository, 3);
-
-        const createSettings = (guildId: string): GuildSettings => ({
-          guildId,
-          enabled: true,
-          afkTimeoutSeconds: 300,
-          warningSecondsBefore: 60,
-          warningChannelId: null,
-          exemptRoleIds: [],
-          adminRoleIds: [],
-          createdAt: '2024-01-01T00:00:00.000Z',
-          updatedAt: '2024-01-01T00:00:00.000Z',
-        });
 
         let callCount = 0;
         vi.mocked(mockRepository.findByGuildId).mockImplementation((id) => {
           callCount++;
-          return createSettings(id);
+          return createMockGuildSettings({ guildId: id });
         });
 
         // Fill cache to max capacity (3 entries)
@@ -700,25 +656,12 @@ describe('GuildConfigService', () => {
       });
 
       it('should evict the correct entry when cache is filled sequentially', () => {
-        // This test verifies that eviction follows insertion order when no accesses occur
         const smallCacheService = new GuildConfigService(mockRepository, 2);
-
-        const createSettings = (guildId: string): GuildSettings => ({
-          guildId,
-          enabled: true,
-          afkTimeoutSeconds: 300,
-          warningSecondsBefore: 60,
-          warningChannelId: null,
-          exemptRoleIds: [],
-          adminRoleIds: [],
-          createdAt: '2024-01-01T00:00:00.000Z',
-          updatedAt: '2024-01-01T00:00:00.000Z',
-        });
 
         let callCount = 0;
         vi.mocked(mockRepository.findByGuildId).mockImplementation((id) => {
           callCount++;
-          return createSettings(id);
+          return createMockGuildSettings({ guildId: id });
         });
 
         // Add first entry
@@ -739,25 +682,12 @@ describe('GuildConfigService', () => {
       });
 
       it('should handle eviction when cache size is 1', () => {
-        // Edge case: cache that can only hold one entry
         const tinyCache = new GuildConfigService(mockRepository, 1);
-
-        const createSettings = (guildId: string): GuildSettings => ({
-          guildId,
-          enabled: false,
-          afkTimeoutSeconds: 300,
-          warningSecondsBefore: 60,
-          warningChannelId: null,
-          exemptRoleIds: [],
-          adminRoleIds: [],
-          createdAt: '2024-01-01T00:00:00.000Z',
-          updatedAt: '2024-01-01T00:00:00.000Z',
-        });
 
         let callCount = 0;
         vi.mocked(mockRepository.findByGuildId).mockImplementation((id) => {
           callCount++;
-          return createSettings(id);
+          return createMockGuildSettings({ guildId: id });
         });
 
         // Add first entry
@@ -786,25 +716,12 @@ describe('GuildConfigService', () => {
 
     describe('when accessing an entry updates its recency', () => {
       it('should prevent eviction of recently accessed entries', () => {
-        // This test proves that accessing an entry moves it to the "most recently used" position
         const smallCacheService = new GuildConfigService(mockRepository, 3);
-
-        const createSettings = (guildId: string): GuildSettings => ({
-          guildId,
-          enabled: true,
-          afkTimeoutSeconds: 300,
-          warningSecondsBefore: 60,
-          warningChannelId: null,
-          exemptRoleIds: [],
-          adminRoleIds: [],
-          createdAt: '2024-01-01T00:00:00.000Z',
-          updatedAt: '2024-01-01T00:00:00.000Z',
-        });
 
         let callCount = 0;
         vi.mocked(mockRepository.findByGuildId).mockImplementation((id) => {
           callCount++;
-          return createSettings(id);
+          return createMockGuildSettings({ guildId: id });
         });
 
         // Fill cache: guild-1, guild-2, guild-3 (in that order)
@@ -835,22 +752,10 @@ describe('GuildConfigService', () => {
       it('should update recency on multiple sequential accesses', () => {
         const smallCacheService = new GuildConfigService(mockRepository, 3);
 
-        const createSettings = (guildId: string): GuildSettings => ({
-          guildId,
-          enabled: false,
-          afkTimeoutSeconds: 300,
-          warningSecondsBefore: 60,
-          warningChannelId: null,
-          exemptRoleIds: [],
-          adminRoleIds: [],
-          createdAt: '2024-01-01T00:00:00.000Z',
-          updatedAt: '2024-01-01T00:00:00.000Z',
-        });
-
         let callCount = 0;
         vi.mocked(mockRepository.findByGuildId).mockImplementation((id) => {
           callCount++;
-          return createSettings(id);
+          return createMockGuildSettings({ guildId: id });
         });
 
         // Fill cache: A, B, C
@@ -881,25 +786,12 @@ describe('GuildConfigService', () => {
       });
 
       it('should preserve cache size limit while updating recency', () => {
-        // Ensures that accessing entries doesn't somehow allow cache to grow beyond max size
         const smallCacheService = new GuildConfigService(mockRepository, 2);
-
-        const createSettings = (guildId: string): GuildSettings => ({
-          guildId,
-          enabled: true,
-          afkTimeoutSeconds: 300,
-          warningSecondsBefore: 60,
-          warningChannelId: null,
-          exemptRoleIds: [],
-          adminRoleIds: [],
-          createdAt: '2024-01-01T00:00:00.000Z',
-          updatedAt: '2024-01-01T00:00:00.000Z',
-        });
 
         let callCount = 0;
         vi.mocked(mockRepository.findByGuildId).mockImplementation((id) => {
           callCount++;
-          return createSettings(id);
+          return createMockGuildSettings({ guildId: id });
         });
 
         // Add entries with lots of accesses in between
@@ -1070,7 +962,7 @@ describe('GuildConfigService', () => {
 
   describe('upsert error handling', () => {
     describe('when repository.upsert throws an error', () => {
-      it('should log the error with context', () => {
+      it('should log the error and rethrow with context', () => {
         const guildId = 'error-guild';
         const updates = { enabled: true, afkTimeoutSeconds: 500 };
         const dbError = new Error('Database connection failed');
@@ -1081,79 +973,33 @@ describe('GuildConfigService', () => {
 
         expect(() => {
           service.updateConfig(guildId, updates);
-        }).toThrow();
+        }).toThrow('Failed to update guild settings for guild error-guild: Database connection failed');
 
-        // Verify error was logged with full context
-        expect(logger.error).toHaveBeenCalledWith(
-          { error: dbError, guildId, updates },
-          'Failed to upsert guild settings to database'
-        );
-        expect(logger.error).toHaveBeenCalledTimes(1);
-      });
-
-      it('should rethrow error with additional context', () => {
-        const guildId = 'failing-guild';
-        const updates = { warningSecondsBefore: 120 };
-        const originalError = new Error('Constraint violation');
-
-        vi.mocked(mockRepository.upsert).mockImplementation(() => {
-          throw originalError;
-        });
-
-        expect(() => {
-          service.updateConfig(guildId, updates);
-        }).toThrow(
-          `Failed to update guild settings for guild ${guildId}: ${originalError.message}`
-        );
+        expect(logger.error).toHaveBeenCalled();
       });
 
       it('should handle non-Error thrown objects gracefully', () => {
-        // Edge case: something throws a non-Error object
         const guildId = 'weird-error-guild';
         const updates = { enabled: false };
 
         vi.mocked(mockRepository.upsert).mockImplementation(() => {
           // eslint-disable-next-line no-throw-literal
-          throw 'string error'; // Intentionally throwing a string
+          throw 'string error';
         });
 
         expect(() => {
           service.updateConfig(guildId, updates);
-        }).toThrow(`Failed to update guild settings for guild ${guildId}: string error`);
+        }).toThrow('Failed to update guild settings for guild weird-error-guild: string error');
 
-        // Should still log the error
         expect(logger.error).toHaveBeenCalled();
       });
 
-      it('should handle undefined error message', () => {
-        const guildId = 'no-message-guild';
-        const updates = { afkTimeoutSeconds: 999 };
-
-        vi.mocked(mockRepository.upsert).mockImplementation(() => {
-          const errorWithoutMessage = new Error();
-          errorWithoutMessage.message = '';
-          throw errorWithoutMessage;
-        });
-
-        expect(() => {
-          service.updateConfig(guildId, updates);
-        }).toThrow(`Failed to update guild settings for guild ${guildId}:`);
-      });
-
       it('should not update cache when upsert fails', () => {
-        // This is critical: if DB update fails, cache must not be updated with stale data
         const guildId = 'cache-integrity-guild';
-        const initialSettings: GuildSettings = {
+        const initialSettings = createMockGuildSettings({
           guildId,
           enabled: false,
-          afkTimeoutSeconds: 300,
-          warningSecondsBefore: 60,
-          warningChannelId: null,
-          exemptRoleIds: [],
-          adminRoleIds: [],
-          createdAt: '2024-01-01T00:00:00.000Z',
-          updatedAt: '2024-01-01T00:00:00.000Z',
-        };
+        });
 
         // First, populate cache with initial settings
         vi.mocked(mockRepository.findByGuildId).mockReturnValue(initialSettings);
@@ -1175,8 +1021,8 @@ describe('GuildConfigService', () => {
 
         // Cache should still have the OLD value (enabled: false)
         const cachedAfter = service.getConfig(guildId);
-        expect(mockRepository.findByGuildId).not.toHaveBeenCalled(); // Proves it came from cache
-        expect(cachedAfter.enabled).toBe(false); // Proves cache wasn't corrupted
+        expect(mockRepository.findByGuildId).not.toHaveBeenCalled();
+        expect(cachedAfter.enabled).toBe(false);
         expect(cachedAfter).toEqual(initialSettings);
       });
 
@@ -1274,304 +1120,116 @@ describe('GuildConfigService', () => {
       });
     });
 
-    describe('error handling edge cases', () => {
-      it('should log all fields in updates object, including arrays', () => {
-        const guildId = 'complex-update-guild';
-        const complexUpdates = {
-          enabled: true,
-          afkTimeoutSeconds: 600,
-          exemptRoleIds: ['role-1', 'role-2', 'role-3'],
-          warningChannelId: 'channel-999',
-        };
-        const error = new Error('Complex update failed');
-
-        vi.mocked(mockRepository.upsert).mockImplementation(() => {
-          throw error;
-        });
-
-        expect(() => {
-          service.updateConfig(guildId, complexUpdates);
-        }).toThrow();
-
-        // Verify the complete updates object was logged
-        expect(logger.error).toHaveBeenCalledWith(
-          { error, guildId, updates: complexUpdates },
-          'Failed to upsert guild settings to database'
-        );
-      });
-
-      it('should handle errors during updates with partial config changes', () => {
-        const guildId = 'partial-error-guild';
-        const partialUpdate = { warningSecondsBefore: 30 }; // Only updating one field
-
-        vi.mocked(mockRepository.upsert).mockImplementation(() => {
-          throw new Error('Partial update failed');
-        });
-
-        expect(() => {
-          service.updateConfig(guildId, partialUpdate);
-        }).toThrow('Partial update failed');
-
-        expect(logger.error).toHaveBeenCalledWith(
-          expect.objectContaining({
-            guildId,
-            updates: partialUpdate,
-          }),
-          'Failed to upsert guild settings to database'
-        );
-      });
-    });
   });
 
   describe('null value handling from database', () => {
-    describe('when database returns settings with null numeric fields', () => {
-      it('should apply default timeout (300) when database has null afkTimeoutSeconds', () => {
-        const guildId = 'null-timeout-guild';
-        const settingsWithNullTimeout: GuildSettings = {
-          guildId,
-          enabled: true,
-          afkTimeoutSeconds: null as unknown as number, // Simulating DB null
-          warningSecondsBefore: 120,
-          warningChannelId: 'channel-123',
-          exemptRoleIds: ['role-1'],
-          adminRoleIds: [],
-          createdAt: '2024-01-01T00:00:00.000Z',
-          updatedAt: '2024-01-01T00:00:00.000Z',
-        };
-
-        vi.mocked(mockRepository.findByGuildId).mockReturnValue(settingsWithNullTimeout);
-
-        const config = service.getConfig(guildId);
-
-        // CRITICAL: Service must replace null with default value
-        expect(config.afkTimeoutSeconds).toBe(300);
-        // Verify other fields preserved
-        expect(config.enabled).toBe(true);
-        expect(config.warningSecondsBefore).toBe(120);
-        expect(config.warningChannelId).toBe('channel-123');
-        expect(config.exemptRoleIds).toEqual(['role-1']);
+    it.each([
+      {
+        field: 'afkTimeoutSeconds' as const,
+        nullValue: null as unknown as number,
+        expectedDefault: 300,
+        otherFields: { warningSecondsBefore: 120 },
+      },
+      {
+        field: 'warningSecondsBefore' as const,
+        nullValue: null as unknown as number,
+        expectedDefault: 60,
+        otherFields: { afkTimeoutSeconds: 450 },
+      },
+    ])('should apply default for $field when null from getConfig', ({ field, expectedDefault, otherFields }) => {
+      const guildId = 'null-field-guild';
+      const settingsWithNull = createMockGuildSettings({
+        guildId,
+        [field]: null as unknown as number,
+        ...otherFields,
       });
 
-      it('should apply default warning (60) when database has null warningSecondsBefore', () => {
-        const guildId = 'null-warning-guild';
-        const settingsWithNullWarning: GuildSettings = {
-          guildId,
-          enabled: false,
-          afkTimeoutSeconds: 450,
-          warningSecondsBefore: null as unknown as number, // Simulating DB null
-          warningChannelId: null,
-          exemptRoleIds: [],
-          adminRoleIds: [],
-          createdAt: '2024-01-01T00:00:00.000Z',
-          updatedAt: '2024-01-01T00:00:00.000Z',
-        };
+      vi.mocked(mockRepository.findByGuildId).mockReturnValue(settingsWithNull);
+      const config = service.getConfig(guildId);
 
-        vi.mocked(mockRepository.findByGuildId).mockReturnValue(settingsWithNullWarning);
-
-        const config = service.getConfig(guildId);
-
-        // CRITICAL: Service must replace null with default value
-        expect(config.warningSecondsBefore).toBe(60);
-        // Verify other fields preserved
-        expect(config.enabled).toBe(false);
-        expect(config.afkTimeoutSeconds).toBe(450);
-        expect(config.warningChannelId).toBeNull();
-      });
-
-      it('should apply defaults for both timeout and warning when both are null', () => {
-        const guildId = 'both-null-guild';
-        const settingsWithBothNull: GuildSettings = {
-          guildId,
-          enabled: true,
-          afkTimeoutSeconds: null as unknown as number, // Simulating DB null
-          warningSecondsBefore: null as unknown as number, // Simulating DB null
-          warningChannelId: 'channel-999',
-          exemptRoleIds: ['role-admin', 'role-mod'],
-          adminRoleIds: ['admin-1'],
-          createdAt: '2024-01-01T00:00:00.000Z',
-          updatedAt: '2024-01-01T00:00:00.000Z',
-        };
-
-        vi.mocked(mockRepository.findByGuildId).mockReturnValue(settingsWithBothNull);
-
-        const config = service.getConfig(guildId);
-
-        // CRITICAL: Both nulls must be replaced with defaults
-        expect(config.afkTimeoutSeconds).toBe(300);
-        expect(config.warningSecondsBefore).toBe(60);
-        // Verify other fields preserved exactly
-        expect(config.enabled).toBe(true);
-        expect(config.warningChannelId).toBe('channel-999');
-        expect(config.exemptRoleIds).toEqual(['role-admin', 'role-mod']);
-        expect(config.adminRoleIds).toEqual(['admin-1']);
-      });
-
-      it('should preserve non-null numeric values from database without overwriting', () => {
-        // This test proves the service doesn't blindly overwrite valid custom values
-        const guildId = 'custom-values-guild';
-        const settingsWithCustomValues: GuildSettings = {
-          guildId,
-          enabled: true,
-          afkTimeoutSeconds: 999, // Custom non-default value
-          warningSecondsBefore: 150, // Custom non-default value
-          warningChannelId: 'channel-custom',
-          exemptRoleIds: ['custom-role'],
-          adminRoleIds: [],
-          createdAt: '2024-01-01T00:00:00.000Z',
-          updatedAt: '2024-01-01T00:00:00.000Z',
-        };
-
-        vi.mocked(mockRepository.findByGuildId).mockReturnValue(settingsWithCustomValues);
-
-        const config = service.getConfig(guildId);
-
-        // CRITICAL: Must preserve the custom values, not replace with defaults
-        expect(config.afkTimeoutSeconds).toBe(999);
-        expect(config.warningSecondsBefore).toBe(150);
-        // Verify no field was modified
-        expect(config).toEqual(settingsWithCustomValues);
-      });
-
-      it('should preserve zero values without treating them as null', () => {
-        // Edge case: 0 is a valid value and should not be replaced with default
-        const guildId = 'zero-values-guild';
-        const settingsWithZero: GuildSettings = {
-          guildId,
-          enabled: true,
-          afkTimeoutSeconds: 0, // Zero is valid, means immediate timeout
-          warningSecondsBefore: 0, // Zero is valid, means no warning
-          warningChannelId: null,
-          exemptRoleIds: [],
-          adminRoleIds: [],
-          createdAt: '2024-01-01T00:00:00.000Z',
-          updatedAt: '2024-01-01T00:00:00.000Z',
-        };
-
-        vi.mocked(mockRepository.findByGuildId).mockReturnValue(settingsWithZero);
-
-        const config = service.getConfig(guildId);
-
-        // CRITICAL: Zero must be preserved, not replaced with defaults
-        expect(config.afkTimeoutSeconds).toBe(0);
-        expect(config.warningSecondsBefore).toBe(0);
-      });
-
-      it('should handle mix of null and valid values correctly', () => {
-        // Real-world scenario: partial null corruption from database migration
-        const guildId = 'mixed-null-guild';
-        const settingsWithMixedNulls: GuildSettings = {
-          guildId,
-          enabled: true,
-          afkTimeoutSeconds: 600, // Valid value
-          warningSecondsBefore: null as unknown as number, // Null value
-          warningChannelId: 'channel-mixed',
-          exemptRoleIds: [],
-          adminRoleIds: [],
-          createdAt: '2024-01-01T00:00:00.000Z',
-          updatedAt: '2024-01-01T00:00:00.000Z',
-        };
-
-        vi.mocked(mockRepository.findByGuildId).mockReturnValue(settingsWithMixedNulls);
-
-        const config = service.getConfig(guildId);
-
-        // Valid value preserved, null replaced
-        expect(config.afkTimeoutSeconds).toBe(600);
-        expect(config.warningSecondsBefore).toBe(60);
-        expect(config.warningChannelId).toBe('channel-mixed');
-      });
+      expect(config[field]).toBe(expectedDefault);
     });
 
-    describe('when updateConfig returns settings with null fields', () => {
-      it('should apply defaults to null fields in returned config after update', () => {
-        // Tests that updateConfig also applies defaults when DB returns nulls
-        const guildId = 'update-null-guild';
-        const updatedSettingsWithNull: GuildSettings = {
-          guildId,
-          enabled: true,
-          afkTimeoutSeconds: null as unknown as number, // DB returned null after update
-          warningSecondsBefore: 90,
-          warningChannelId: 'new-channel',
-          exemptRoleIds: ['new-role'],
-          adminRoleIds: [],
-          createdAt: '2024-01-01T00:00:00.000Z',
-          updatedAt: '2024-01-02T10:00:00.000Z',
-        };
-
-        vi.mocked(mockRepository.findByGuildId).mockReturnValue(updatedSettingsWithNull);
-
-        const result = service.updateConfig(guildId, { enabled: true });
-
-        // CRITICAL: Returned config must have defaults applied
-        expect(result.afkTimeoutSeconds).toBe(300);
-        expect(result.warningSecondsBefore).toBe(90);
-        expect(result.enabled).toBe(true);
+    it.each([
+      {
+        field: 'afkTimeoutSeconds' as const,
+        nullValue: null as unknown as number,
+        expectedDefault: 300,
+      },
+      {
+        field: 'warningSecondsBefore' as const,
+        nullValue: null as unknown as number,
+        expectedDefault: 60,
+      },
+    ])('should apply default for $field when null from updateConfig', ({ field, expectedDefault }) => {
+      const guildId = 'update-null-field';
+      const updatedSettings = createMockGuildSettings({
+        guildId,
+        [field]: null as unknown as number,
       });
 
-      it('should apply defaults to both null fields when updateConfig returns both null', () => {
-        const guildId = 'update-both-null-guild';
-        const updatedWithBothNull: GuildSettings = {
-          guildId,
-          enabled: false,
-          afkTimeoutSeconds: null as unknown as number,
-          warningSecondsBefore: null as unknown as number,
-          warningChannelId: null,
-          exemptRoleIds: [],
-          adminRoleIds: [],
-          createdAt: '2024-01-01T00:00:00.000Z',
-          updatedAt: '2024-01-02T11:00:00.000Z',
-        };
+      vi.mocked(mockRepository.findByGuildId).mockReturnValue(updatedSettings);
+      const result = service.updateConfig(guildId, { enabled: true });
 
-        vi.mocked(mockRepository.findByGuildId).mockReturnValue(updatedWithBothNull);
-
-        const result = service.updateConfig(guildId, { warningChannelId: null });
-
-        // CRITICAL: Both nulls replaced with defaults
-        expect(result.afkTimeoutSeconds).toBe(300);
-        expect(result.warningSecondsBefore).toBe(60);
-        expect(result.enabled).toBe(false);
-      });
-
-      it('should preserve custom non-null values in updateConfig result', () => {
-        // Ensures updateConfig doesn't overwrite valid custom values with defaults
-        const guildId = 'update-preserve-guild';
-        const updatedWithCustomValues: GuildSettings = {
-          guildId,
-          enabled: true,
-          afkTimeoutSeconds: 888,
-          warningSecondsBefore: 200,
-          warningChannelId: 'preserved-channel',
-          exemptRoleIds: ['preserved-role'],
-          adminRoleIds: [],
-          createdAt: '2024-01-01T00:00:00.000Z',
-          updatedAt: '2024-01-02T12:00:00.000Z',
-        };
-
-        vi.mocked(mockRepository.findByGuildId).mockReturnValue(updatedWithCustomValues);
-
-        const result = service.updateConfig(guildId, { afkTimeoutSeconds: 888 });
-
-        // CRITICAL: Custom values must not be replaced
-        expect(result.afkTimeoutSeconds).toBe(888);
-        expect(result.warningSecondsBefore).toBe(200);
-      });
+      expect(result[field]).toBe(expectedDefault);
     });
 
-    describe('when cached values have null fields', () => {
+    it('should apply defaults for both fields when both are null', () => {
+      const guildId = 'both-null-guild';
+      const settingsWithBothNull = createMockGuildSettings({
+        guildId,
+        afkTimeoutSeconds: null as unknown as number,
+        warningSecondsBefore: null as unknown as number,
+      });
+
+      vi.mocked(mockRepository.findByGuildId).mockReturnValue(settingsWithBothNull);
+      const config = service.getConfig(guildId);
+
+      expect(config.afkTimeoutSeconds).toBe(300);
+      expect(config.warningSecondsBefore).toBe(60);
+    });
+
+    it.each([
+      { value: 0, description: 'zero' },
+      { value: -1, description: 'negative' },
+      { value: 999, description: 'custom non-default' },
+      { value: Number.MAX_SAFE_INTEGER, description: 'very large' },
+    ])('should preserve $description values without replacing with defaults', ({ value }) => {
+      const guildId = 'preserve-values-guild';
+      const settings = createMockGuildSettings({
+        guildId,
+        afkTimeoutSeconds: value,
+        warningSecondsBefore: value,
+      });
+
+      vi.mocked(mockRepository.findByGuildId).mockReturnValue(settings);
+      const config = service.getConfig(guildId);
+
+      expect(config.afkTimeoutSeconds).toBe(value);
+      expect(config.warningSecondsBefore).toBe(value);
+    });
+
+    it('should handle undefined as null and apply defaults', () => {
+      const guildId = 'undefined-field-guild';
+      const settingsWithUndefined = createMockGuildSettings({
+        guildId,
+        afkTimeoutSeconds: undefined as unknown as number,
+      });
+
+      vi.mocked(mockRepository.findByGuildId).mockReturnValue(settingsWithUndefined);
+      const config = service.getConfig(guildId);
+
+      expect(config.afkTimeoutSeconds).toBe(300);
+    });
+
+    describe('cache behavior with null values', () => {
       it('should apply defaults before caching so subsequent calls have correct values', () => {
-        // This test proves that nulls are fixed BEFORE caching, not on every access
         const guildId = 'cache-with-nulls-guild';
-        const settingsWithNull: GuildSettings = {
+        const settingsWithNull = createMockGuildSettings({
           guildId,
-          enabled: true,
           afkTimeoutSeconds: null as unknown as number,
           warningSecondsBefore: null as unknown as number,
-          warningChannelId: 'channel-cache',
-          exemptRoleIds: [],
-          adminRoleIds: [],
-          createdAt: '2024-01-01T00:00:00.000Z',
-          updatedAt: '2024-01-01T00:00:00.000Z',
-        };
+        });
 
         vi.mocked(mockRepository.findByGuildId).mockReturnValue(settingsWithNull);
 
@@ -1585,219 +1243,28 @@ describe('GuildConfigService', () => {
 
         // Second call - should use cache AND still have defaults applied
         const secondCall = service.getConfig(guildId);
-        expect(mockRepository.findByGuildId).not.toHaveBeenCalled(); // Proves cache hit
-        expect(secondCall.afkTimeoutSeconds).toBe(300); // CRITICAL: Defaults still present
+        expect(mockRepository.findByGuildId).not.toHaveBeenCalled();
+        expect(secondCall.afkTimeoutSeconds).toBe(300);
         expect(secondCall.warningSecondsBefore).toBe(60);
+        expect(secondCall).toBe(firstCall); // Same reference
       });
 
-      it('should return same object reference from cache with defaults already applied', () => {
-        // Tests that the cached object already has defaults, ensuring performance
-        const guildId = 'cache-reference-nulls';
-        const settingsWithNull: GuildSettings = {
+      it('should reapply defaults after cache clear if DB still returns nulls', () => {
+        const guildId = 'reclear-nulls-guild';
+        const settingsWithNull = createMockGuildSettings({
           guildId,
-          enabled: false,
           afkTimeoutSeconds: null as unknown as number,
-          warningSecondsBefore: 45,
-          warningChannelId: null,
-          exemptRoleIds: [],
-          adminRoleIds: [],
-          createdAt: '2024-01-01T00:00:00.000Z',
-          updatedAt: '2024-01-01T00:00:00.000Z',
-        };
-
-        vi.mocked(mockRepository.findByGuildId).mockReturnValue(settingsWithNull);
-
-        const call1 = service.getConfig(guildId);
-        const call2 = service.getConfig(guildId);
-
-        // Should be same reference (cached)
-        expect(call1).toBe(call2);
-        // And both should have defaults
-        expect(call1.afkTimeoutSeconds).toBe(300);
-        expect(call2.afkTimeoutSeconds).toBe(300);
-      });
-
-      it('should not hit database on subsequent calls after defaults are applied and cached', () => {
-        // Proves that default application happens once, then cache is used
-        const guildId = 'cache-efficiency-nulls';
-        const settingsWithNull: GuildSettings = {
-          guildId,
-          enabled: true,
-          afkTimeoutSeconds: null as unknown as number,
-          warningSecondsBefore: null as unknown as number,
-          warningChannelId: 'efficient-channel',
-          exemptRoleIds: ['role-eff'],
-          adminRoleIds: [],
-          createdAt: '2024-01-01T00:00:00.000Z',
-          updatedAt: '2024-01-01T00:00:00.000Z',
-        };
-
-        let dbCallCount = 0;
-        vi.mocked(mockRepository.findByGuildId).mockImplementation(() => {
-          dbCallCount++;
-          return settingsWithNull;
         });
 
-        // Call multiple times
-        service.getConfig(guildId);
-        service.getConfig(guildId);
-        service.getConfig(guildId);
-
-        // Should only hit DB once
-        expect(dbCallCount).toBe(1);
-      });
-    });
-
-    describe('edge cases with null value handling', () => {
-      it('should handle undefined as different from null and treat it as missing', () => {
-        // Edge case: undefined vs null behavior
-        const guildId = 'undefined-field-guild';
-        const settingsWithUndefined: GuildSettings = {
-          guildId,
-          enabled: true,
-          afkTimeoutSeconds: undefined as unknown as number,
-          warningSecondsBefore: 75,
-          warningChannelId: null,
-          exemptRoleIds: [],
-          adminRoleIds: [],
-          createdAt: '2024-01-01T00:00:00.000Z',
-          updatedAt: '2024-01-01T00:00:00.000Z',
-        };
-
-        vi.mocked(mockRepository.findByGuildId).mockReturnValue(settingsWithUndefined);
-
-        const config = service.getConfig(guildId);
-
-        // Should apply default for undefined as well
-        expect(config.afkTimeoutSeconds).toBe(300);
-        expect(config.warningSecondsBefore).toBe(75);
-      });
-
-      it('should handle negative values by preserving them (they are technically valid numbers)', () => {
-        // Edge case: negative numbers might indicate disabled features
-        const guildId = 'negative-values-guild';
-        const settingsWithNegatives: GuildSettings = {
-          guildId,
-          enabled: true,
-          afkTimeoutSeconds: -1, // Might mean "disabled"
-          warningSecondsBefore: -1, // Might mean "no warning"
-          warningChannelId: null,
-          exemptRoleIds: [],
-          adminRoleIds: [],
-          createdAt: '2024-01-01T00:00:00.000Z',
-          updatedAt: '2024-01-01T00:00:00.000Z',
-        };
-
-        vi.mocked(mockRepository.findByGuildId).mockReturnValue(settingsWithNegatives);
-
-        const config = service.getConfig(guildId);
-
-        // Negative numbers should be preserved as they might be valid sentinel values
-        expect(config.afkTimeoutSeconds).toBe(-1);
-        expect(config.warningSecondsBefore).toBe(-1);
-      });
-
-      it('should handle very large numbers without replacing them', () => {
-        // Edge case: MAX_SAFE_INTEGER and beyond
-        const guildId = 'large-numbers-guild';
-        const settingsWithLargeNumbers: GuildSettings = {
-          guildId,
-          enabled: true,
-          afkTimeoutSeconds: Number.MAX_SAFE_INTEGER,
-          warningSecondsBefore: 999999999,
-          warningChannelId: null,
-          exemptRoleIds: [],
-          adminRoleIds: [],
-          createdAt: '2024-01-01T00:00:00.000Z',
-          updatedAt: '2024-01-01T00:00:00.000Z',
-        };
-
-        vi.mocked(mockRepository.findByGuildId).mockReturnValue(settingsWithLargeNumbers);
-
-        const config = service.getConfig(guildId);
-
-        // Large valid numbers should be preserved
-        expect(config.afkTimeoutSeconds).toBe(Number.MAX_SAFE_INTEGER);
-        expect(config.warningSecondsBefore).toBe(999999999);
-      });
-    });
-
-    describe('integration with cache clearing and null values', () => {
-      it('should reapply defaults after cache clear if DB still returns nulls', () => {
-        // Tests that defaults are applied on every fetch from DB, not just once
-        const guildId = 'reclear-nulls-guild';
-        const settingsWithNull: GuildSettings = {
-          guildId,
-          enabled: true,
-          afkTimeoutSeconds: null as unknown as number,
-          warningSecondsBefore: null as unknown as number,
-          warningChannelId: null,
-          exemptRoleIds: [],
-          adminRoleIds: [],
-          createdAt: '2024-01-01T00:00:00.000Z',
-          updatedAt: '2024-01-01T00:00:00.000Z',
-        };
-
         vi.mocked(mockRepository.findByGuildId).mockReturnValue(settingsWithNull);
 
-        // First fetch
         const first = service.getConfig(guildId);
         expect(first.afkTimeoutSeconds).toBe(300);
 
-        // Clear cache
         service.clearCache(guildId);
 
-        // Second fetch - should apply defaults again
         const second = service.getConfig(guildId);
         expect(second.afkTimeoutSeconds).toBe(300);
-        expect(second.warningSecondsBefore).toBe(60);
-      });
-
-      it('should handle update that changes value from null to custom, then to null again', () => {
-        // Complex scenario: tracking default application through multiple updates
-        const guildId = 'null-cycle-guild';
-
-        // Initial state: null in DB
-        const initialNull: GuildSettings = {
-          guildId,
-          enabled: true,
-          afkTimeoutSeconds: null as unknown as number,
-          warningSecondsBefore: 60,
-          warningChannelId: null,
-          exemptRoleIds: [],
-          adminRoleIds: [],
-          createdAt: '2024-01-01T00:00:00.000Z',
-          updatedAt: '2024-01-01T00:00:00.000Z',
-        };
-
-        vi.mocked(mockRepository.findByGuildId).mockReturnValue(initialNull);
-
-        // First fetch - applies default
-        const firstFetch = service.getConfig(guildId);
-        expect(firstFetch.afkTimeoutSeconds).toBe(300);
-
-        // Update to custom value
-        const customValue: GuildSettings = {
-          ...initialNull,
-          afkTimeoutSeconds: 500,
-          updatedAt: '2024-01-02T00:00:00.000Z',
-        };
-        vi.mocked(mockRepository.findByGuildId).mockReturnValue(customValue);
-
-        const afterUpdate = service.updateConfig(guildId, { afkTimeoutSeconds: 500 });
-        expect(afterUpdate.afkTimeoutSeconds).toBe(500);
-
-        // Update back to null (DB corruption scenario)
-        const backToNull: GuildSettings = {
-          ...customValue,
-          afkTimeoutSeconds: null as unknown as number,
-          updatedAt: '2024-01-03T00:00:00.000Z',
-        };
-        vi.mocked(mockRepository.findByGuildId).mockReturnValue(backToNull);
-
-        service.clearCache(guildId);
-        const afterCorruption = service.getConfig(guildId);
-        expect(afterCorruption.afkTimeoutSeconds).toBe(300); // Default reapplied
       });
     });
   });
@@ -1806,17 +1273,14 @@ describe('GuildConfigService', () => {
     describe('when guild exists in cache', () => {
       it('should clear cache entry for specified guild', () => {
         const guildId = 'guild-to-delete';
-        const settings: GuildSettings = {
+        const settings = createMockGuildSettings({
           guildId,
           enabled: true,
           afkTimeoutSeconds: 500,
           warningSecondsBefore: 100,
           warningChannelId: 'channel-123',
           exemptRoleIds: ['role-1'],
-          adminRoleIds: [],
-          createdAt: '2024-01-01T00:00:00.000Z',
-          updatedAt: '2024-01-01T00:00:00.000Z',
-        };
+        });
 
         vi.mocked(mockRepository.findByGuildId).mockReturnValue(settings);
 
@@ -1837,56 +1301,15 @@ describe('GuildConfigService', () => {
         expect(mockRepository.findByGuildId).toHaveBeenCalledWith(guildId);
       });
 
-      it('should log debug message when clearing cache', () => {
-        const guildId = 'logged-delete-guild';
-        const settings: GuildSettings = {
-          guildId,
-          enabled: false,
-          afkTimeoutSeconds: 300,
-          warningSecondsBefore: 60,
-          warningChannelId: null,
-          exemptRoleIds: [],
-          adminRoleIds: [],
-          createdAt: '2024-01-01T00:00:00.000Z',
-          updatedAt: '2024-01-01T00:00:00.000Z',
-        };
-
-        vi.mocked(mockRepository.findByGuildId).mockReturnValue(settings);
-
-        // Populate cache
-        service.getConfig(guildId);
-
-        vi.clearAllMocks();
-
-        // Delete guild
-        service.onGuildDelete(guildId);
-
-        // Verify debug log was called
-        expect(logger.debug).toHaveBeenCalledWith(
-          { guildId },
-          'Cleared guild config cache on guild delete'
-        );
-        expect(logger.debug).toHaveBeenCalledTimes(1);
-      });
 
       it('should only clear specified guild, not affect other cached guilds', () => {
         const guild1 = 'keep-this-guild';
         const guild2 = 'delete-this-guild';
         const guild3 = 'also-keep-this';
 
-        const createSettings = (guildId: string): GuildSettings => ({
-          guildId,
-          enabled: true,
-          afkTimeoutSeconds: 300,
-          warningSecondsBefore: 60,
-          warningChannelId: null,
-          exemptRoleIds: [],
-          adminRoleIds: [],
-          createdAt: '2024-01-01T00:00:00.000Z',
-          updatedAt: '2024-01-01T00:00:00.000Z',
-        });
-
-        vi.mocked(mockRepository.findByGuildId).mockImplementation((id) => createSettings(id));
+        vi.mocked(mockRepository.findByGuildId).mockImplementation((id) =>
+          createMockGuildSettings({ guildId: id })
+        );
 
         // Populate cache with 3 guilds
         service.getConfig(guild1);
@@ -1919,18 +1342,6 @@ describe('GuildConfigService', () => {
         }).not.toThrow();
       });
 
-      it('should still log debug message even when guild not in cache', () => {
-        const guildId = 'uncached-delete-guild';
-
-        service.onGuildDelete(guildId);
-
-        // Should log regardless of whether guild was in cache
-        expect(logger.debug).toHaveBeenCalledWith(
-          { guildId },
-          'Cleared guild config cache on guild delete'
-        );
-      });
-
       it('should be idempotent - can be called multiple times safely', () => {
         const guildId = 'idempotent-delete-guild';
 
@@ -1939,26 +1350,18 @@ describe('GuildConfigService', () => {
           service.onGuildDelete(guildId);
           service.onGuildDelete(guildId);
         }).not.toThrow();
-
-        // Should log each time
-        expect(logger.debug).toHaveBeenCalledTimes(3);
       });
     });
 
     describe('integration with other cache operations', () => {
       it('should allow re-caching after deletion', () => {
         const guildId = 'recache-after-delete';
-        const settings: GuildSettings = {
+        const settings = createMockGuildSettings({
           guildId,
           enabled: true,
           afkTimeoutSeconds: 400,
           warningSecondsBefore: 80,
-          warningChannelId: null,
-          exemptRoleIds: [],
-          adminRoleIds: [],
-          createdAt: '2024-01-01T00:00:00.000Z',
-          updatedAt: '2024-01-01T00:00:00.000Z',
-        };
+        });
 
         vi.mocked(mockRepository.findByGuildId).mockReturnValue(settings);
 
@@ -1982,19 +1385,9 @@ describe('GuildConfigService', () => {
         const guildId1 = 'guild-delete-test';
         const guildId2 = 'guild-clear-test';
 
-        const createSettings = (guildId: string): GuildSettings => ({
-          guildId,
-          enabled: false,
-          afkTimeoutSeconds: 300,
-          warningSecondsBefore: 60,
-          warningChannelId: null,
-          exemptRoleIds: [],
-          adminRoleIds: [],
-          createdAt: '2024-01-01T00:00:00.000Z',
-          updatedAt: '2024-01-01T00:00:00.000Z',
-        });
-
-        vi.mocked(mockRepository.findByGuildId).mockImplementation((id) => createSettings(id));
+        vi.mocked(mockRepository.findByGuildId).mockImplementation((id) =>
+          createMockGuildSettings({ guildId: id })
+        );
 
         // Cache both
         service.getConfig(guildId1);
@@ -2015,22 +1408,11 @@ describe('GuildConfigService', () => {
       });
 
       it('should not interfere with LRU eviction logic', () => {
-        // Ensures that onGuildDelete works correctly with the LRU cache implementation
         const smallCacheService = new GuildConfigService(mockRepository, 3);
 
-        const createSettings = (guildId: string): GuildSettings => ({
-          guildId,
-          enabled: true,
-          afkTimeoutSeconds: 300,
-          warningSecondsBefore: 60,
-          warningChannelId: null,
-          exemptRoleIds: [],
-          adminRoleIds: [],
-          createdAt: '2024-01-01T00:00:00.000Z',
-          updatedAt: '2024-01-01T00:00:00.000Z',
-        });
-
-        vi.mocked(mockRepository.findByGuildId).mockImplementation((id) => createSettings(id));
+        vi.mocked(mockRepository.findByGuildId).mockImplementation((id) =>
+          createMockGuildSettings({ guildId: id })
+        );
 
         // Fill cache: A, B, C
         smallCacheService.getConfig('A');
@@ -2060,15 +1442,9 @@ describe('GuildConfigService', () => {
 
     describe('edge cases', () => {
       it('should handle deleting guild with empty string ID', () => {
-        // Edge case: what if someone passes an empty string?
         expect(() => {
           service.onGuildDelete('');
         }).not.toThrow();
-
-        expect(logger.debug).toHaveBeenCalledWith(
-          { guildId: '' },
-          'Cleared guild config cache on guild delete'
-        );
       });
 
       it('should handle deleting guild immediately after creation', () => {

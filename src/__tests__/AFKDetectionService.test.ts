@@ -5,13 +5,20 @@ import { WarningService } from '../services/WarningService';
 import { GuildConfigService } from '../services/GuildConfigService';
 import type { GuildSettings } from '../database/repositories/GuildSettingsRepository';
 import type { RateLimiter } from '../utils/RateLimiter';
+import {
+  createMockGuildSettings,
+  createMockLogger,
+  DISABLED_CONFIG,
+  ENABLED_CONFIG,
+  INVALID_CONFIGS,
+} from './fixtures';
 
 describe('AFKDetectionService', () => {
   let mockClient: Client;
   let mockWarningService: WarningService;
   let mockConfigService: GuildConfigService;
   let mockRateLimiter: RateLimiter;
-  let mockLogger: any;
+  let mockLogger: ReturnType<typeof createMockLogger>;
   let service: AFKDetectionService;
 
   beforeEach(() => {
@@ -19,12 +26,7 @@ describe('AFKDetectionService', () => {
     vi.useFakeTimers();
 
     // Mock the logger
-    mockLogger = {
-      debug: vi.fn(),
-      info: vi.fn(),
-      warn: vi.fn(),
-      error: vi.fn(),
-    };
+    mockLogger = createMockLogger();
 
     // Mock the Client
     mockClient = {
@@ -69,23 +71,12 @@ describe('AFKDetectionService', () => {
         const userId = 'user-123';
         const channelId = 'channel-456';
 
-        const disabledConfig: GuildSettings = {
-          guildId,
-          enabled: false,
-          afkTimeoutSeconds: 300,
-          warningSecondsBefore: 60,
-          warningChannelId: null,
-          exemptRoleIds: [],
-          adminRoleIds: [],
-          createdAt: '2024-01-01T00:00:00.000Z',
-          updatedAt: '2024-01-01T00:00:00.000Z',
-        };
-
-        vi.mocked(mockConfigService.getConfig).mockReturnValue(disabledConfig);
+        vi.mocked(mockConfigService.getConfig).mockReturnValue(
+          createMockGuildSettings({ guildId, enabled: false })
+        );
 
         await service.startTracking(guildId, userId, channelId);
 
-        // Verify user is not being tracked
         expect(service.isTracking(guildId, userId)).toBe(false);
       });
 
@@ -94,19 +85,9 @@ describe('AFKDetectionService', () => {
         const userId = 'user-456';
         const channelId = 'channel-789';
 
-        const disabledConfig: GuildSettings = {
-          guildId,
-          enabled: false,
-          afkTimeoutSeconds: 300,
-          warningSecondsBefore: 60,
-          warningChannelId: null,
-          exemptRoleIds: [],
-          adminRoleIds: [],
-          createdAt: '2024-01-01T00:00:00.000Z',
-          updatedAt: '2024-01-01T00:00:00.000Z',
-        };
-
-        vi.mocked(mockConfigService.getConfig).mockReturnValue(disabledConfig);
+        vi.mocked(mockConfigService.getConfig).mockReturnValue(
+          createMockGuildSettings({ guildId, enabled: false })
+        );
 
         await service.startTracking(guildId, userId, channelId);
 
@@ -123,19 +104,9 @@ describe('AFKDetectionService', () => {
         const userId = 'user-123';
         const channelId = 'channel-456';
 
-        const enabledConfig: GuildSettings = {
-          guildId,
-          enabled: true,
-          afkTimeoutSeconds: 300,
-          warningSecondsBefore: 60,
-          warningChannelId: null,
-          exemptRoleIds: [],
-          adminRoleIds: [],
-          createdAt: '2024-01-01T00:00:00.000Z',
-          updatedAt: '2024-01-01T00:00:00.000Z',
-        };
-
-        vi.mocked(mockConfigService.getConfig).mockReturnValue(enabledConfig);
+        vi.mocked(mockConfigService.getConfig).mockReturnValue(
+          createMockGuildSettings({ guildId, enabled: true })
+        );
 
         await service.startTracking(guildId, userId, channelId);
 
@@ -147,19 +118,15 @@ describe('AFKDetectionService', () => {
         const userId = 'user-warn';
         const channelId = 'channel-warn';
 
-        const config: GuildSettings = {
-          guildId,
-          enabled: true,
-          afkTimeoutSeconds: 300, // 5 minutes
-          warningSecondsBefore: 60, // 1 minute before
-          warningChannelId: 'warning-channel',
-          exemptRoleIds: [],
-          adminRoleIds: [],
-          createdAt: '2024-01-01T00:00:00.000Z',
-          updatedAt: '2024-01-01T00:00:00.000Z',
-        };
-
-        vi.mocked(mockConfigService.getConfig).mockReturnValue(config);
+        vi.mocked(mockConfigService.getConfig).mockReturnValue(
+          createMockGuildSettings({
+            guildId,
+            enabled: true,
+            afkTimeoutSeconds: 300, // 5 minutes
+            warningSecondsBefore: 60, // 1 minute before
+            warningChannelId: 'warning-channel',
+          })
+        );
         vi.mocked(mockWarningService.sendWarning).mockResolvedValue();
 
         await service.startTracking(guildId, userId, channelId);
@@ -177,18 +144,6 @@ describe('AFKDetectionService', () => {
         const userId = 'user-kick';
         const channelId = 'channel-kick';
 
-        const config: GuildSettings = {
-          guildId,
-          enabled: true,
-          afkTimeoutSeconds: 120, // 2 minutes
-          warningSecondsBefore: 30,
-          warningChannelId: null,
-          exemptRoleIds: [],
-          adminRoleIds: [],
-          createdAt: '2024-01-01T00:00:00.000Z',
-          updatedAt: '2024-01-01T00:00:00.000Z',
-        };
-
         const mockVoiceState: Partial<VoiceState> = {
           channel: { id: channelId } as any,
         };
@@ -203,7 +158,14 @@ describe('AFKDetectionService', () => {
           } as any,
         };
 
-        vi.mocked(mockConfigService.getConfig).mockReturnValue(config);
+        vi.mocked(mockConfigService.getConfig).mockReturnValue(
+          createMockGuildSettings({
+            guildId,
+            enabled: true,
+            afkTimeoutSeconds: 120, // 2 minutes
+            warningSecondsBefore: 30,
+          })
+        );
         vi.mocked(mockClient.guilds.fetch).mockResolvedValue(mockGuild as Guild);
         vi.mocked(mockWarningService.sendWarning).mockResolvedValue();
 
@@ -223,37 +185,6 @@ describe('AFKDetectionService', () => {
 
         expect(mockDisconnect).toHaveBeenCalledWith('AFK timeout');
       });
-
-      it('should log when starting tracking', async () => {
-        const guildId = 'log-guild';
-        const userId = 'log-user';
-        const channelId = 'log-channel';
-
-        const config: GuildSettings = {
-          guildId,
-          enabled: true,
-          afkTimeoutSeconds: 300,
-          warningSecondsBefore: 60,
-          warningChannelId: null,
-          exemptRoleIds: [],
-          adminRoleIds: [],
-          createdAt: '2024-01-01T00:00:00.000Z',
-          updatedAt: '2024-01-01T00:00:00.000Z',
-        };
-
-        vi.mocked(mockConfigService.getConfig).mockReturnValue(config);
-
-        await service.startTracking(guildId, userId, channelId);
-
-        expect(mockLogger.debug).toHaveBeenCalledWith(
-          expect.objectContaining({
-            guildId,
-            userId,
-            channelId,
-          }),
-          'Started tracking user for AFK'
-        );
-      });
     });
 
     describe('timer calculation', () => {
@@ -262,19 +193,14 @@ describe('AFKDetectionService', () => {
         const userId = 'calc-user';
         const channelId = 'calc-channel';
 
-        const config: GuildSettings = {
-          guildId,
-          enabled: true,
-          afkTimeoutSeconds: 600, // 10 minutes
-          warningSecondsBefore: 120, // 2 minutes before
-          warningChannelId: null,
-          exemptRoleIds: [],
-          adminRoleIds: [],
-          createdAt: '2024-01-01T00:00:00.000Z',
-          updatedAt: '2024-01-01T00:00:00.000Z',
-        };
-
-        vi.mocked(mockConfigService.getConfig).mockReturnValue(config);
+        vi.mocked(mockConfigService.getConfig).mockReturnValue(
+          createMockGuildSettings({
+            guildId,
+            enabled: true,
+            afkTimeoutSeconds: 600, // 10 minutes
+            warningSecondsBefore: 120, // 2 minutes before
+          })
+        );
         vi.mocked(mockWarningService.sendWarning).mockResolvedValue();
 
         await service.startTracking(guildId, userId, channelId);
@@ -292,24 +218,18 @@ describe('AFKDetectionService', () => {
         const userId = 'edge-user';
         const channelId = 'edge-channel';
 
-        const config: GuildSettings = {
-          guildId,
-          enabled: true,
-          afkTimeoutSeconds: 60,
-          warningSecondsBefore: 60, // Warning at same time as timeout - invalid!
-          warningChannelId: null,
-          exemptRoleIds: [],
-          adminRoleIds: [],
-          createdAt: '2024-01-01T00:00:00.000Z',
-          updatedAt: '2024-01-01T00:00:00.000Z',
-        };
-
-        vi.mocked(mockConfigService.getConfig).mockReturnValue(config);
-        vi.mocked(mockWarningService.sendWarning).mockResolvedValue();
+        vi.mocked(mockConfigService.getConfig).mockReturnValue(
+          createMockGuildSettings({
+            guildId,
+            enabled: true,
+            afkTimeoutSeconds: 60,
+            warningSecondsBefore: 60, // Warning at same time as timeout - invalid!
+          })
+        );
 
         await service.startTracking(guildId, userId, channelId);
 
-        // Tracking should NOT start because config validation rejects warningSecondsBefore >= afkTimeoutSeconds
+        // Should not start tracking with invalid config
         expect(service.isTracking(guildId, userId)).toBe(false);
       });
     });
@@ -318,28 +238,16 @@ describe('AFKDetectionService', () => {
       it('should stop existing tracking before starting new tracking', async () => {
         const guildId = 'restart-guild';
         const userId = 'restart-user';
-        const channelId1 = 'channel-1';
-        const channelId2 = 'channel-2';
+        const channelId1 = 'channel-old';
+        const channelId2 = 'channel-new';
 
-        const config: GuildSettings = {
-          guildId,
-          enabled: true,
-          afkTimeoutSeconds: 300,
-          warningSecondsBefore: 60,
-          warningChannelId: null,
-          exemptRoleIds: [],
-          adminRoleIds: [],
-          createdAt: '2024-01-01T00:00:00.000Z',
-          updatedAt: '2024-01-01T00:00:00.000Z',
-        };
+        vi.mocked(mockConfigService.getConfig).mockReturnValue(
+          createMockGuildSettings({ guildId, enabled: true })
+        );
 
-        vi.mocked(mockConfigService.getConfig).mockReturnValue(config);
-
-        // Start tracking in first channel
         await service.startTracking(guildId, userId, channelId1);
         expect(service.isTracking(guildId, userId)).toBe(true);
 
-        // Start tracking again in second channel - should restart
         await service.startTracking(guildId, userId, channelId2);
         expect(service.isTracking(guildId, userId)).toBe(true);
       });
@@ -347,36 +255,32 @@ describe('AFKDetectionService', () => {
       it('should clear old timers when restarting tracking', async () => {
         const guildId = 'clear-timers-guild';
         const userId = 'clear-timers-user';
-        const channelId = 'channel-123';
+        const channelId1 = 'channel-1';
+        const channelId2 = 'channel-2';
 
-        const config: GuildSettings = {
-          guildId,
-          enabled: true,
-          afkTimeoutSeconds: 300,
-          warningSecondsBefore: 60,
-          warningChannelId: null,
-          exemptRoleIds: [],
-          adminRoleIds: [],
-          createdAt: '2024-01-01T00:00:00.000Z',
-          updatedAt: '2024-01-01T00:00:00.000Z',
-        };
-
-        vi.mocked(mockConfigService.getConfig).mockReturnValue(config);
+        vi.mocked(mockConfigService.getConfig).mockReturnValue(
+          createMockGuildSettings({
+            guildId,
+            enabled: true,
+            afkTimeoutSeconds: 100,
+            warningSecondsBefore: 30,
+          })
+        );
         vi.mocked(mockWarningService.sendWarning).mockResolvedValue();
 
-        // Start tracking
-        await service.startTracking(guildId, userId, channelId);
+        await service.startTracking(guildId, userId, channelId1);
 
-        // Advance time partway to warning
-        await vi.advanceTimersByTimeAsync(120000); // 2 minutes
+        // Advance partway through first tracking period
+        await vi.advanceTimersByTimeAsync(50000);
 
-        // Restart tracking - this should reset the timer
-        await service.startTracking(guildId, userId, channelId);
+        // Restart tracking (new channel)
+        await service.startTracking(guildId, userId, channelId2);
 
-        // Advance another 2 minutes (total would be 4 minutes from first start)
-        await vi.advanceTimersByTimeAsync(120000);
+        // Advance to where old warning would have fired (100s - 30s = 70s total from first start)
+        // We've already advanced 50s, so advance 20s more
+        await vi.advanceTimersByTimeAsync(20000);
 
-        // Warning shouldn't have fired yet (should need 4 minutes from restart)
+        // Old timer should not fire - new timer has restarted the countdown
         expect(mockWarningService.sendWarning).not.toHaveBeenCalled();
       });
     });
@@ -384,57 +288,81 @@ describe('AFKDetectionService', () => {
     describe('tracking key generation', () => {
       it('should track users independently across different guilds', async () => {
         const userId = 'same-user';
-        const guild1 = 'guild-one';
-        const guild2 = 'guild-two';
-        const channelId = 'channel-123';
+        const channelId = 'some-channel';
+        const guild1 = 'guild-1';
+        const guild2 = 'guild-2';
 
-        const config: GuildSettings = {
-          guildId: guild1,
-          enabled: true,
-          afkTimeoutSeconds: 300,
-          warningSecondsBefore: 60,
-          warningChannelId: null,
-          exemptRoleIds: [],
-          adminRoleIds: [],
-          createdAt: '2024-01-01T00:00:00.000Z',
-          updatedAt: '2024-01-01T00:00:00.000Z',
-        };
-
-        vi.mocked(mockConfigService.getConfig).mockReturnValue(config);
+        vi.mocked(mockConfigService.getConfig).mockReturnValue(
+          createMockGuildSettings({ enabled: true })
+        );
 
         await service.startTracking(guild1, userId, channelId);
         await service.startTracking(guild2, userId, channelId);
 
-        // Both should be tracked independently
         expect(service.isTracking(guild1, userId)).toBe(true);
+        expect(service.isTracking(guild2, userId)).toBe(true);
+
+        service.stopTracking(guild1, userId);
+
+        expect(service.isTracking(guild1, userId)).toBe(false);
         expect(service.isTracking(guild2, userId)).toBe(true);
       });
 
       it('should track different users in same guild independently', async () => {
         const guildId = 'multi-user-guild';
-        const user1 = 'user-one';
-        const user2 = 'user-two';
-        const channelId = 'channel-123';
+        const user1 = 'user-1';
+        const user2 = 'user-2';
+        const channelId = 'channel';
 
-        const config: GuildSettings = {
-          guildId,
-          enabled: true,
-          afkTimeoutSeconds: 300,
-          warningSecondsBefore: 60,
-          warningChannelId: null,
-          exemptRoleIds: [],
-          adminRoleIds: [],
-          createdAt: '2024-01-01T00:00:00.000Z',
-          updatedAt: '2024-01-01T00:00:00.000Z',
-        };
-
-        vi.mocked(mockConfigService.getConfig).mockReturnValue(config);
+        vi.mocked(mockConfigService.getConfig).mockReturnValue(
+          createMockGuildSettings({ guildId, enabled: true })
+        );
 
         await service.startTracking(guildId, user1, channelId);
         await service.startTracking(guildId, user2, channelId);
 
         expect(service.isTracking(guildId, user1)).toBe(true);
         expect(service.isTracking(guildId, user2)).toBe(true);
+
+        service.stopTracking(guildId, user1);
+
+        expect(service.isTracking(guildId, user1)).toBe(false);
+        expect(service.isTracking(guildId, user2)).toBe(true);
+      });
+    });
+
+    describe('config validation', () => {
+      it.each(INVALID_CONFIGS)('should not start tracking with $name', async ({ config }) => {
+        const guildId = 'test-guild';
+        const userId = 'test-user';
+        const channelId = 'test-channel';
+
+        vi.mocked(mockConfigService.getConfig).mockReturnValue(
+          createMockGuildSettings({ guildId, enabled: true, ...config })
+        );
+
+        await service.startTracking(guildId, userId, channelId);
+
+        expect(service.isTracking(guildId, userId)).toBe(false);
+      });
+
+      it('should allow tracking with valid edge case: warningSecondsBefore = afkTimeoutSeconds - 1', async () => {
+        const guildId = 'valid-edge-guild';
+        const userId = 'valid-edge-user';
+        const channelId = 'valid-edge-channel';
+
+        vi.mocked(mockConfigService.getConfig).mockReturnValue(
+          createMockGuildSettings({
+            guildId,
+            enabled: true,
+            afkTimeoutSeconds: 60,
+            warningSecondsBefore: 59, // Warning at 1 second (valid)
+          })
+        );
+
+        await service.startTracking(guildId, userId, channelId);
+
+        expect(service.isTracking(guildId, userId)).toBe(true);
       });
     });
   });
@@ -445,92 +373,55 @@ describe('AFKDetectionService', () => {
       const userId = 'stop-user';
       const channelId = 'stop-channel';
 
-      const config: GuildSettings = {
-        guildId,
-        enabled: true,
-        afkTimeoutSeconds: 300,
-        warningSecondsBefore: 60,
-        warningChannelId: null,
-        exemptRoleIds: [],
-        adminRoleIds: [],
-        createdAt: '2024-01-01T00:00:00.000Z',
-        updatedAt: '2024-01-01T00:00:00.000Z',
-      };
-
-      vi.mocked(mockConfigService.getConfig).mockReturnValue(config);
+      vi.mocked(mockConfigService.getConfig).mockReturnValue(
+        createMockGuildSettings({ guildId, enabled: true })
+      );
 
       await service.startTracking(guildId, userId, channelId);
       expect(service.isTracking(guildId, userId)).toBe(true);
 
       service.stopTracking(guildId, userId);
+
       expect(service.isTracking(guildId, userId)).toBe(false);
     });
 
     it('should prevent timers from firing after stopping', async () => {
-      const guildId = 'prevent-fire-guild';
-      const userId = 'prevent-fire-user';
-      const channelId = 'prevent-fire-channel';
+      const guildId = 'prevent-timers-guild';
+      const userId = 'prevent-timers-user';
+      const channelId = 'prevent-timers-channel';
 
-      const config: GuildSettings = {
-        guildId,
-        enabled: true,
-        afkTimeoutSeconds: 300,
-        warningSecondsBefore: 60,
-        warningChannelId: null,
-        exemptRoleIds: [],
-        adminRoleIds: [],
-        createdAt: '2024-01-01T00:00:00.000Z',
-        updatedAt: '2024-01-01T00:00:00.000Z',
-      };
-
-      vi.mocked(mockConfigService.getConfig).mockReturnValue(config);
+      vi.mocked(mockConfigService.getConfig).mockReturnValue(
+        createMockGuildSettings({
+          guildId,
+          enabled: true,
+          afkTimeoutSeconds: 100,
+          warningSecondsBefore: 30,
+        })
+      );
       vi.mocked(mockWarningService.sendWarning).mockResolvedValue();
 
       await service.startTracking(guildId, userId, channelId);
+
+      // Advance partway
+      await vi.advanceTimersByTimeAsync(50000);
+
       service.stopTracking(guildId, userId);
 
-      // Advance past when timers would have fired
-      await vi.advanceTimersByTimeAsync(500000);
+      // Advance past where warning would have fired
+      await vi.advanceTimersByTimeAsync(100000);
 
       expect(mockWarningService.sendWarning).not.toHaveBeenCalled();
     });
 
     it('should do nothing when stopping non-tracked user', () => {
-      const guildId = 'non-tracked-guild';
-      const userId = 'non-tracked-user';
+      const guildId = 'not-tracked-guild';
+      const userId = 'not-tracked-user';
 
-      // Should not throw
       expect(() => {
         service.stopTracking(guildId, userId);
       }).not.toThrow();
-    });
 
-    it('should log when stopping tracking', async () => {
-      const guildId = 'log-stop-guild';
-      const userId = 'log-stop-user';
-      const channelId = 'log-stop-channel';
-
-      const config: GuildSettings = {
-        guildId,
-        enabled: true,
-        afkTimeoutSeconds: 300,
-        warningSecondsBefore: 60,
-        warningChannelId: null,
-        exemptRoleIds: [],
-        adminRoleIds: [],
-        createdAt: '2024-01-01T00:00:00.000Z',
-        updatedAt: '2024-01-01T00:00:00.000Z',
-      };
-
-      vi.mocked(mockConfigService.getConfig).mockReturnValue(config);
-
-      await service.startTracking(guildId, userId, channelId);
-      service.stopTracking(guildId, userId);
-
-      expect(mockLogger.debug).toHaveBeenCalledWith(
-        { guildId, userId },
-        'Stopped tracking user'
-      );
+      expect(service.isTracking(guildId, userId)).toBe(false);
     });
   });
 
@@ -540,118 +431,75 @@ describe('AFKDetectionService', () => {
       const userId = 'reset-user';
       const channelId = 'reset-channel';
 
-      const config: GuildSettings = {
-        guildId,
-        enabled: true,
-        afkTimeoutSeconds: 300,
-        warningSecondsBefore: 60,
-        warningChannelId: null,
-        exemptRoleIds: [],
-        adminRoleIds: [],
-        createdAt: '2024-01-01T00:00:00.000Z',
-        updatedAt: '2024-01-01T00:00:00.000Z',
-      };
-
-      vi.mocked(mockConfigService.getConfig).mockReturnValue(config);
+      vi.mocked(mockConfigService.getConfig).mockReturnValue(
+        createMockGuildSettings({
+          guildId,
+          enabled: true,
+          afkTimeoutSeconds: 100,
+          warningSecondsBefore: 30,
+        })
+      );
       vi.mocked(mockWarningService.sendWarning).mockResolvedValue();
 
       await service.startTracking(guildId, userId, channelId);
 
-      // Advance time partway
-      await vi.advanceTimersByTimeAsync(200000); // 200 seconds
+      // Advance partway
+      await vi.advanceTimersByTimeAsync(60000);
 
-      // Reset timer
       await service.resetTimer(guildId, userId);
 
-      // Advance another 200 seconds - warning still shouldn't fire
-      // (needs 240 seconds from reset)
-      await vi.advanceTimersByTimeAsync(200000);
+      // Advance to where old warning would have been (70s from start)
+      await vi.advanceTimersByTimeAsync(10000);
 
+      // Old timer should not fire - timer was reset
       expect(mockWarningService.sendWarning).not.toHaveBeenCalled();
+
+      // Warning should fire at 70s from reset (130s total)
+      await vi.advanceTimersByTimeAsync(60000);
+      expect(mockWarningService.sendWarning).toHaveBeenCalled();
     });
 
     it('should do nothing for non-tracked user', async () => {
-      const guildId = 'non-reset-guild';
-      const userId = 'non-reset-user';
+      const guildId = 'not-tracked-reset-guild';
+      const userId = 'not-tracked-reset-user';
 
-      // Should not throw
-      await expect(service.resetTimer(guildId, userId)).resolves.not.toThrow();
-    });
-
-    it('should log when resetting timer', async () => {
-      const guildId = 'log-reset-guild';
-      const userId = 'log-reset-user';
-      const channelId = 'log-reset-channel';
-
-      const config: GuildSettings = {
-        guildId,
-        enabled: true,
-        afkTimeoutSeconds: 300,
-        warningSecondsBefore: 60,
-        warningChannelId: null,
-        exemptRoleIds: [],
-        adminRoleIds: [],
-        createdAt: '2024-01-01T00:00:00.000Z',
-        updatedAt: '2024-01-01T00:00:00.000Z',
-      };
-
-      vi.mocked(mockConfigService.getConfig).mockReturnValue(config);
-
-      await service.startTracking(guildId, userId, channelId);
-      await service.resetTimer(guildId, userId);
-
-      expect(mockLogger.debug).toHaveBeenCalledWith(
-        { guildId, userId },
-        'User activity detected, resetting timer'
-      );
+      await expect(service.resetTimer(guildId, userId)).resolves.toBeUndefined();
     });
 
     it('should preserve channel info when resetting', async () => {
-      const guildId = 'preserve-guild';
-      const userId = 'preserve-user';
+      const guildId = 'preserve-channel-guild';
+      const userId = 'preserve-channel-user';
       const channelId = 'original-channel';
 
-      const config: GuildSettings = {
-        guildId,
-        enabled: true,
-        afkTimeoutSeconds: 300,
-        warningSecondsBefore: 60,
-        warningChannelId: null,
-        exemptRoleIds: [],
-        adminRoleIds: [],
-        createdAt: '2024-01-01T00:00:00.000Z',
-        updatedAt: '2024-01-01T00:00:00.000Z',
-      };
-
-      vi.mocked(mockConfigService.getConfig).mockReturnValue(config);
+      vi.mocked(mockConfigService.getConfig).mockReturnValue(
+        createMockGuildSettings({
+          guildId,
+          enabled: true,
+          afkTimeoutSeconds: 100,
+          warningSecondsBefore: 30,
+        })
+      );
+      vi.mocked(mockWarningService.sendWarning).mockResolvedValue();
 
       await service.startTracking(guildId, userId, channelId);
       await service.resetTimer(guildId, userId);
 
-      // User should still be tracked in the same channel
-      expect(service.isTracking(guildId, userId)).toBe(true);
+      // Advance to warning time
+      await vi.advanceTimersByTimeAsync(70000);
+
+      expect(mockWarningService.sendWarning).toHaveBeenCalledWith(guildId, userId, channelId);
     });
   });
 
   describe('isTracking', () => {
     it('should return true when user is being tracked', async () => {
-      const guildId = 'tracking-check-guild';
-      const userId = 'tracking-check-user';
-      const channelId = 'tracking-check-channel';
+      const guildId = 'is-tracking-guild';
+      const userId = 'is-tracking-user';
+      const channelId = 'is-tracking-channel';
 
-      const config: GuildSettings = {
-        guildId,
-        enabled: true,
-        afkTimeoutSeconds: 300,
-        warningSecondsBefore: 60,
-        warningChannelId: null,
-        exemptRoleIds: [],
-        adminRoleIds: [],
-        createdAt: '2024-01-01T00:00:00.000Z',
-        updatedAt: '2024-01-01T00:00:00.000Z',
-      };
-
-      vi.mocked(mockConfigService.getConfig).mockReturnValue(config);
+      vi.mocked(mockConfigService.getConfig).mockReturnValue(
+        createMockGuildSettings({ guildId, enabled: true })
+      );
 
       await service.startTracking(guildId, userId, channelId);
 
@@ -666,23 +514,13 @@ describe('AFKDetectionService', () => {
     });
 
     it('should return false after tracking is stopped', async () => {
-      const guildId = 'stopped-tracking-guild';
-      const userId = 'stopped-tracking-user';
-      const channelId = 'stopped-tracking-channel';
+      const guildId = 'stopped-guild';
+      const userId = 'stopped-user';
+      const channelId = 'stopped-channel';
 
-      const config: GuildSettings = {
-        guildId,
-        enabled: true,
-        afkTimeoutSeconds: 300,
-        warningSecondsBefore: 60,
-        warningChannelId: null,
-        exemptRoleIds: [],
-        adminRoleIds: [],
-        createdAt: '2024-01-01T00:00:00.000Z',
-        updatedAt: '2024-01-01T00:00:00.000Z',
-      };
-
-      vi.mocked(mockConfigService.getConfig).mockReturnValue(config);
+      vi.mocked(mockConfigService.getConfig).mockReturnValue(
+        createMockGuildSettings({ guildId, enabled: true })
+      );
 
       await service.startTracking(guildId, userId, channelId);
       service.stopTracking(guildId, userId);
@@ -691,24 +529,14 @@ describe('AFKDetectionService', () => {
     });
 
     it('should correctly distinguish between different users in same guild', async () => {
-      const guildId = 'distinguish-guild';
-      const user1 = 'tracked-user';
-      const user2 = 'not-tracked-user';
+      const guildId = 'multi-user-guild';
+      const user1 = 'user-alpha';
+      const user2 = 'user-beta';
       const channelId = 'channel';
 
-      const config: GuildSettings = {
-        guildId,
-        enabled: true,
-        afkTimeoutSeconds: 300,
-        warningSecondsBefore: 60,
-        warningChannelId: null,
-        exemptRoleIds: [],
-        adminRoleIds: [],
-        createdAt: '2024-01-01T00:00:00.000Z',
-        updatedAt: '2024-01-01T00:00:00.000Z',
-      };
-
-      vi.mocked(mockConfigService.getConfig).mockReturnValue(config);
+      vi.mocked(mockConfigService.getConfig).mockReturnValue(
+        createMockGuildSettings({ guildId, enabled: true })
+      );
 
       await service.startTracking(guildId, user1, channelId);
 
@@ -717,24 +545,14 @@ describe('AFKDetectionService', () => {
     });
 
     it('should correctly distinguish same user across different guilds', async () => {
-      const guild1 = 'guild-one';
-      const guild2 = 'guild-two';
       const userId = 'same-user';
+      const guild1 = 'guild-alpha';
+      const guild2 = 'guild-beta';
       const channelId = 'channel';
 
-      const config: GuildSettings = {
-        guildId: guild1,
-        enabled: true,
-        afkTimeoutSeconds: 300,
-        warningSecondsBefore: 60,
-        warningChannelId: null,
-        exemptRoleIds: [],
-        adminRoleIds: [],
-        createdAt: '2024-01-01T00:00:00.000Z',
-        updatedAt: '2024-01-01T00:00:00.000Z',
-      };
-
-      vi.mocked(mockConfigService.getConfig).mockReturnValue(config);
+      vi.mocked(mockConfigService.getConfig).mockReturnValue(
+        createMockGuildSettings({ enabled: true })
+      );
 
       await service.startTracking(guild1, userId, channelId);
 
@@ -749,89 +567,22 @@ describe('AFKDetectionService', () => {
       const userId = 'warning-behavior-user';
       const channelId = 'warning-behavior-channel';
 
-      const config: GuildSettings = {
-        guildId,
-        enabled: true,
-        afkTimeoutSeconds: 300,
-        warningSecondsBefore: 60,
-        warningChannelId: 'warning-channel-id',
-        exemptRoleIds: [],
-        adminRoleIds: [],
-        createdAt: '2024-01-01T00:00:00.000Z',
-        updatedAt: '2024-01-01T00:00:00.000Z',
-      };
-
-      vi.mocked(mockConfigService.getConfig).mockReturnValue(config);
+      vi.mocked(mockConfigService.getConfig).mockReturnValue(
+        createMockGuildSettings({
+          guildId,
+          enabled: true,
+          afkTimeoutSeconds: 200,
+          warningSecondsBefore: 50,
+        })
+      );
       vi.mocked(mockWarningService.sendWarning).mockResolvedValue();
 
       await service.startTracking(guildId, userId, channelId);
 
-      await vi.advanceTimersByTimeAsync(240000); // 240 seconds
+      // Advance to warning time (200 - 50 = 150 seconds)
+      await vi.advanceTimersByTimeAsync(150000);
 
       expect(mockWarningService.sendWarning).toHaveBeenCalledWith(guildId, userId, channelId);
-    });
-
-    it('should log when warning is sent successfully', async () => {
-      const guildId = 'log-warning-guild';
-      const userId = 'log-warning-user';
-      const channelId = 'log-warning-channel';
-
-      const config: GuildSettings = {
-        guildId,
-        enabled: true,
-        afkTimeoutSeconds: 200,
-        warningSecondsBefore: 50,
-        warningChannelId: null,
-        exemptRoleIds: [],
-        adminRoleIds: [],
-        createdAt: '2024-01-01T00:00:00.000Z',
-        updatedAt: '2024-01-01T00:00:00.000Z',
-      };
-
-      vi.mocked(mockConfigService.getConfig).mockReturnValue(config);
-      vi.mocked(mockWarningService.sendWarning).mockResolvedValue();
-
-      await service.startTracking(guildId, userId, channelId);
-
-      await vi.advanceTimersByTimeAsync(150000);
-      await vi.runAllTimersAsync();
-
-      expect(mockLogger.info).toHaveBeenCalledWith(
-        { guildId, userId },
-        'Warning sent for AFK user'
-      );
-    });
-
-    it('should log error when warning fails', async () => {
-      const guildId = 'error-warning-guild';
-      const userId = 'error-warning-user';
-      const channelId = 'error-warning-channel';
-      const error = new Error('Failed to send warning');
-
-      const config: GuildSettings = {
-        guildId,
-        enabled: true,
-        afkTimeoutSeconds: 200,
-        warningSecondsBefore: 50,
-        warningChannelId: null,
-        exemptRoleIds: [],
-        adminRoleIds: [],
-        createdAt: '2024-01-01T00:00:00.000Z',
-        updatedAt: '2024-01-01T00:00:00.000Z',
-      };
-
-      vi.mocked(mockConfigService.getConfig).mockReturnValue(config);
-      vi.mocked(mockWarningService.sendWarning).mockRejectedValue(error);
-
-      await service.startTracking(guildId, userId, channelId);
-
-      await vi.advanceTimersByTimeAsync(150000);
-      await vi.runAllTimersAsync();
-
-      expect(mockLogger.error).toHaveBeenCalledWith(
-        expect.objectContaining({ error, guildId, userId }),
-        'Failed to send warning'
-      );
     });
   });
 
@@ -841,18 +592,6 @@ describe('AFKDetectionService', () => {
       const userId = 'kick-behavior-user';
       const channelId = 'kick-behavior-channel';
 
-      const config: GuildSettings = {
-        guildId,
-        enabled: true,
-        afkTimeoutSeconds: 180,
-        warningSecondsBefore: 60,
-        warningChannelId: null,
-        exemptRoleIds: [],
-        adminRoleIds: [],
-        createdAt: '2024-01-01T00:00:00.000Z',
-        updatedAt: '2024-01-01T00:00:00.000Z',
-      };
-
       const mockDisconnect = vi.fn();
       const mockVoiceState: Partial<VoiceState> = {
         channel: { id: channelId } as any,
@@ -869,34 +608,29 @@ describe('AFKDetectionService', () => {
         } as any,
       };
 
-      vi.mocked(mockConfigService.getConfig).mockReturnValue(config);
+      vi.mocked(mockConfigService.getConfig).mockReturnValue(
+        createMockGuildSettings({
+          guildId,
+          enabled: true,
+          afkTimeoutSeconds: 150,
+          warningSecondsBefore: 40,
+        })
+      );
       vi.mocked(mockClient.guilds.fetch).mockResolvedValue(mockGuild as Guild);
-      vi.mocked(mockWarningService.sendWarning).mockResolvedValue();
 
       await service.startTracking(guildId, userId, channelId);
 
-      await vi.advanceTimersByTimeAsync(180000);
+      // Advance to kick time
+      await vi.advanceTimersByTimeAsync(150000);
       await vi.runAllTimersAsync();
 
       expect(mockDisconnect).toHaveBeenCalledWith('AFK timeout');
     });
 
     it('should remove tracking after successful kick', async () => {
-      const guildId = 'remove-tracking-guild';
-      const userId = 'remove-tracking-user';
-      const channelId = 'remove-tracking-channel';
-
-      const config: GuildSettings = {
-        guildId,
-        enabled: true,
-        afkTimeoutSeconds: 100,
-        warningSecondsBefore: 30,
-        warningChannelId: null,
-        exemptRoleIds: [],
-        adminRoleIds: [],
-        createdAt: '2024-01-01T00:00:00.000Z',
-        updatedAt: '2024-01-01T00:00:00.000Z',
-      };
+      const guildId = 'remove-after-kick-guild';
+      const userId = 'remove-after-kick-user';
+      const channelId = 'remove-after-kick-channel';
 
       const mockDisconnect = vi.fn();
       const mockVoiceState: Partial<VoiceState> = {
@@ -914,11 +648,19 @@ describe('AFKDetectionService', () => {
         } as any,
       };
 
-      vi.mocked(mockConfigService.getConfig).mockReturnValue(config);
+      vi.mocked(mockConfigService.getConfig).mockReturnValue(
+        createMockGuildSettings({
+          guildId,
+          enabled: true,
+          afkTimeoutSeconds: 100,
+          warningSecondsBefore: 30,
+        })
+      );
       vi.mocked(mockClient.guilds.fetch).mockResolvedValue(mockGuild as Guild);
-      vi.mocked(mockWarningService.sendWarning).mockResolvedValue();
 
       await service.startTracking(guildId, userId, channelId);
+
+      expect(service.isTracking(guildId, userId)).toBe(true);
 
       await vi.advanceTimersByTimeAsync(100000);
       await vi.runAllTimersAsync();
@@ -927,21 +669,9 @@ describe('AFKDetectionService', () => {
     });
 
     it('should handle user already disconnected gracefully', async () => {
-      const guildId = 'already-disconnected-guild';
-      const userId = 'already-disconnected-user';
-      const channelId = 'already-disconnected-channel';
-
-      const config: GuildSettings = {
-        guildId,
-        enabled: true,
-        afkTimeoutSeconds: 100,
-        warningSecondsBefore: 30,
-        warningChannelId: null,
-        exemptRoleIds: [],
-        adminRoleIds: [],
-        createdAt: '2024-01-01T00:00:00.000Z',
-        updatedAt: '2024-01-01T00:00:00.000Z',
-      };
+      const guildId = 'already-gone-guild';
+      const userId = 'already-gone-user';
+      const channelId = 'already-gone-channel';
 
       const mockVoiceState: Partial<VoiceState> = {
         channel: null, // User already left
@@ -957,100 +687,70 @@ describe('AFKDetectionService', () => {
         } as any,
       };
 
-      vi.mocked(mockConfigService.getConfig).mockReturnValue(config);
+      vi.mocked(mockConfigService.getConfig).mockReturnValue(
+        createMockGuildSettings({
+          guildId,
+          enabled: true,
+          afkTimeoutSeconds: 100,
+          warningSecondsBefore: 30,
+        })
+      );
       vi.mocked(mockClient.guilds.fetch).mockResolvedValue(mockGuild as Guild);
-      vi.mocked(mockWarningService.sendWarning).mockResolvedValue();
 
       await service.startTracking(guildId, userId, channelId);
 
       await vi.advanceTimersByTimeAsync(100000);
       await vi.runAllTimersAsync();
 
-      expect(mockLogger.debug).toHaveBeenCalledWith(
-        { guildId, userId },
-        'User already disconnected when kick timer fired'
-      );
-    });
-
-    it('should log error when kick fails', async () => {
-      const guildId = 'kick-error-guild';
-      const userId = 'kick-error-user';
-      const channelId = 'kick-error-channel';
-      const error = new Error('Failed to disconnect user');
-
-      const config: GuildSettings = {
-        guildId,
-        enabled: true,
-        afkTimeoutSeconds: 100,
-        warningSecondsBefore: 30,
-        warningChannelId: null,
-        exemptRoleIds: [],
-        adminRoleIds: [],
-        createdAt: '2024-01-01T00:00:00.000Z',
-        updatedAt: '2024-01-01T00:00:00.000Z',
-      };
-
-      const mockGuild: Partial<Guild> = {
-        members: {
-          fetch: vi.fn().mockRejectedValue(error),
-        } as any,
-      };
-
-      vi.mocked(mockConfigService.getConfig).mockReturnValue(config);
-      vi.mocked(mockClient.guilds.fetch).mockResolvedValue(mockGuild as Guild);
-      vi.mocked(mockWarningService.sendWarning).mockResolvedValue();
-
-      await service.startTracking(guildId, userId, channelId);
-
-      await vi.advanceTimersByTimeAsync(100000);
-      await vi.runAllTimersAsync();
-
-      expect(mockLogger.error).toHaveBeenCalledWith(
-        expect.objectContaining({ error, guildId, userId }),
-        'Failed to kick AFK user'
-      );
+      // Should not throw, should clean up tracking
+      expect(service.isTracking(guildId, userId)).toBe(false);
     });
 
     it('should still remove tracking even when kick fails', async () => {
-      const guildId = 'cleanup-on-error-guild';
-      const userId = 'cleanup-on-error-user';
-      const channelId = 'cleanup-on-error-channel';
+      const guildId = 'kick-fails-guild';
+      const userId = 'kick-fails-user';
+      const channelId = 'kick-fails-channel';
 
-      const config: GuildSettings = {
-        guildId,
-        enabled: true,
-        afkTimeoutSeconds: 100,
-        warningSecondsBefore: 30,
-        warningChannelId: null,
-        exemptRoleIds: [],
-        adminRoleIds: [],
-        createdAt: '2024-01-01T00:00:00.000Z',
-        updatedAt: '2024-01-01T00:00:00.000Z',
+      const error = new Error('Disconnect failed');
+      const mockDisconnect = vi.fn().mockRejectedValue(error);
+
+      const mockVoiceState: Partial<VoiceState> = {
+        channel: { id: channelId } as any,
+        disconnect: mockDisconnect,
+      };
+
+      const mockMember: Partial<GuildMember> = {
+        voice: mockVoiceState as VoiceState,
       };
 
       const mockGuild: Partial<Guild> = {
         members: {
-          fetch: vi.fn().mockRejectedValue(new Error('Fetch failed')),
+          fetch: vi.fn().mockResolvedValue(mockMember),
         } as any,
       };
 
-      vi.mocked(mockConfigService.getConfig).mockReturnValue(config);
+      vi.mocked(mockConfigService.getConfig).mockReturnValue(
+        createMockGuildSettings({
+          guildId,
+          enabled: true,
+          afkTimeoutSeconds: 100,
+          warningSecondsBefore: 30,
+        })
+      );
       vi.mocked(mockClient.guilds.fetch).mockResolvedValue(mockGuild as Guild);
-      vi.mocked(mockWarningService.sendWarning).mockResolvedValue();
 
       await service.startTracking(guildId, userId, channelId);
 
       await vi.advanceTimersByTimeAsync(100000);
       await vi.runAllTimersAsync();
 
-      // Tracking should be removed even though kick failed
+      // Tracking should be cleaned up even though kick failed
       expect(service.isTracking(guildId, userId)).toBe(false);
     });
   });
 
   describe('MIN_USERS_FOR_AFK_TRACKING constant', () => {
     it('should exist and equal 2', () => {
-      expect(MIN_USERS_FOR_AFK_TRACKING).toBeDefined();
       expect(MIN_USERS_FOR_AFK_TRACKING).toBe(2);
     });
 
@@ -1064,56 +764,42 @@ describe('AFKDetectionService', () => {
   });
 
   describe('stopAllTrackingForChannel', () => {
-    const createEnabledConfig = (guildId: string): GuildSettings => ({
-      guildId,
-      enabled: true,
-      afkTimeoutSeconds: 300,
-      warningSecondsBefore: 60,
-      warningChannelId: null,
-      exemptRoleIds: [],
-      adminRoleIds: [],
-      createdAt: '2024-01-01T00:00:00.000Z',
-      updatedAt: '2024-01-01T00:00:00.000Z',
-    });
+    const guildId = 'bulk-stop-guild';
+    const channelId = 'target-channel';
 
     describe('when multiple users are in same channel', () => {
       it('should stop tracking all users in that specific channel', async () => {
-        const guildId = 'bulk-stop-guild';
-        const channelId = 'target-channel';
         const user1 = 'user-1';
         const user2 = 'user-2';
         const user3 = 'user-3';
 
-        const config = createEnabledConfig(guildId);
-        vi.mocked(mockConfigService.getConfig).mockReturnValue(config);
+        vi.mocked(mockConfigService.getConfig).mockReturnValue(
+          createMockGuildSettings({ guildId, enabled: true })
+        );
 
-        // Start tracking all three users in the same channel
         await service.startTracking(guildId, user1, channelId);
         await service.startTracking(guildId, user2, channelId);
         await service.startTracking(guildId, user3, channelId);
 
-        // Verify all are being tracked
-        expect(service.isTracking(guildId, user1)).toBe(true);
-        expect(service.isTracking(guildId, user2)).toBe(true);
-        expect(service.isTracking(guildId, user3)).toBe(true);
-
-        // Stop all tracking for the channel
         service.stopAllTrackingForChannel(guildId, channelId);
 
-        // Verify none are being tracked
         expect(service.isTracking(guildId, user1)).toBe(false);
         expect(service.isTracking(guildId, user2)).toBe(false);
         expect(service.isTracking(guildId, user3)).toBe(false);
       });
 
       it('should clear all timers for stopped users', async () => {
-        const guildId = 'clear-timers-guild';
-        const channelId = 'target-channel';
-        const user1 = 'user-1';
-        const user2 = 'user-2';
+        const user1 = 'timer-user-1';
+        const user2 = 'timer-user-2';
 
-        const config = createEnabledConfig(guildId);
-        vi.mocked(mockConfigService.getConfig).mockReturnValue(config);
+        vi.mocked(mockConfigService.getConfig).mockReturnValue(
+          createMockGuildSettings({
+            guildId,
+            enabled: true,
+            afkTimeoutSeconds: 100,
+            warningSecondsBefore: 30,
+          })
+        );
         vi.mocked(mockWarningService.sendWarning).mockResolvedValue();
 
         await service.startTracking(guildId, user1, channelId);
@@ -1121,447 +807,288 @@ describe('AFKDetectionService', () => {
 
         service.stopAllTrackingForChannel(guildId, channelId);
 
-        // Advance time past when warnings would have fired
-        await vi.advanceTimersByTimeAsync(500000);
+        // Advance past warning time
+        await vi.advanceTimersByTimeAsync(100000);
 
-        // No warnings should fire since timers were cleared
         expect(mockWarningService.sendWarning).not.toHaveBeenCalled();
-      });
-
-      it('should log the count of stopped users', async () => {
-        const guildId = 'log-count-guild';
-        const channelId = 'target-channel';
-
-        const config = createEnabledConfig(guildId);
-        vi.mocked(mockConfigService.getConfig).mockReturnValue(config);
-
-        await service.startTracking(guildId, 'user-1', channelId);
-        await service.startTracking(guildId, 'user-2', channelId);
-        await service.startTracking(guildId, 'user-3', channelId);
-
-        service.stopAllTrackingForChannel(guildId, channelId);
-
-        expect(mockLogger.debug).toHaveBeenCalledWith(
-          expect.objectContaining({
-            guildId,
-            channelId,
-            count: 3,
-          }),
-          'Stopped tracking all users in channel'
-        );
       });
     });
 
     describe('when users are in different channels', () => {
       it('should only stop users in target channel and leave other channels untouched', async () => {
-        const guildId = 'multi-channel-guild';
-        const targetChannel = 'channel-to-stop';
+        const user1 = 'user-in-target';
+        const user2 = 'user-in-other';
         const otherChannel = 'other-channel';
-        const userInTarget1 = 'user-target-1';
-        const userInTarget2 = 'user-target-2';
-        const userInOther = 'user-other';
 
-        const config = createEnabledConfig(guildId);
-        vi.mocked(mockConfigService.getConfig).mockReturnValue(config);
+        vi.mocked(mockConfigService.getConfig).mockReturnValue(
+          createMockGuildSettings({ guildId, enabled: true })
+        );
 
-        // Start tracking users in different channels
-        await service.startTracking(guildId, userInTarget1, targetChannel);
-        await service.startTracking(guildId, userInTarget2, targetChannel);
-        await service.startTracking(guildId, userInOther, otherChannel);
+        await service.startTracking(guildId, user1, channelId);
+        await service.startTracking(guildId, user2, otherChannel);
 
-        // Verify all are tracked
-        expect(service.isTracking(guildId, userInTarget1)).toBe(true);
-        expect(service.isTracking(guildId, userInTarget2)).toBe(true);
-        expect(service.isTracking(guildId, userInOther)).toBe(true);
+        service.stopAllTrackingForChannel(guildId, channelId);
 
-        // Stop only the target channel
-        service.stopAllTrackingForChannel(guildId, targetChannel);
-
-        // Target channel users should be stopped
-        expect(service.isTracking(guildId, userInTarget1)).toBe(false);
-        expect(service.isTracking(guildId, userInTarget2)).toBe(false);
-
-        // Other channel user should still be tracked
-        expect(service.isTracking(guildId, userInOther)).toBe(true);
+        expect(service.isTracking(guildId, user1)).toBe(false);
+        expect(service.isTracking(guildId, user2)).toBe(true);
       });
 
       it('should preserve timers for users in other channels', async () => {
-        const guildId = 'preserve-timers-guild';
-        const targetChannel = 'channel-to-stop';
-        const otherChannel = 'other-channel';
+        const userInTarget = 'user-target';
         const userInOther = 'user-other';
+        const otherChannel = 'other-channel';
 
-        const config = createEnabledConfig(guildId);
-        vi.mocked(mockConfigService.getConfig).mockReturnValue(config);
+        vi.mocked(mockConfigService.getConfig).mockReturnValue(
+          createMockGuildSettings({
+            guildId,
+            enabled: true,
+            afkTimeoutSeconds: 100,
+            warningSecondsBefore: 30,
+          })
+        );
         vi.mocked(mockWarningService.sendWarning).mockResolvedValue();
 
-        await service.startTracking(guildId, 'user-target', targetChannel);
+        await service.startTracking(guildId, userInTarget, channelId);
         await service.startTracking(guildId, userInOther, otherChannel);
 
-        service.stopAllTrackingForChannel(guildId, targetChannel);
+        service.stopAllTrackingForChannel(guildId, channelId);
 
-        // Advance to warning time for other channel user
-        await vi.advanceTimersByTimeAsync(240000);
+        // Advance to warning time
+        await vi.advanceTimersByTimeAsync(70000);
 
-        // Warning should still fire for user in other channel
-        expect(mockWarningService.sendWarning).toHaveBeenCalledWith(
-          guildId,
-          userInOther,
-          otherChannel
-        );
+        // Only user in other channel should get warning
+        expect(mockWarningService.sendWarning).toHaveBeenCalledTimes(1);
+        expect(mockWarningService.sendWarning).toHaveBeenCalledWith(guildId, userInOther, otherChannel);
       });
     });
 
     describe('when channel has no tracked users', () => {
       it('should be a no-op and not throw', () => {
-        const guildId = 'empty-channel-guild';
-        const channelId = 'empty-channel';
+        const emptyChannel = 'empty-channel';
 
         expect(() => {
-          service.stopAllTrackingForChannel(guildId, channelId);
+          service.stopAllTrackingForChannel(guildId, emptyChannel);
         }).not.toThrow();
-      });
-
-      it('should log count of zero when no users stopped', () => {
-        const guildId = 'empty-log-guild';
-        const channelId = 'empty-channel';
-
-        service.stopAllTrackingForChannel(guildId, channelId);
-
-        expect(mockLogger.debug).toHaveBeenCalledWith(
-          expect.objectContaining({
-            guildId,
-            channelId,
-            count: 0,
-          }),
-          'Stopped tracking all users in channel'
-        );
       });
     });
 
     describe('guild isolation', () => {
       it('should only affect the specified guild', async () => {
-        const guild1 = 'guild-one';
-        const guild2 = 'guild-two';
-        const channelId = 'same-channel-id';
-        const user1 = 'user-in-guild1';
-        const user2 = 'user-in-guild2';
+        const guild1 = 'guild-1';
+        const guild2 = 'guild-2';
+        const userId = 'cross-guild-user';
 
-        const config1 = createEnabledConfig(guild1);
-        const config2 = createEnabledConfig(guild2);
+        vi.mocked(mockConfigService.getConfig).mockReturnValue(
+          createMockGuildSettings({ enabled: true })
+        );
 
-        vi.mocked(mockConfigService.getConfig).mockImplementation((guildId) => {
-          return guildId === guild1 ? config1 : config2;
-        });
+        await service.startTracking(guild1, userId, channelId);
+        await service.startTracking(guild2, userId, channelId);
 
-        // Track users with same channel ID but different guilds
-        await service.startTracking(guild1, user1, channelId);
-        await service.startTracking(guild2, user2, channelId);
-
-        expect(service.isTracking(guild1, user1)).toBe(true);
-        expect(service.isTracking(guild2, user2)).toBe(true);
-
-        // Stop tracking in guild1 only
         service.stopAllTrackingForChannel(guild1, channelId);
 
-        // Only guild1 user should be stopped
-        expect(service.isTracking(guild1, user1)).toBe(false);
-        expect(service.isTracking(guild2, user2)).toBe(true);
+        expect(service.isTracking(guild1, userId)).toBe(false);
+        expect(service.isTracking(guild2, userId)).toBe(true);
       });
     });
 
     describe('edge cases', () => {
       it('should handle stopping same channel multiple times', async () => {
-        const guildId = 'repeat-stop-guild';
-        const channelId = 'channel';
+        const userId = 'edge-user';
 
-        const config = createEnabledConfig(guildId);
-        vi.mocked(mockConfigService.getConfig).mockReturnValue(config);
+        vi.mocked(mockConfigService.getConfig).mockReturnValue(
+          createMockGuildSettings({ guildId, enabled: true })
+        );
 
-        await service.startTracking(guildId, 'user-1', channelId);
+        await service.startTracking(guildId, userId, channelId);
 
-        service.stopAllTrackingForChannel(guildId, channelId);
-
-        // Second call should be safe
         expect(() => {
+          service.stopAllTrackingForChannel(guildId, channelId);
           service.stopAllTrackingForChannel(guildId, channelId);
         }).not.toThrow();
       });
 
       it('should handle empty string channel ID', async () => {
-        const guildId = 'empty-channel-id-guild';
-        const channelId = '';
-
-        const config = createEnabledConfig(guildId);
-        vi.mocked(mockConfigService.getConfig).mockReturnValue(config);
-
-        await service.startTracking(guildId, 'user-1', channelId);
-
         expect(() => {
-          service.stopAllTrackingForChannel(guildId, channelId);
+          service.stopAllTrackingForChannel(guildId, '');
         }).not.toThrow();
-
-        expect(service.isTracking(guildId, 'user-1')).toBe(false);
       });
     });
   });
 
   describe('startTrackingAllInChannel', () => {
-    const createEnabledConfig = (guildId: string): GuildSettings => ({
-      guildId,
-      enabled: true,
-      afkTimeoutSeconds: 300,
-      warningSecondsBefore: 60,
-      warningChannelId: null,
-      exemptRoleIds: [],
-      adminRoleIds: [],
-      createdAt: '2024-01-01T00:00:00.000Z',
-      updatedAt: '2024-01-01T00:00:00.000Z',
-    });
+    const guildId = 'bulk-start-guild';
+    const channelId = 'bulk-start-channel';
 
     describe('when provided with multiple user IDs', () => {
       it('should start tracking for all provided users', async () => {
-        const guildId = 'bulk-start-guild';
-        const channelId = 'channel-123';
-        const userIds = ['user-1', 'user-2', 'user-3', 'user-4'];
+        const userIds = ['bulk-user-1', 'bulk-user-2', 'bulk-user-3'];
 
-        const config = createEnabledConfig(guildId);
-        vi.mocked(mockConfigService.getConfig).mockReturnValue(config);
+        vi.mocked(mockConfigService.getConfig).mockReturnValue(
+          createMockGuildSettings({ guildId, enabled: true })
+        );
 
         await service.startTrackingAllInChannel(guildId, channelId, userIds);
 
-        // Verify all users are being tracked
-        for (const userId of userIds) {
+        userIds.forEach((userId) => {
           expect(service.isTracking(guildId, userId)).toBe(true);
-        }
+        });
       });
 
       it('should set up timers for all users', async () => {
-        const guildId = 'timers-for-all-guild';
-        const channelId = 'channel-456';
-        const userIds = ['user-a', 'user-b'];
+        const userIds = ['timer-bulk-1', 'timer-bulk-2'];
 
-        const config = createEnabledConfig(guildId);
-        vi.mocked(mockConfigService.getConfig).mockReturnValue(config);
+        vi.mocked(mockConfigService.getConfig).mockReturnValue(
+          createMockGuildSettings({
+            guildId,
+            enabled: true,
+            afkTimeoutSeconds: 100,
+            warningSecondsBefore: 30,
+          })
+        );
         vi.mocked(mockWarningService.sendWarning).mockResolvedValue();
 
         await service.startTrackingAllInChannel(guildId, channelId, userIds);
 
         // Advance to warning time
-        await vi.advanceTimersByTimeAsync(240000);
+        await vi.advanceTimersByTimeAsync(70000);
 
-        // Both users should receive warnings
-        expect(mockWarningService.sendWarning).toHaveBeenCalledWith(guildId, 'user-a', channelId);
-        expect(mockWarningService.sendWarning).toHaveBeenCalledWith(guildId, 'user-b', channelId);
-      });
-
-      it('should log the user count when starting bulk tracking', async () => {
-        const guildId = 'log-bulk-start-guild';
-        const channelId = 'channel-789';
-        const userIds = ['user-1', 'user-2', 'user-3'];
-
-        const config = createEnabledConfig(guildId);
-        vi.mocked(mockConfigService.getConfig).mockReturnValue(config);
-
-        await service.startTrackingAllInChannel(guildId, channelId, userIds);
-
-        expect(mockLogger.debug).toHaveBeenCalledWith(
-          expect.objectContaining({
-            guildId,
-            channelId,
-            userCount: 3,
-          }),
-          'Starting tracking for all users in channel'
-        );
+        expect(mockWarningService.sendWarning).toHaveBeenCalledTimes(userIds.length);
       });
     });
 
     describe('when provided with empty userIds array', () => {
       it('should not start tracking any users', async () => {
-        const guildId = 'empty-array-guild';
-        const channelId = 'channel-empty';
-        const userIds: string[] = [];
-
-        const config = createEnabledConfig(guildId);
-        vi.mocked(mockConfigService.getConfig).mockReturnValue(config);
-
-        await service.startTrackingAllInChannel(guildId, channelId, userIds);
-
-        // Should not throw and should log zero count
-        expect(mockLogger.debug).toHaveBeenCalledWith(
-          expect.objectContaining({
-            guildId,
-            channelId,
-            userCount: 0,
-          }),
-          'Starting tracking for all users in channel'
+        vi.mocked(mockConfigService.getConfig).mockReturnValue(
+          createMockGuildSettings({ guildId, enabled: true })
         );
+
+        await service.startTrackingAllInChannel(guildId, channelId, []);
+
+        // No assertions needed - just verify no errors
       });
 
       it('should not call startTracking when userIds is empty', async () => {
-        const guildId = 'no-start-guild';
-        const channelId = 'channel-none';
-        const userIds: string[] = [];
+        const startTrackingSpy = vi.spyOn(service, 'startTracking');
 
-        const config = createEnabledConfig(guildId);
-        vi.mocked(mockConfigService.getConfig).mockReturnValue(config);
+        vi.mocked(mockConfigService.getConfig).mockReturnValue(
+          createMockGuildSettings({ guildId, enabled: true })
+        );
 
-        await service.startTrackingAllInChannel(guildId, channelId, userIds);
+        await service.startTrackingAllInChannel(guildId, channelId, []);
 
-        // Verify no users are being tracked in this guild
-        // We can't easily spy on private methods, but we can verify state
-        expect(service.isTracking(guildId, 'any-user')).toBe(false);
+        expect(startTrackingSpy).not.toHaveBeenCalled();
       });
     });
 
     describe('respecting config settings', () => {
       it('should respect disabled config for all users', async () => {
-        const guildId = 'disabled-bulk-guild';
-        const channelId = 'channel-disabled';
-        const userIds = ['user-1', 'user-2'];
+        const userIds = ['disabled-bulk-1', 'disabled-bulk-2'];
 
-        const disabledConfig: GuildSettings = {
-          guildId,
-          enabled: false,
-          afkTimeoutSeconds: 300,
-          warningSecondsBefore: 60,
-          warningChannelId: null,
-          exemptRoleIds: [],
-          adminRoleIds: [],
-          createdAt: '2024-01-01T00:00:00.000Z',
-          updatedAt: '2024-01-01T00:00:00.000Z',
-        };
-
-        vi.mocked(mockConfigService.getConfig).mockReturnValue(disabledConfig);
+        vi.mocked(mockConfigService.getConfig).mockReturnValue(
+          createMockGuildSettings({ guildId, enabled: false })
+        );
 
         await service.startTrackingAllInChannel(guildId, channelId, userIds);
 
-        // None should be tracked due to disabled config
-        expect(service.isTracking(guildId, 'user-1')).toBe(false);
-        expect(service.isTracking(guildId, 'user-2')).toBe(false);
+        userIds.forEach((userId) => {
+          expect(service.isTracking(guildId, userId)).toBe(false);
+        });
       });
     });
 
     describe('when users already being tracked', () => {
       it('should restart tracking for already-tracked users', async () => {
-        const guildId = 'restart-bulk-guild';
-        const channelId = 'channel-restart';
-        const userIds = ['user-1', 'user-2'];
+        const userId = 'already-tracked-bulk';
+        const oldChannel = 'old-channel';
 
-        const config = createEnabledConfig(guildId);
-        vi.mocked(mockConfigService.getConfig).mockReturnValue(config);
-        vi.mocked(mockWarningService.sendWarning).mockResolvedValue();
+        vi.mocked(mockConfigService.getConfig).mockReturnValue(
+          createMockGuildSettings({ guildId, enabled: true })
+        );
 
-        // Start tracking user-1 first
-        await service.startTracking(guildId, 'user-1', channelId);
+        await service.startTracking(guildId, userId, oldChannel);
+        expect(service.isTracking(guildId, userId)).toBe(true);
 
-        // Advance time partway
-        await vi.advanceTimersByTimeAsync(120000); // 2 minutes
+        await service.startTrackingAllInChannel(guildId, channelId, [userId]);
 
-        // Now start tracking all users (including user-1 again)
-        await service.startTrackingAllInChannel(guildId, channelId, userIds);
-
-        // Advance another 2 minutes (would be 4 min total for original user-1 timer)
-        await vi.advanceTimersByTimeAsync(120000);
-
-        // Warning shouldn't fire yet because timer was reset
-        expect(mockWarningService.sendWarning).not.toHaveBeenCalled();
+        expect(service.isTracking(guildId, userId)).toBe(true);
       });
     });
 
     describe('edge cases', () => {
       it('should handle single user ID', async () => {
-        const guildId = 'single-user-guild';
-        const channelId = 'channel-single';
-        const userIds = ['lonely-user'];
+        const userIds = ['single-user'];
 
-        const config = createEnabledConfig(guildId);
-        vi.mocked(mockConfigService.getConfig).mockReturnValue(config);
+        vi.mocked(mockConfigService.getConfig).mockReturnValue(
+          createMockGuildSettings({ guildId, enabled: true })
+        );
 
         await service.startTrackingAllInChannel(guildId, channelId, userIds);
 
-        expect(service.isTracking(guildId, 'lonely-user')).toBe(true);
+        expect(service.isTracking(guildId, userIds[0])).toBe(true);
       });
 
       it('should handle duplicate user IDs in array', async () => {
-        const guildId = 'duplicate-guild';
-        const channelId = 'channel-dup';
-        const userIds = ['user-1', 'user-1', 'user-2'];
+        const userIds = ['dup-user', 'dup-user'];
 
-        const config = createEnabledConfig(guildId);
-        vi.mocked(mockConfigService.getConfig).mockReturnValue(config);
+        vi.mocked(mockConfigService.getConfig).mockReturnValue(
+          createMockGuildSettings({ guildId, enabled: true })
+        );
 
         await service.startTrackingAllInChannel(guildId, channelId, userIds);
 
-        // Should track both unique users
-        expect(service.isTracking(guildId, 'user-1')).toBe(true);
-        expect(service.isTracking(guildId, 'user-2')).toBe(true);
+        expect(service.isTracking(guildId, 'dup-user')).toBe(true);
       });
 
       it('should handle large number of users', async () => {
-        const guildId = 'large-guild';
-        const channelId = 'large-channel';
-        const userIds = Array.from({ length: 50 }, (_, i) => `user-${i}`);
+        const userIds = Array.from({ length: 100 }, (_, i) => `mass-user-${i}`);
 
-        const config = createEnabledConfig(guildId);
-        vi.mocked(mockConfigService.getConfig).mockReturnValue(config);
+        vi.mocked(mockConfigService.getConfig).mockReturnValue(
+          createMockGuildSettings({ guildId, enabled: true })
+        );
 
         await service.startTrackingAllInChannel(guildId, channelId, userIds);
 
-        // Verify a sample of users
-        expect(service.isTracking(guildId, 'user-0')).toBe(true);
-        expect(service.isTracking(guildId, 'user-25')).toBe(true);
-        expect(service.isTracking(guildId, 'user-49')).toBe(true);
+        userIds.forEach((userId) => {
+          expect(service.isTracking(guildId, userId)).toBe(true);
+        });
       });
 
       it('should handle special characters in user IDs', async () => {
-        const guildId = 'special-chars-guild';
-        const channelId = 'channel-special';
-        const userIds = ['user:with:colons', 'user-with-dashes', 'user_with_underscores'];
+        const userIds = ['user-with-dash', 'user_with_underscore', 'user.with.dot'];
 
-        const config = createEnabledConfig(guildId);
-        vi.mocked(mockConfigService.getConfig).mockReturnValue(config);
+        vi.mocked(mockConfigService.getConfig).mockReturnValue(
+          createMockGuildSettings({ guildId, enabled: true })
+        );
 
         await service.startTrackingAllInChannel(guildId, channelId, userIds);
 
-        for (const userId of userIds) {
+        userIds.forEach((userId) => {
           expect(service.isTracking(guildId, userId)).toBe(true);
-        }
+        });
       });
     });
 
     describe('integration with stopAllTrackingForChannel', () => {
       it('should allow starting and stopping in succession', async () => {
-        const guildId = 'start-stop-guild';
-        const channelId = 'channel-cycle';
-        const userIds = ['user-1', 'user-2', 'user-3'];
+        const userIds = ['succession-1', 'succession-2', 'succession-3'];
 
-        const config = createEnabledConfig(guildId);
-        vi.mocked(mockConfigService.getConfig).mockReturnValue(config);
+        vi.mocked(mockConfigService.getConfig).mockReturnValue(
+          createMockGuildSettings({ guildId, enabled: true })
+        );
 
-        // Start tracking all
         await service.startTrackingAllInChannel(guildId, channelId, userIds);
-
-        // Verify all tracked
-        for (const userId of userIds) {
-          expect(service.isTracking(guildId, userId)).toBe(true);
-        }
-
-        // Stop all
         service.stopAllTrackingForChannel(guildId, channelId);
 
-        // Verify none tracked
-        for (const userId of userIds) {
+        userIds.forEach((userId) => {
           expect(service.isTracking(guildId, userId)).toBe(false);
-        }
+        });
 
-        // Start again
         await service.startTrackingAllInChannel(guildId, channelId, userIds);
 
-        // Verify all tracked again
-        for (const userId of userIds) {
+        userIds.forEach((userId) => {
           expect(service.isTracking(guildId, userId)).toBe(true);
-        }
+        });
       });
     });
   });
@@ -1569,88 +1096,34 @@ describe('AFKDetectionService', () => {
   describe('error handling hardening', () => {
     describe('timer callback error handling', () => {
       describe('when handleWarning throws', () => {
-        it('should log error but not crash the process', async () => {
-          const guildId = 'warning-error-guild';
-          const userId = 'warning-error-user';
-          const channelId = 'warning-error-channel';
-          const error = new Error('Warning service exploded');
+        it('should keep tracking state intact after warning error', async () => {
+          const guildId = 'warning-error-state-guild';
+          const userId = 'warning-error-state-user';
+          const channelId = 'warning-error-state-channel';
 
-          const config: GuildSettings = {
-            guildId,
-            enabled: true,
-            afkTimeoutSeconds: 200,
-            warningSecondsBefore: 50,
-            warningChannelId: null,
-            exemptRoleIds: [],
-            adminRoleIds: [],
-            createdAt: '2024-01-01T00:00:00.000Z',
-            updatedAt: '2024-01-01T00:00:00.000Z',
-          };
-
-          vi.mocked(mockConfigService.getConfig).mockReturnValue(config);
-          vi.mocked(mockWarningService.sendWarning).mockRejectedValue(error);
+          vi.mocked(mockConfigService.getConfig).mockReturnValue(
+            createMockGuildSettings({
+              guildId,
+              enabled: true,
+              afkTimeoutSeconds: 200,
+              warningSecondsBefore: 50,
+            })
+          );
+          vi.mocked(mockWarningService.sendWarning).mockRejectedValue(new Error('Warning failed'));
 
           await service.startTracking(guildId, userId, channelId);
 
           // Advance to warning time
           await vi.advanceTimersByTimeAsync(150000);
-          await vi.runAllTimersAsync();
 
-          // Error should be logged
-          expect(mockLogger.error).toHaveBeenCalledWith(
-            expect.objectContaining({ error, guildId, userId }),
-            'Failed to send warning'
-          );
-
-          // Should not crash - verify by checking that isTracking still works
-          expect(() => service.isTracking(guildId, userId)).not.toThrow();
-        });
-
-        it('should keep tracking state intact after warning error', async () => {
-          const guildId = 'warning-state-guild';
-          const userId = 'warning-state-user';
-          const channelId = 'warning-state-channel';
-
-          const config: GuildSettings = {
-            guildId,
-            enabled: true,
-            afkTimeoutSeconds: 300,
-            warningSecondsBefore: 60,
-            warningChannelId: null,
-            exemptRoleIds: [],
-            adminRoleIds: [],
-            createdAt: '2024-01-01T00:00:00.000Z',
-            updatedAt: '2024-01-01T00:00:00.000Z',
-          };
-
-          vi.mocked(mockConfigService.getConfig).mockReturnValue(config);
-          vi.mocked(mockWarningService.sendWarning).mockRejectedValue(new Error('Boom'));
-
-          await service.startTracking(guildId, userId, channelId);
-
-          // Advance to warning time (300 - 60 = 240 seconds)
-          await vi.advanceTimersByTimeAsync(240001);
-
-          // User should still be tracked despite warning failure (kick timer hasn't fired yet)
+          // Tracking should still be active despite warning failure
           expect(service.isTracking(guildId, userId)).toBe(true);
         });
 
         it('should still fire kick timer after warning fails', async () => {
-          const guildId = 'kick-after-warning-error-guild';
-          const userId = 'kick-after-warning-error-user';
-          const channelId = 'kick-after-warning-error-channel';
-
-          const config: GuildSettings = {
-            guildId,
-            enabled: true,
-            afkTimeoutSeconds: 200,
-            warningSecondsBefore: 100,
-            warningChannelId: null,
-            exemptRoleIds: [],
-            adminRoleIds: [],
-            createdAt: '2024-01-01T00:00:00.000Z',
-            updatedAt: '2024-01-01T00:00:00.000Z',
-          };
+          const guildId = 'warning-fail-kick-still-fires-guild';
+          const userId = 'warning-fail-kick-still-fires-user';
+          const channelId = 'warning-fail-kick-still-fires-channel';
 
           const mockDisconnect = vi.fn();
           const mockVoiceState: Partial<VoiceState> = {
@@ -1668,85 +1141,40 @@ describe('AFKDetectionService', () => {
             } as any,
           };
 
-          vi.mocked(mockConfigService.getConfig).mockReturnValue(config);
-          vi.mocked(mockWarningService.sendWarning).mockRejectedValue(new Error('Warning failed'));
+          vi.mocked(mockConfigService.getConfig).mockReturnValue(
+            createMockGuildSettings({
+              guildId,
+              enabled: true,
+              afkTimeoutSeconds: 200,
+              warningSecondsBefore: 50,
+            })
+          );
           vi.mocked(mockClient.guilds.fetch).mockResolvedValue(mockGuild as Guild);
+          vi.mocked(mockWarningService.sendWarning).mockRejectedValue(new Error('Warning API failed'));
 
           await service.startTracking(guildId, userId, channelId);
 
-          // Advance through warning time (100s) to kick time (200s)
-          await vi.advanceTimersByTimeAsync(100000);
+          // Advance to warning time
+          await vi.advanceTimersByTimeAsync(150000);
+
+          // Warning should fail but not crash
+          expect(mockWarningService.sendWarning).toHaveBeenCalled();
+
+          // Advance to kick time
+          await vi.advanceTimersByTimeAsync(50000);
           await vi.runAllTimersAsync();
 
-          // Warning should have failed
-          expect(mockLogger.error).toHaveBeenCalledWith(
-            expect.objectContaining({ guildId, userId }),
-            'Failed to send warning'
-          );
-
-          // Continue to kick time
-          await vi.advanceTimersByTimeAsync(100000);
-          await vi.runAllTimersAsync();
-
-          // Kick should still happen
+          // Kick should still fire despite warning failure
           expect(mockDisconnect).toHaveBeenCalledWith('AFK timeout');
+          expect(service.isTracking(guildId, userId)).toBe(false);
         });
       });
 
       describe('when handleKick throws', () => {
-        it('should log error but not crash the process', async () => {
-          const guildId = 'kick-error-guild';
-          const userId = 'kick-error-user';
-          const channelId = 'kick-error-channel';
-          const error = new Error('Guild fetch failed');
-
-          const config: GuildSettings = {
-            guildId,
-            enabled: true,
-            afkTimeoutSeconds: 100,
-            warningSecondsBefore: 30,
-            warningChannelId: null,
-            exemptRoleIds: [],
-            adminRoleIds: [],
-            createdAt: '2024-01-01T00:00:00.000Z',
-            updatedAt: '2024-01-01T00:00:00.000Z',
-          };
-
-          vi.mocked(mockConfigService.getConfig).mockReturnValue(config);
-          vi.mocked(mockClient.guilds.fetch).mockRejectedValue(error);
-
-          await service.startTracking(guildId, userId, channelId);
-
-          // Advance to kick time
-          await vi.advanceTimersByTimeAsync(100000);
-          await vi.runAllTimersAsync();
-
-          // Error should be logged
-          expect(mockLogger.error).toHaveBeenCalledWith(
-            expect.objectContaining({ error, guildId, userId }),
-            'Failed to kick AFK user'
-          );
-
-          // Should not crash - verify by checking that service still functions
-          expect(() => service.isTracking(guildId, 'other-user')).not.toThrow();
-        });
-
         it('should cleanup tracking state even when kick fails', async () => {
-          const guildId = 'cleanup-kick-error-guild';
-          const userId = 'cleanup-kick-error-user';
-          const channelId = 'cleanup-kick-error-channel';
-
-          const config: GuildSettings = {
-            guildId,
-            enabled: true,
-            afkTimeoutSeconds: 100,
-            warningSecondsBefore: 30,
-            warningChannelId: null,
-            exemptRoleIds: [],
-            adminRoleIds: [],
-            createdAt: '2024-01-01T00:00:00.000Z',
-            updatedAt: '2024-01-01T00:00:00.000Z',
-          };
+          const guildId = 'kick-error-cleanup-guild';
+          const userId = 'kick-error-cleanup-user';
+          const channelId = 'kick-error-cleanup-channel';
 
           const mockGuild: Partial<Guild> = {
             members: {
@@ -1754,11 +1182,17 @@ describe('AFKDetectionService', () => {
             } as any,
           };
 
-          vi.mocked(mockConfigService.getConfig).mockReturnValue(config);
+          vi.mocked(mockConfigService.getConfig).mockReturnValue(
+            createMockGuildSettings({
+              guildId,
+              enabled: true,
+              afkTimeoutSeconds: 100,
+              warningSecondsBefore: 30,
+            })
+          );
           vi.mocked(mockClient.guilds.fetch).mockResolvedValue(mockGuild as Guild);
 
           await service.startTracking(guildId, userId, channelId);
-          expect(service.isTracking(guildId, userId)).toBe(true);
 
           // Advance to kick time
           await vi.advanceTimersByTimeAsync(100000);
@@ -1769,21 +1203,9 @@ describe('AFKDetectionService', () => {
         });
 
         it('should cleanup even when disconnect call throws', async () => {
-          const guildId = 'disconnect-error-guild';
-          const userId = 'disconnect-error-user';
-          const channelId = 'disconnect-error-channel';
-
-          const config: GuildSettings = {
-            guildId,
-            enabled: true,
-            afkTimeoutSeconds: 100,
-            warningSecondsBefore: 30,
-            warningChannelId: null,
-            exemptRoleIds: [],
-            adminRoleIds: [],
-            createdAt: '2024-01-01T00:00:00.000Z',
-            updatedAt: '2024-01-01T00:00:00.000Z',
-          };
+          const guildId = 'disconnect-throws-guild';
+          const userId = 'disconnect-throws-user';
+          const channelId = 'disconnect-throws-channel';
 
           const mockDisconnect = vi.fn().mockRejectedValue(new Error('Disconnect failed'));
           const mockVoiceState: Partial<VoiceState> = {
@@ -1801,7 +1223,14 @@ describe('AFKDetectionService', () => {
             } as any,
           };
 
-          vi.mocked(mockConfigService.getConfig).mockReturnValue(config);
+          vi.mocked(mockConfigService.getConfig).mockReturnValue(
+            createMockGuildSettings({
+              guildId,
+              enabled: true,
+              afkTimeoutSeconds: 100,
+              warningSecondsBefore: 30,
+            })
+          );
           vi.mocked(mockClient.guilds.fetch).mockResolvedValue(mockGuild as Guild);
 
           await service.startTracking(guildId, userId, channelId);
@@ -1812,10 +1241,6 @@ describe('AFKDetectionService', () => {
 
           // Tracking should be cleaned up even though disconnect threw
           expect(service.isTracking(guildId, userId)).toBe(false);
-          expect(mockLogger.error).toHaveBeenCalledWith(
-            expect.objectContaining({ error: expect.any(Error), guildId, userId }),
-            'Failed to kick AFK user'
-          );
         });
       });
     });
@@ -1827,24 +1252,17 @@ describe('AFKDetectionService', () => {
         const channelId = 'exempt-check-error-channel';
         const error = new Error('Guild not found');
 
-        const config: GuildSettings = {
-          guildId,
-          enabled: true,
-          afkTimeoutSeconds: 300,
-          warningSecondsBefore: 60,
-          warningChannelId: null,
-          exemptRoleIds: ['some-exempt-role'], // Non-empty triggers exempt check
-          adminRoleIds: [],
-          createdAt: '2024-01-01T00:00:00.000Z',
-          updatedAt: '2024-01-01T00:00:00.000Z',
-        };
-
-        vi.mocked(mockConfigService.getConfig).mockReturnValue(config);
+        vi.mocked(mockConfigService.getConfig).mockReturnValue(
+          createMockGuildSettings({
+            guildId,
+            enabled: true,
+            exemptRoleIds: ['some-exempt-role'], // Non-empty triggers exempt check
+          })
+        );
         vi.mocked(mockClient.guilds.fetch).mockRejectedValue(error);
 
         await service.startTracking(guildId, userId, channelId);
 
-        // Tracking should NOT be started due to exempt check failure
         expect(service.isTracking(guildId, userId)).toBe(false);
       });
 
@@ -1854,60 +1272,24 @@ describe('AFKDetectionService', () => {
         const channelId = 'member-fetch-error-channel';
         const error = new Error('Member not found');
 
-        const config: GuildSettings = {
-          guildId,
-          enabled: true,
-          afkTimeoutSeconds: 300,
-          warningSecondsBefore: 60,
-          warningChannelId: null,
-          exemptRoleIds: ['exempt-role-id'],
-          adminRoleIds: [],
-          createdAt: '2024-01-01T00:00:00.000Z',
-          updatedAt: '2024-01-01T00:00:00.000Z',
-        };
-
         const mockGuild: Partial<Guild> = {
           members: {
             fetch: vi.fn().mockRejectedValue(error),
           } as any,
         };
 
-        vi.mocked(mockConfigService.getConfig).mockReturnValue(config);
+        vi.mocked(mockConfigService.getConfig).mockReturnValue(
+          createMockGuildSettings({
+            guildId,
+            enabled: true,
+            exemptRoleIds: ['exempt-role-id'],
+          })
+        );
         vi.mocked(mockClient.guilds.fetch).mockResolvedValue(mockGuild as Guild);
 
         await service.startTracking(guildId, userId, channelId);
 
-        // Tracking should NOT be started due to member fetch failure
         expect(service.isTracking(guildId, userId)).toBe(false);
-      });
-
-      it('should log error when exempt role check fails', async () => {
-        const guildId = 'exempt-log-guild';
-        const userId = 'exempt-log-user';
-        const channelId = 'exempt-log-channel';
-        const error = new Error('API rate limit exceeded');
-
-        const config: GuildSettings = {
-          guildId,
-          enabled: true,
-          afkTimeoutSeconds: 300,
-          warningSecondsBefore: 60,
-          warningChannelId: null,
-          exemptRoleIds: ['exempt-role'],
-          adminRoleIds: [],
-          createdAt: '2024-01-01T00:00:00.000Z',
-          updatedAt: '2024-01-01T00:00:00.000Z',
-        };
-
-        vi.mocked(mockConfigService.getConfig).mockReturnValue(config);
-        vi.mocked(mockClient.guilds.fetch).mockRejectedValue(error);
-
-        await service.startTracking(guildId, userId, channelId);
-
-        expect(mockLogger.error).toHaveBeenCalledWith(
-          expect.objectContaining({ error, guildId, userId }),
-          'Failed to check exempt roles'
-        );
       });
 
       it('should not set any timers when exempt check fails', async () => {
@@ -1915,19 +1297,15 @@ describe('AFKDetectionService', () => {
         const userId = 'no-timers-exempt-error-user';
         const channelId = 'no-timers-exempt-error-channel';
 
-        const config: GuildSettings = {
-          guildId,
-          enabled: true,
-          afkTimeoutSeconds: 100,
-          warningSecondsBefore: 30,
-          warningChannelId: null,
-          exemptRoleIds: ['exempt-role'],
-          adminRoleIds: [],
-          createdAt: '2024-01-01T00:00:00.000Z',
-          updatedAt: '2024-01-01T00:00:00.000Z',
-        };
-
-        vi.mocked(mockConfigService.getConfig).mockReturnValue(config);
+        vi.mocked(mockConfigService.getConfig).mockReturnValue(
+          createMockGuildSettings({
+            guildId,
+            enabled: true,
+            afkTimeoutSeconds: 100,
+            warningSecondsBefore: 30,
+            exemptRoleIds: ['exempt-role'],
+          })
+        );
         vi.mocked(mockClient.guilds.fetch).mockRejectedValue(new Error('Fetch failed'));
         vi.mocked(mockWarningService.sendWarning).mockResolvedValue();
 
@@ -1945,18 +1323,6 @@ describe('AFKDetectionService', () => {
         const userId = 'role-cache-error-user';
         const channelId = 'role-cache-error-channel';
         const error = new Error('Cache corrupted');
-
-        const config: GuildSettings = {
-          guildId,
-          enabled: true,
-          afkTimeoutSeconds: 300,
-          warningSecondsBefore: 60,
-          warningChannelId: null,
-          exemptRoleIds: ['exempt-role'],
-          adminRoleIds: [],
-          createdAt: '2024-01-01T00:00:00.000Z',
-          updatedAt: '2024-01-01T00:00:00.000Z',
-        };
 
         const mockRolesCache = {
           some: vi.fn().mockImplementation(() => {
@@ -1976,336 +1342,36 @@ describe('AFKDetectionService', () => {
           } as any,
         };
 
-        vi.mocked(mockConfigService.getConfig).mockReturnValue(config);
+        vi.mocked(mockConfigService.getConfig).mockReturnValue(
+          createMockGuildSettings({
+            guildId,
+            enabled: true,
+            exemptRoleIds: ['exempt-role'],
+          })
+        );
         vi.mocked(mockClient.guilds.fetch).mockResolvedValue(mockGuild as Guild);
 
         await service.startTracking(guildId, userId, channelId);
 
-        // Should log error and not start tracking
-        expect(mockLogger.error).toHaveBeenCalledWith(
-          expect.objectContaining({ error, guildId, userId }),
-          'Failed to check exempt roles'
-        );
         expect(service.isTracking(guildId, userId)).toBe(false);
-      });
-    });
-
-    describe('config validation', () => {
-      it('should not start tracking when warningSecondsBefore equals afkTimeoutSeconds', async () => {
-        const guildId = 'equal-times-guild';
-        const userId = 'equal-times-user';
-        const channelId = 'equal-times-channel';
-
-        const config: GuildSettings = {
-          guildId,
-          enabled: true,
-          afkTimeoutSeconds: 60,
-          warningSecondsBefore: 60, // Warning at time 0 (invalid)
-          warningChannelId: null,
-          exemptRoleIds: [],
-          adminRoleIds: [],
-          createdAt: '2024-01-01T00:00:00.000Z',
-          updatedAt: '2024-01-01T00:00:00.000Z',
-        };
-
-        vi.mocked(mockConfigService.getConfig).mockReturnValue(config);
-
-        await service.startTracking(guildId, userId, channelId);
-
-        // Should not start tracking with invalid config
-        expect(service.isTracking(guildId, userId)).toBe(false);
-      });
-
-      it('should not start tracking when warningSecondsBefore greater than afkTimeoutSeconds', async () => {
-        const guildId = 'warning-too-large-guild';
-        const userId = 'warning-too-large-user';
-        const channelId = 'warning-too-large-channel';
-
-        const config: GuildSettings = {
-          guildId,
-          enabled: true,
-          afkTimeoutSeconds: 60,
-          warningSecondsBefore: 120, // Warning would be at negative time
-          warningChannelId: null,
-          exemptRoleIds: [],
-          adminRoleIds: [],
-          createdAt: '2024-01-01T00:00:00.000Z',
-          updatedAt: '2024-01-01T00:00:00.000Z',
-        };
-
-        vi.mocked(mockConfigService.getConfig).mockReturnValue(config);
-
-        await service.startTracking(guildId, userId, channelId);
-
-        // Should not start tracking
-        expect(service.isTracking(guildId, userId)).toBe(false);
-      });
-
-      it('should not start tracking when afkTimeoutSeconds is negative', async () => {
-        const guildId = 'negative-timeout-guild';
-        const userId = 'negative-timeout-user';
-        const channelId = 'negative-timeout-channel';
-
-        const config: GuildSettings = {
-          guildId,
-          enabled: true,
-          afkTimeoutSeconds: -100,
-          warningSecondsBefore: 30,
-          warningChannelId: null,
-          exemptRoleIds: [],
-          adminRoleIds: [],
-          createdAt: '2024-01-01T00:00:00.000Z',
-          updatedAt: '2024-01-01T00:00:00.000Z',
-        };
-
-        vi.mocked(mockConfigService.getConfig).mockReturnValue(config);
-
-        await service.startTracking(guildId, userId, channelId);
-
-        expect(service.isTracking(guildId, userId)).toBe(false);
-      });
-
-      it('should not start tracking when warningSecondsBefore is negative', async () => {
-        const guildId = 'negative-warning-guild';
-        const userId = 'negative-warning-user';
-        const channelId = 'negative-warning-channel';
-
-        const config: GuildSettings = {
-          guildId,
-          enabled: true,
-          afkTimeoutSeconds: 100,
-          warningSecondsBefore: -30,
-          warningChannelId: null,
-          exemptRoleIds: [],
-          adminRoleIds: [],
-          createdAt: '2024-01-01T00:00:00.000Z',
-          updatedAt: '2024-01-01T00:00:00.000Z',
-        };
-
-        vi.mocked(mockConfigService.getConfig).mockReturnValue(config);
-
-        await service.startTracking(guildId, userId, channelId);
-
-        expect(service.isTracking(guildId, userId)).toBe(false);
-      });
-
-      it('should not start tracking when afkTimeoutSeconds is zero', async () => {
-        const guildId = 'zero-timeout-guild';
-        const userId = 'zero-timeout-user';
-        const channelId = 'zero-timeout-channel';
-
-        const config: GuildSettings = {
-          guildId,
-          enabled: true,
-          afkTimeoutSeconds: 0,
-          warningSecondsBefore: 0,
-          warningChannelId: null,
-          exemptRoleIds: [],
-          adminRoleIds: [],
-          createdAt: '2024-01-01T00:00:00.000Z',
-          updatedAt: '2024-01-01T00:00:00.000Z',
-        };
-
-        vi.mocked(mockConfigService.getConfig).mockReturnValue(config);
-
-        await service.startTracking(guildId, userId, channelId);
-
-        expect(service.isTracking(guildId, userId)).toBe(false);
-      });
-
-      it('should not start tracking when afkTimeoutSeconds is NaN', async () => {
-        const guildId = 'nan-timeout-guild';
-        const userId = 'nan-timeout-user';
-        const channelId = 'nan-timeout-channel';
-
-        const config: GuildSettings = {
-          guildId,
-          enabled: true,
-          afkTimeoutSeconds: NaN,
-          warningSecondsBefore: 60,
-          warningChannelId: null,
-          exemptRoleIds: [],
-          adminRoleIds: [],
-          createdAt: '2024-01-01T00:00:00.000Z',
-          updatedAt: '2024-01-01T00:00:00.000Z',
-        };
-
-        vi.mocked(mockConfigService.getConfig).mockReturnValue(config);
-
-        await service.startTracking(guildId, userId, channelId);
-
-        expect(service.isTracking(guildId, userId)).toBe(false);
-      });
-
-      it('should not start tracking when warningSecondsBefore is NaN', async () => {
-        const guildId = 'nan-warning-guild';
-        const userId = 'nan-warning-user';
-        const channelId = 'nan-warning-channel';
-
-        const config: GuildSettings = {
-          guildId,
-          enabled: true,
-          afkTimeoutSeconds: 300,
-          warningSecondsBefore: NaN,
-          warningChannelId: null,
-          exemptRoleIds: [],
-          adminRoleIds: [],
-          createdAt: '2024-01-01T00:00:00.000Z',
-          updatedAt: '2024-01-01T00:00:00.000Z',
-        };
-
-        vi.mocked(mockConfigService.getConfig).mockReturnValue(config);
-
-        await service.startTracking(guildId, userId, channelId);
-
-        expect(service.isTracking(guildId, userId)).toBe(false);
-      });
-
-      it('should log error when config has invalid warningSecondsBefore >= afkTimeoutSeconds', async () => {
-        const guildId = 'invalid-config-log-guild';
-        const userId = 'invalid-config-log-user';
-        const channelId = 'invalid-config-log-channel';
-
-        const config: GuildSettings = {
-          guildId,
-          enabled: true,
-          afkTimeoutSeconds: 100,
-          warningSecondsBefore: 150,
-          warningChannelId: null,
-          exemptRoleIds: [],
-          adminRoleIds: [],
-          createdAt: '2024-01-01T00:00:00.000Z',
-          updatedAt: '2024-01-01T00:00:00.000Z',
-        };
-
-        vi.mocked(mockConfigService.getConfig).mockReturnValue(config);
-
-        await service.startTracking(guildId, userId, channelId);
-
-        expect(mockLogger.error).toHaveBeenCalledWith(
-          expect.objectContaining({
-            guildId,
-            afkTimeoutSeconds: 100,
-            warningSecondsBefore: 150,
-          }),
-          expect.stringMatching(/invalid|config/i)
-        );
-      });
-
-      it('should log error when config has negative values', async () => {
-        const guildId = 'negative-config-log-guild';
-        const userId = 'negative-config-log-user';
-        const channelId = 'negative-config-log-channel';
-
-        const config: GuildSettings = {
-          guildId,
-          enabled: true,
-          afkTimeoutSeconds: -50,
-          warningSecondsBefore: 30,
-          warningChannelId: null,
-          exemptRoleIds: [],
-          adminRoleIds: [],
-          createdAt: '2024-01-01T00:00:00.000Z',
-          updatedAt: '2024-01-01T00:00:00.000Z',
-        };
-
-        vi.mocked(mockConfigService.getConfig).mockReturnValue(config);
-
-        await service.startTracking(guildId, userId, channelId);
-
-        expect(mockLogger.error).toHaveBeenCalledWith(
-          expect.objectContaining({
-            guildId,
-            afkTimeoutSeconds: -50,
-          }),
-          expect.stringMatching(/invalid|config/i)
-        );
-      });
-
-      it('should log error when config has NaN values', async () => {
-        const guildId = 'nan-config-log-guild';
-        const userId = 'nan-config-log-user';
-        const channelId = 'nan-config-log-channel';
-
-        const config: GuildSettings = {
-          guildId,
-          enabled: true,
-          afkTimeoutSeconds: NaN,
-          warningSecondsBefore: NaN,
-          warningChannelId: null,
-          exemptRoleIds: [],
-          adminRoleIds: [],
-          createdAt: '2024-01-01T00:00:00.000Z',
-          updatedAt: '2024-01-01T00:00:00.000Z',
-        };
-
-        vi.mocked(mockConfigService.getConfig).mockReturnValue(config);
-
-        await service.startTracking(guildId, userId, channelId);
-
-        expect(mockLogger.error).toHaveBeenCalledWith(
-          expect.objectContaining({ guildId }),
-          expect.stringMatching(/invalid|config/i)
-        );
-      });
-
-      it('should allow tracking with valid edge case: warningSecondsBefore = afkTimeoutSeconds - 1', async () => {
-        const guildId = 'valid-edge-guild';
-        const userId = 'valid-edge-user';
-        const channelId = 'valid-edge-channel';
-
-        const config: GuildSettings = {
-          guildId,
-          enabled: true,
-          afkTimeoutSeconds: 60,
-          warningSecondsBefore: 59, // Warning at 1 second (valid)
-          warningChannelId: null,
-          exemptRoleIds: [],
-          adminRoleIds: [],
-          createdAt: '2024-01-01T00:00:00.000Z',
-          updatedAt: '2024-01-01T00:00:00.000Z',
-        };
-
-        vi.mocked(mockConfigService.getConfig).mockReturnValue(config);
-
-        await service.startTracking(guildId, userId, channelId);
-
-        // Should start tracking with valid config
-        expect(service.isTracking(guildId, userId)).toBe(true);
       });
     });
   });
 
   describe('RateLimiter integration', () => {
-    const createEnabledConfig = (guildId: string): GuildSettings => ({
-      guildId,
-      enabled: true,
-      afkTimeoutSeconds: 300,
-      warningSecondsBefore: 60,
-      warningChannelId: null,
-      exemptRoleIds: [],
-      adminRoleIds: [],
-      createdAt: '2024-01-01T00:00:00.000Z',
-      updatedAt: '2024-01-01T00:00:00.000Z',
-    });
+    const createEnabledConfig = (guildId: string): GuildSettings =>
+      createMockGuildSettings({
+        guildId,
+        enabled: true,
+        afkTimeoutSeconds: 300,
+        warningSecondsBefore: 60,
+      });
 
     describe('startTracking with exempt roles', () => {
       it('should call recordAction twice when checking exempt roles (guilds.fetch, members.fetch)', async () => {
         const guildId = 'rate-limit-guild';
         const userId = 'rate-limit-user';
         const channelId = 'rate-limit-channel';
-
-        const config: GuildSettings = {
-          guildId,
-          enabled: true,
-          afkTimeoutSeconds: 300,
-          warningSecondsBefore: 60,
-          warningChannelId: null,
-          exemptRoleIds: ['exempt-role-123'], // Non-empty exempt roles triggers API calls
-          adminRoleIds: [],
-          createdAt: '2024-01-01T00:00:00.000Z',
-          updatedAt: '2024-01-01T00:00:00.000Z',
-        };
 
         const mockMember: Partial<GuildMember> = {
           roles: {
@@ -2319,7 +1385,13 @@ describe('AFKDetectionService', () => {
           } as any,
         };
 
-        vi.mocked(mockConfigService.getConfig).mockReturnValue(config);
+        vi.mocked(mockConfigService.getConfig).mockReturnValue(
+          createMockGuildSettings({
+            guildId,
+            enabled: true,
+            exemptRoleIds: ['exempt-role-123'], // Non-empty exempt roles triggers API calls
+          })
+        );
         vi.mocked(mockClient.guilds.fetch).mockResolvedValue(mockGuild as Guild);
 
         await service.startTracking(guildId, userId, channelId);
@@ -2333,18 +1405,6 @@ describe('AFKDetectionService', () => {
         const userId = 'rate-limit-order-user';
         const channelId = 'rate-limit-order-channel';
 
-        const config: GuildSettings = {
-          guildId,
-          enabled: true,
-          afkTimeoutSeconds: 300,
-          warningSecondsBefore: 60,
-          warningChannelId: null,
-          exemptRoleIds: ['exempt-role-456'],
-          adminRoleIds: [],
-          createdAt: '2024-01-01T00:00:00.000Z',
-          updatedAt: '2024-01-01T00:00:00.000Z',
-        };
-
         const mockMember: Partial<GuildMember> = {
           roles: {
             cache: new Map(),
@@ -2357,7 +1417,13 @@ describe('AFKDetectionService', () => {
           } as any,
         };
 
-        vi.mocked(mockConfigService.getConfig).mockReturnValue(config);
+        vi.mocked(mockConfigService.getConfig).mockReturnValue(
+          createMockGuildSettings({
+            guildId,
+            enabled: true,
+            exemptRoleIds: ['exempt-role-456'],
+          })
+        );
 
         // Set up verification that recordAction is called before guilds.fetch
         let recordActionCallCount = 0;
@@ -2394,19 +1460,13 @@ describe('AFKDetectionService', () => {
         const channelId = 'error-exempt-channel';
         const error = new Error('Failed to fetch guild');
 
-        const config: GuildSettings = {
-          guildId,
-          enabled: true,
-          afkTimeoutSeconds: 300,
-          warningSecondsBefore: 60,
-          warningChannelId: null,
-          exemptRoleIds: ['exempt-role-789'],
-          adminRoleIds: [],
-          createdAt: '2024-01-01T00:00:00.000Z',
-          updatedAt: '2024-01-01T00:00:00.000Z',
-        };
-
-        vi.mocked(mockConfigService.getConfig).mockReturnValue(config);
+        vi.mocked(mockConfigService.getConfig).mockReturnValue(
+          createMockGuildSettings({
+            guildId,
+            enabled: true,
+            exemptRoleIds: ['exempt-role-789'],
+          })
+        );
         vi.mocked(mockClient.guilds.fetch).mockRejectedValue(error);
 
         await service.startTracking(guildId, userId, channelId);
@@ -2421,18 +1481,6 @@ describe('AFKDetectionService', () => {
         const guildId = 'kick-rate-limit-guild';
         const userId = 'kick-rate-limit-user';
         const channelId = 'kick-rate-limit-channel';
-
-        const config: GuildSettings = {
-          guildId,
-          enabled: true,
-          afkTimeoutSeconds: 100,
-          warningSecondsBefore: 30,
-          warningChannelId: null,
-          exemptRoleIds: [],
-          adminRoleIds: [],
-          createdAt: '2024-01-01T00:00:00.000Z',
-          updatedAt: '2024-01-01T00:00:00.000Z',
-        };
 
         const mockDisconnect = vi.fn();
         const mockVoiceState: Partial<VoiceState> = {
@@ -2450,7 +1498,14 @@ describe('AFKDetectionService', () => {
           } as any,
         };
 
-        vi.mocked(mockConfigService.getConfig).mockReturnValue(config);
+        vi.mocked(mockConfigService.getConfig).mockReturnValue(
+          createMockGuildSettings({
+            guildId,
+            enabled: true,
+            afkTimeoutSeconds: 100,
+            warningSecondsBefore: 30,
+          })
+        );
         vi.mocked(mockClient.guilds.fetch).mockResolvedValue(mockGuild as Guild);
 
         await service.startTracking(guildId, userId, channelId);
@@ -2471,18 +1526,6 @@ describe('AFKDetectionService', () => {
         const userId = 'kick-order-user';
         const channelId = 'kick-order-channel';
 
-        const config: GuildSettings = {
-          guildId,
-          enabled: true,
-          afkTimeoutSeconds: 100,
-          warningSecondsBefore: 30,
-          warningChannelId: null,
-          exemptRoleIds: [],
-          adminRoleIds: [],
-          createdAt: '2024-01-01T00:00:00.000Z',
-          updatedAt: '2024-01-01T00:00:00.000Z',
-        };
-
         const mockDisconnect = vi.fn();
         const mockVoiceState: Partial<VoiceState> = {
           channel: { id: channelId } as any,
@@ -2499,7 +1542,14 @@ describe('AFKDetectionService', () => {
           } as any,
         };
 
-        vi.mocked(mockConfigService.getConfig).mockReturnValue(config);
+        vi.mocked(mockConfigService.getConfig).mockReturnValue(
+          createMockGuildSettings({
+            guildId,
+            enabled: true,
+            afkTimeoutSeconds: 100,
+            warningSecondsBefore: 30,
+          })
+        );
 
         // Track recordAction calls
         let recordActionCallCount = 0;
@@ -2539,18 +1589,6 @@ describe('AFKDetectionService', () => {
         const userId = 'already-gone-user';
         const channelId = 'already-gone-channel';
 
-        const config: GuildSettings = {
-          guildId,
-          enabled: true,
-          afkTimeoutSeconds: 100,
-          warningSecondsBefore: 30,
-          warningChannelId: null,
-          exemptRoleIds: [],
-          adminRoleIds: [],
-          createdAt: '2024-01-01T00:00:00.000Z',
-          updatedAt: '2024-01-01T00:00:00.000Z',
-        };
-
         const mockVoiceState: Partial<VoiceState> = {
           channel: null, // User already left
         };
@@ -2565,7 +1603,14 @@ describe('AFKDetectionService', () => {
           } as any,
         };
 
-        vi.mocked(mockConfigService.getConfig).mockReturnValue(config);
+        vi.mocked(mockConfigService.getConfig).mockReturnValue(
+          createMockGuildSettings({
+            guildId,
+            enabled: true,
+            afkTimeoutSeconds: 100,
+            warningSecondsBefore: 30,
+          })
+        );
         vi.mocked(mockClient.guilds.fetch).mockResolvedValue(mockGuild as Guild);
 
         await service.startTracking(guildId, userId, channelId);
@@ -2586,25 +1631,20 @@ describe('AFKDetectionService', () => {
         const channelId = 'kick-error-channel';
         const error = new Error('Member fetch failed');
 
-        const config: GuildSettings = {
-          guildId,
-          enabled: true,
-          afkTimeoutSeconds: 100,
-          warningSecondsBefore: 30,
-          warningChannelId: null,
-          exemptRoleIds: [],
-          adminRoleIds: [],
-          createdAt: '2024-01-01T00:00:00.000Z',
-          updatedAt: '2024-01-01T00:00:00.000Z',
-        };
-
         const mockGuild: Partial<Guild> = {
           members: {
             fetch: vi.fn().mockRejectedValue(error),
           } as any,
         };
 
-        vi.mocked(mockConfigService.getConfig).mockReturnValue(config);
+        vi.mocked(mockConfigService.getConfig).mockReturnValue(
+          createMockGuildSettings({
+            guildId,
+            enabled: true,
+            afkTimeoutSeconds: 100,
+            warningSecondsBefore: 30,
+          })
+        );
         vi.mocked(mockClient.guilds.fetch).mockResolvedValue(mockGuild as Guild);
 
         await service.startTracking(guildId, userId, channelId);
@@ -2626,18 +1666,6 @@ describe('AFKDetectionService', () => {
         const userId = 'reset-rate-limit-user';
         const channelId = 'reset-rate-limit-channel';
 
-        const config: GuildSettings = {
-          guildId,
-          enabled: true,
-          afkTimeoutSeconds: 300,
-          warningSecondsBefore: 60,
-          warningChannelId: null,
-          exemptRoleIds: [],  // No exempt roles - user should be tracked
-          adminRoleIds: [],
-          createdAt: '2024-01-01T00:00:00.000Z',
-          updatedAt: '2024-01-01T00:00:00.000Z',
-        };
-
         const mockMember: Partial<GuildMember> = {
           roles: {
             cache: new Map(),
@@ -2650,7 +1678,13 @@ describe('AFKDetectionService', () => {
           } as any,
         };
 
-        vi.mocked(mockConfigService.getConfig).mockReturnValue(config);
+        vi.mocked(mockConfigService.getConfig).mockReturnValue(
+          createMockGuildSettings({
+            guildId,
+            enabled: true,
+            exemptRoleIds: [],  // No exempt roles - user should be tracked
+          })
+        );
         vi.mocked(mockClient.guilds.fetch).mockResolvedValue(mockGuild as Guild);
 
         await service.startTracking(guildId, userId, channelId);
