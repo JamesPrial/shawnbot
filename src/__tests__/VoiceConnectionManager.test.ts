@@ -15,6 +15,7 @@ vi.mock('@discordjs/voice', async () => {
   const actual = await vi.importActual('@discordjs/voice');
   return {
     ...actual,
+    joinVoiceChannel: vi.fn(),
     createAudioPlayer: vi.fn(() => mockPlayer),
     createAudioResource: vi.fn((stream, options) => {
       capturedStreamType = options?.inputType;
@@ -111,10 +112,10 @@ describe('VoiceConnectionManager', () => {
           // but NOT because of null/undefined handling
         }
 
-        // Verify we attempted to create a new connection (logged as joining)
-        expect(mockLogger.info).toHaveBeenCalledWith(
-          expect.objectContaining({ guildId: 'guild-new', channelId: 'channel-1' }),
-          'Joining voice channel'
+        // Verify we attempted to create a new connection (logged as joining with debug)
+        expect(mockLogger.debug).toHaveBeenCalledWith(
+          expect.objectContaining({ guildId: 'guild-new', channelId: 'channel-1', action: 'connection_join' }),
+          expect.stringContaining('Joining voice channel')
         );
       });
     });
@@ -151,8 +152,8 @@ describe('VoiceConnectionManager', () => {
           'Already connected to a channel in this guild'
         );
 
-        // Should NOT attempt to join (no 'Joining voice channel' info log)
-        expect(mockLogger.info).not.toHaveBeenCalled();
+        // Should NOT attempt to join (no 'Joining voice channel' debug log)
+        expect(mockLogger.debug).not.toHaveBeenCalled();
       });
 
       it('should not call voiceAdapterCreator when connection exists', async () => {
@@ -245,9 +246,9 @@ describe('VoiceConnectionManager', () => {
         }
 
         // Verify it attempted to create a new connection (didn't return guild-1's)
-        expect(mockLogger.info).toHaveBeenCalledWith(
-          expect.objectContaining({ guildId: guild2Id, channelId: 'channel-2' }),
-          'Joining voice channel'
+        expect(mockLogger.debug).toHaveBeenCalledWith(
+          expect.objectContaining({ guildId: guild2Id, channelId: 'channel-2', action: 'connection_join' }),
+          expect.stringContaining('Joining voice channel')
         );
       });
 
@@ -304,9 +305,9 @@ describe('VoiceConnectionManager', () => {
         }
 
         // The important part: didn't throw at the get() check
-        expect(mockLogger.info).toHaveBeenCalledWith(
-          expect.objectContaining({ guildId: emptyGuildId }),
-          'Joining voice channel'
+        expect(mockLogger.debug).toHaveBeenCalledWith(
+          expect.objectContaining({ guildId: emptyGuildId, action: 'connection_join' }),
+          expect.stringContaining('Joining voice channel')
         );
       });
 
@@ -328,9 +329,9 @@ describe('VoiceConnectionManager', () => {
           // Expected to fail in test environment
         }
 
-        expect(mockLogger.info).toHaveBeenCalledWith(
-          expect.objectContaining({ guildId: specialGuildId }),
-          'Joining voice channel'
+        expect(mockLogger.debug).toHaveBeenCalledWith(
+          expect.objectContaining({ guildId: specialGuildId, action: 'connection_join' }),
+          expect.stringContaining('Joining voice channel')
         );
       });
 
@@ -448,7 +449,7 @@ describe('VoiceConnectionManager', () => {
 
         expect(mockSpeakingTracker.unregisterConnection).not.toHaveBeenCalled();
         // No log should occur when connection doesn't exist
-        expect(mockLogger.info).not.toHaveBeenCalled();
+        expect(mockLogger.debug).not.toHaveBeenCalled();
       });
 
       it('should safely handle get() returning undefined', () => {
@@ -480,9 +481,9 @@ describe('VoiceConnectionManager', () => {
 
         manager.leaveChannel(guildId);
 
-        expect(mockLogger.info).toHaveBeenCalledWith(
-          { guildId },
-          'Leaving voice channel'
+        expect(mockLogger.debug).toHaveBeenCalledWith(
+          expect.objectContaining({ guildId, action: 'connection_leave' }),
+          expect.stringContaining('Leaving voice channel')
         );
         expect(mockSpeakingTracker.unregisterConnection).toHaveBeenCalledWith(guildId);
         expect(mockOff).toHaveBeenCalled();
@@ -1032,9 +1033,9 @@ describe('VoiceConnectionManager', () => {
           }
 
           // Verify we got past the type cast and attempted to create the connection
-          expect(mockLogger.info).toHaveBeenCalledWith(
-            expect.objectContaining({ guildId, channelId }),
-            'Joining voice channel'
+          expect(mockLogger.debug).toHaveBeenCalledWith(
+            expect.objectContaining({ guildId, channelId, action: 'connection_join' }),
+            expect.stringContaining('Joining voice channel')
           );
         });
 
@@ -1060,9 +1061,9 @@ describe('VoiceConnectionManager', () => {
             // May fail during joinVoiceChannel call, but not at the type cast
           }
 
-          expect(mockLogger.info).toHaveBeenCalledWith(
-            expect.objectContaining({ guildId, channelId }),
-            'Joining voice channel'
+          expect(mockLogger.debug).toHaveBeenCalledWith(
+            expect.objectContaining({ guildId, channelId, action: 'connection_join' }),
+            expect.stringContaining('Joining voice channel')
           );
         });
 
@@ -1087,14 +1088,15 @@ describe('VoiceConnectionManager', () => {
             // Expected to fail in test environment
           }
 
-          // The fact that we got to the info log proves the config object was created
+          // The fact that we got to the debug log proves the config object was created
           // with proper types (channelId: string, guildId: string, etc.)
-          expect(mockLogger.info).toHaveBeenCalledWith(
+          expect(mockLogger.debug).toHaveBeenCalledWith(
             expect.objectContaining({
               guildId: expect.any(String),
               channelId: expect.any(String),
+              action: 'connection_join',
             }),
-            'Joining voice channel'
+            expect.stringContaining('Joining voice channel')
           );
         });
       });
@@ -1370,6 +1372,268 @@ describe('VoiceConnectionManager', () => {
           expect(mockDestroy).toHaveBeenCalled();
         });
       });
+    });
+  });
+
+  describe('WU-3: Voice Components Debug Logging', () => {
+    /**
+     * WU-3 tests for debug logging with structured action metadata.
+     * These tests verify that voice connection lifecycle events are logged
+     * with specific action identifiers for observability.
+     */
+
+    describe('Connection Lifecycle Debug Logging', () => {
+      describe('when joining a voice channel', () => {
+        it('should log connection join with action metadata', async () => {
+          // WHY: Debug logs with structured action field enable filtering and monitoring.
+          // This helps track connection lifecycle in production logs.
+
+          const guildId = 'debug-join-guild';
+          const channelId = 'debug-join-channel';
+
+          // Setup mock to complete join flow
+          const mockConnection = {
+            joinConfig: { guildId, channelId },
+            state: { status: VoiceConnectionStatus.Ready },
+            on: vi.fn(),
+            receiver: {
+              speaking: {
+                on: vi.fn(),
+                removeAllListeners: vi.fn(),
+              },
+            },
+            subscribe: vi.fn(),
+          } as unknown as VoiceConnection;
+
+          // Mock the player to auto-complete
+          mockPlayer.on.mockImplementation((event: string, handler: () => void) => {
+            if (event === AudioPlayerStatus.Idle) {
+              setImmediate(() => handler());
+            }
+          });
+
+          // Mock joinVoiceChannel using module mock setup
+          const { joinVoiceChannel } = await import('@discordjs/voice');
+          vi.mocked(joinVoiceChannel).mockReturnValue(mockConnection);
+
+          const mockChannel = {
+            id: channelId,
+            guild: {
+              id: guildId,
+              voiceAdapterCreator: vi.fn(),
+            },
+          } as unknown as VoiceBasedChannel;
+
+          await manager.joinChannel(mockChannel);
+
+          // Verify debug log includes action: 'connection_join'
+          expect(mockLogger.debug).toHaveBeenCalledWith(
+            expect.objectContaining({
+              action: 'connection_join',
+              guildId,
+              channelId,
+            }),
+            expect.stringContaining('Joining voice channel')
+          );
+        });
+
+        it('should include guild and channel IDs in connection_join log', async () => {
+          // WHY: Guild and channel IDs are essential for correlating logs with specific servers.
+
+          const guildId = 'guild-with-id';
+          const channelId = 'channel-with-id';
+
+          const mockConnection = {
+            joinConfig: { guildId, channelId },
+            state: { status: VoiceConnectionStatus.Ready },
+            on: vi.fn(),
+            receiver: {
+              speaking: {
+                on: vi.fn(),
+                removeAllListeners: vi.fn(),
+              },
+            },
+            subscribe: vi.fn(),
+          } as unknown as VoiceConnection;
+
+          mockPlayer.on.mockImplementation((event: string, handler: () => void) => {
+            if (event === AudioPlayerStatus.Idle) {
+              setImmediate(() => handler());
+            }
+          });
+
+          const { joinVoiceChannel } = await import('@discordjs/voice');
+          vi.mocked(joinVoiceChannel).mockReturnValue(mockConnection);
+
+          const mockChannel = {
+            id: channelId,
+            guild: {
+              id: guildId,
+              voiceAdapterCreator: vi.fn(),
+            },
+          } as unknown as VoiceBasedChannel;
+
+          await manager.joinChannel(mockChannel);
+
+          expect(mockLogger.debug).toHaveBeenCalledWith(
+            expect.objectContaining({
+              guildId: 'guild-with-id',
+              channelId: 'channel-with-id',
+            }),
+            expect.any(String)
+          );
+        });
+      });
+
+      describe('when leaving a voice channel', () => {
+        it('should log connection leave with action metadata', () => {
+          // WHY: Tracking when bot leaves channels helps diagnose disconnection issues.
+
+          const guildId = 'debug-leave-guild';
+
+          const mockConnection = {
+            joinConfig: { guildId },
+            destroy: vi.fn(),
+            off: vi.fn(),
+          } as unknown as VoiceConnection;
+
+          (manager as any).connections.set(guildId, mockConnection);
+          (manager as any).connectionListeners.set(guildId, {
+            onDisconnected: vi.fn(),
+            onDestroyed: vi.fn(),
+          });
+
+          manager.leaveChannel(guildId);
+
+          expect(mockLogger.debug).toHaveBeenCalledWith(
+            expect.objectContaining({
+              action: 'connection_leave',
+              guildId,
+            }),
+            expect.stringContaining('Leaving voice channel')
+          );
+        });
+
+        it('should include guildId in connection_leave log', () => {
+          // WHY: Guild ID identifies which server the bot is leaving.
+
+          const guildId = 'leave-guild-123';
+
+          const mockConnection = {
+            joinConfig: { guildId },
+            destroy: vi.fn(),
+            off: vi.fn(),
+          } as unknown as VoiceConnection;
+
+          (manager as any).connections.set(guildId, mockConnection);
+
+          manager.leaveChannel(guildId);
+
+          expect(mockLogger.debug).toHaveBeenCalledWith(
+            expect.objectContaining({
+              guildId: 'leave-guild-123',
+            }),
+            expect.any(String)
+          );
+        });
+
+        it('should not log when leaving non-existent connection', () => {
+          // WHY: No need to log when there's no actual connection to leave.
+
+          const initialCallCount = mockLogger.debug.mock.calls.length;
+
+          manager.leaveChannel('non-existent-guild');
+
+          // Debug log count should not increase
+          expect(mockLogger.debug).toHaveBeenCalledTimes(initialCallCount);
+        });
+      });
+
+      describe('when connection is destroyed', () => {
+        it('should log connection destroyed with action metadata when Destroyed event fires', () => {
+          // WHY: Tracking connection destruction helps diagnose network issues and crashes.
+          // The onDestroyed handler created in joinChannel logs with action: 'connection_destroyed'
+          // then calls leaveChannel which cleans up the connection.
+
+          const guildId = 'destroyed-event-guild';
+
+          const mockConnection = {
+            joinConfig: { guildId },
+            on: vi.fn(),
+            off: vi.fn(),
+            destroy: vi.fn(),
+          } as unknown as VoiceConnection;
+
+          // Simulate the handler that would be created in joinChannel
+          const onDestroyed = (): void => {
+            if (mockLogger.isLevelEnabled('debug')) {
+              mockLogger.debug({ guildId, action: 'connection_destroyed' }, 'Voice connection destroyed');
+            }
+            manager.leaveChannel(guildId);
+          };
+
+          (manager as any).connections.set(guildId, mockConnection);
+          (manager as any).connectionListeners.set(guildId, {
+            onDisconnected: vi.fn(),
+            onDestroyed,
+          });
+
+          // Clear existing logs from setup
+          vi.mocked(mockLogger.debug).mockClear();
+          vi.mocked(mockLogger.isLevelEnabled).mockReturnValue(true);
+
+          // Simulate connection being destroyed externally (network error, etc.)
+          onDestroyed();
+
+          expect(mockLogger.debug).toHaveBeenCalledWith(
+            expect.objectContaining({
+              action: 'connection_destroyed',
+              guildId,
+            }),
+            expect.stringContaining('Voice connection destroyed')
+          );
+        });
+
+        it('should include guildId in connection_destroyed log', () => {
+          // WHY: Identify which guild experienced the connection destruction.
+
+          const guildId = 'destroyed-guild-456';
+
+          const mockConnection = {
+            joinConfig: { guildId },
+            on: vi.fn(),
+            off: vi.fn(),
+            destroy: vi.fn(),
+          } as unknown as VoiceConnection;
+
+          // Simulate the handler that would be created in joinChannel
+          const onDestroyed = (): void => {
+            if (mockLogger.isLevelEnabled('debug')) {
+              mockLogger.debug({ guildId, action: 'connection_destroyed' }, 'Voice connection destroyed');
+            }
+            manager.leaveChannel(guildId);
+          };
+
+          (manager as any).connections.set(guildId, mockConnection);
+          (manager as any).connectionListeners.set(guildId, {
+            onDisconnected: vi.fn(),
+            onDestroyed,
+          });
+
+          vi.mocked(mockLogger.debug).mockClear();
+          vi.mocked(mockLogger.isLevelEnabled).mockReturnValue(true);
+
+          onDestroyed();
+
+          expect(mockLogger.debug).toHaveBeenCalledWith(
+            expect.objectContaining({
+              guildId: 'destroyed-guild-456',
+            }),
+            expect.any(String)
+          );
+        });
+      });
+
     });
   });
 });

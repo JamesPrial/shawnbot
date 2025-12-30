@@ -879,4 +879,291 @@ describe('RateLimiter', () => {
       expect(limiter.getActionCount()).toBe(1);
     });
   });
+
+  describe('WU-4: debug logging with actionType', () => {
+    describe('when actionType parameter is provided', () => {
+      it('should accept actionType parameter without error', () => {
+        const limiter = new RateLimiter(mockLogger);
+
+        // Prove the parameter is accepted by TypeScript and runtime
+        expect(() => {
+          limiter.recordAction('guild_fetch');
+        }).not.toThrow();
+
+        expect(limiter.getActionCount()).toBe(1);
+      });
+
+      it('should include actionType in debug log context', () => {
+        const limiter = new RateLimiter(mockLogger);
+
+        limiter.recordAction('guild_fetch');
+
+        expect(mockLogger.debug).toHaveBeenCalledWith(
+          expect.objectContaining({
+            actionType: 'guild_fetch',
+            actionCount: 1,
+          }),
+          'Action recorded'
+        );
+      });
+
+      it('should include actionType in warn log when threshold reached', () => {
+        const limiter = new RateLimiter(mockLogger);
+
+        // Push to warn threshold (20 actions)
+        for (let i = 0; i < 20; i++) {
+          limiter.recordAction('guild_fetch');
+        }
+
+        expect(mockLogger.warn).toHaveBeenCalledWith(
+          expect.objectContaining({
+            actionType: 'guild_fetch',
+            actionCount: 20,
+            warnThreshold: 20,
+          }),
+          expect.stringContaining('Rate limit warning')
+        );
+      });
+
+      it('should include actionType in error log when crash threshold reached', () => {
+        const limiter = new RateLimiter(mockLogger);
+
+        // Push to crash threshold (50 actions)
+        for (let i = 0; i < 50; i++) {
+          limiter.recordAction('guild_fetch');
+        }
+
+        expect(mockLogger.error).toHaveBeenCalledWith(
+          expect.objectContaining({
+            actionType: 'guild_fetch',
+            actionCount: 50,
+            crashThreshold: 50,
+          }),
+          expect.stringContaining('Rate limit exceeded')
+        );
+      });
+
+      it('should track different actionTypes independently in logs', () => {
+        const limiter = new RateLimiter(mockLogger);
+
+        limiter.recordAction('guild_fetch');
+        limiter.recordAction('channel_fetch');
+        limiter.recordAction('user_fetch');
+
+        // All should be logged with their respective actionTypes
+        expect(mockLogger.debug).toHaveBeenCalledWith(
+          expect.objectContaining({ actionType: 'guild_fetch' }),
+          'Action recorded'
+        );
+        expect(mockLogger.debug).toHaveBeenCalledWith(
+          expect.objectContaining({ actionType: 'channel_fetch' }),
+          'Action recorded'
+        );
+        expect(mockLogger.debug).toHaveBeenCalledWith(
+          expect.objectContaining({ actionType: 'user_fetch' }),
+          'Action recorded'
+        );
+      });
+    });
+
+    describe('when actionType parameter is omitted', () => {
+      it('should accept calls without actionType parameter', () => {
+        const limiter = new RateLimiter(mockLogger);
+
+        expect(() => {
+          limiter.recordAction();
+        }).not.toThrow();
+
+        expect(limiter.getActionCount()).toBe(1);
+      });
+
+      it('should include undefined actionType in debug log context', () => {
+        const limiter = new RateLimiter(mockLogger);
+
+        limiter.recordAction();
+
+        expect(mockLogger.debug).toHaveBeenCalledWith(
+          expect.objectContaining({
+            actionType: undefined,
+            actionCount: 1,
+          }),
+          'Action recorded'
+        );
+      });
+
+      it('should include undefined actionType in warn log', () => {
+        const limiter = new RateLimiter(mockLogger);
+
+        for (let i = 0; i < 20; i++) {
+          limiter.recordAction();
+        }
+
+        expect(mockLogger.warn).toHaveBeenCalledWith(
+          expect.objectContaining({
+            actionType: undefined,
+            actionCount: 20,
+          }),
+          expect.any(String)
+        );
+      });
+
+      it('should include undefined actionType in error log', () => {
+        const limiter = new RateLimiter(mockLogger);
+
+        for (let i = 0; i < 50; i++) {
+          limiter.recordAction();
+        }
+
+        expect(mockLogger.error).toHaveBeenCalledWith(
+          expect.objectContaining({
+            actionType: undefined,
+            actionCount: 50,
+          }),
+          expect.any(String)
+        );
+      });
+    });
+
+    describe('when debug level is disabled', () => {
+      it('should not call logger.debug when isLevelEnabled returns false', () => {
+        vi.mocked(mockLogger.isLevelEnabled).mockReturnValue(false);
+        const limiter = new RateLimiter(mockLogger);
+
+        limiter.recordAction('guild_fetch');
+
+        // isLevelEnabled should be checked before logging
+        expect(mockLogger.isLevelEnabled).toHaveBeenCalledWith('debug');
+        // debug should NOT be called when level is disabled
+        expect(mockLogger.debug).not.toHaveBeenCalled();
+      });
+
+      it('should still warn when debug is disabled but warn threshold is reached', () => {
+        vi.mocked(mockLogger.isLevelEnabled).mockReturnValue(false);
+        const limiter = new RateLimiter(mockLogger);
+
+        for (let i = 0; i < 20; i++) {
+          limiter.recordAction('guild_fetch');
+        }
+
+        // Warn should still fire even with debug disabled
+        expect(mockLogger.warn).toHaveBeenCalled();
+        expect(mockLogger.debug).not.toHaveBeenCalled();
+      });
+
+      it('should still crash when debug is disabled but crash threshold is reached', () => {
+        vi.mocked(mockLogger.isLevelEnabled).mockReturnValue(false);
+        const limiter = new RateLimiter(mockLogger);
+
+        for (let i = 0; i < 50; i++) {
+          limiter.recordAction('guild_fetch');
+        }
+
+        // Error should still fire even with debug disabled
+        expect(mockLogger.error).toHaveBeenCalled();
+        expect(mockProcessExit).toHaveBeenCalledWith(1);
+        expect(mockLogger.debug).not.toHaveBeenCalled();
+      });
+
+      it('should check isLevelEnabled on every recordAction call', () => {
+        vi.mocked(mockLogger.isLevelEnabled).mockReturnValue(false);
+        const limiter = new RateLimiter(mockLogger);
+
+        limiter.recordAction();
+        limiter.recordAction();
+        limiter.recordAction();
+
+        // Should check level 3 times (once per call)
+        expect(mockLogger.isLevelEnabled).toHaveBeenCalledTimes(3);
+      });
+    });
+
+    describe('when debug level is enabled', () => {
+      it('should call logger.debug when isLevelEnabled returns true', () => {
+        vi.mocked(mockLogger.isLevelEnabled).mockReturnValue(true);
+        const limiter = new RateLimiter(mockLogger);
+
+        limiter.recordAction('channel_fetch');
+
+        expect(mockLogger.isLevelEnabled).toHaveBeenCalledWith('debug');
+        expect(mockLogger.debug).toHaveBeenCalledWith(
+          expect.objectContaining({
+            actionType: 'channel_fetch',
+            actionCount: 1,
+          }),
+          'Action recorded'
+        );
+      });
+
+      it('should include all expected fields in debug log context', () => {
+        vi.mocked(mockLogger.isLevelEnabled).mockReturnValue(true);
+        const limiter = new RateLimiter(mockLogger);
+
+        limiter.recordAction('test_action');
+
+        expect(mockLogger.debug).toHaveBeenCalledWith(
+          expect.objectContaining({
+            actionCount: 1,
+            windowMs: 60000, // default window
+            actionType: 'test_action',
+          }),
+          'Action recorded'
+        );
+      });
+
+      it('should log every action when debug is enabled', () => {
+        vi.mocked(mockLogger.isLevelEnabled).mockReturnValue(true);
+        const limiter = new RateLimiter(mockLogger);
+
+        limiter.recordAction('action_1');
+        limiter.recordAction('action_2');
+        limiter.recordAction('action_3');
+
+        // Should log all 3 actions
+        expect(mockLogger.debug).toHaveBeenCalledTimes(3);
+        expect(mockLogger.debug).toHaveBeenNthCalledWith(
+          1,
+          expect.objectContaining({ actionCount: 1, actionType: 'action_1' }),
+          'Action recorded'
+        );
+        expect(mockLogger.debug).toHaveBeenNthCalledWith(
+          2,
+          expect.objectContaining({ actionCount: 2, actionType: 'action_2' }),
+          'Action recorded'
+        );
+        expect(mockLogger.debug).toHaveBeenNthCalledWith(
+          3,
+          expect.objectContaining({ actionCount: 3, actionType: 'action_3' }),
+          'Action recorded'
+        );
+      });
+    });
+
+    describe('level guard performance implications', () => {
+      it('should minimize overhead by checking level before constructing log context', () => {
+        vi.mocked(mockLogger.isLevelEnabled).mockReturnValue(false);
+        const limiter = new RateLimiter(mockLogger);
+
+        // Record many actions with debug disabled
+        for (let i = 0; i < 100; i++) {
+          limiter.recordAction('expensive_operation');
+        }
+
+        // isLevelEnabled should be called 100 times
+        expect(mockLogger.isLevelEnabled).toHaveBeenCalledTimes(100);
+        // But debug should NEVER be called (saving the cost of object construction)
+        expect(mockLogger.debug).not.toHaveBeenCalled();
+      });
+
+      it('should not skip level check even after exited flag is set', () => {
+        vi.mocked(mockLogger.isLevelEnabled).mockReturnValue(false);
+        const limiter = new RateLimiter(mockLogger, { crashThreshold: 2 });
+
+        limiter.recordAction();
+        limiter.recordAction(); // Should crash here
+
+        // Even though exited=true, the level check should have happened
+        expect(mockLogger.isLevelEnabled).toHaveBeenCalledTimes(2);
+      });
+    });
+  });
 });

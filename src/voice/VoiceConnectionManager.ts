@@ -56,9 +56,11 @@ export class VoiceConnectionManager {
       return existingConnection;
     }
 
-    this.logger.info({ guildId, channelId: channel.id }, 'Joining voice channel');
+    if (this.logger.isLevelEnabled('debug')) {
+      this.logger.debug({ guildId, channelId: channel.id, action: 'connection_join' }, 'Joining voice channel');
+    }
 
-    this.rateLimiter.recordAction();
+    this.rateLimiter.recordAction('joinVoiceChannel');
 
     const connection = joinVoiceChannel({
       channelId: channel.id,
@@ -94,7 +96,9 @@ export class VoiceConnectionManager {
     };
 
     const onDestroyed = (): void => {
-      this.logger.info({ guildId }, 'Voice connection destroyed');
+      if (this.logger.isLevelEnabled('debug')) {
+        this.logger.debug({ guildId, action: 'connection_destroyed' }, 'Voice connection destroyed');
+      }
       this.leaveChannel(guildId);
     };
 
@@ -114,7 +118,9 @@ export class VoiceConnectionManager {
     const connection = this.connections.get(guildId);
 
     if (connection) {
-      this.logger.info({ guildId }, 'Leaving voice channel');
+      if (this.logger.isLevelEnabled('debug')) {
+        this.logger.debug({ guildId, action: 'connection_leave' }, 'Leaving voice channel');
+      }
 
       // Remove event listeners before destroying to prevent memory leaks
       const listeners = this.connectionListeners.get(guildId);
@@ -154,6 +160,11 @@ export class VoiceConnectionManager {
       const player = createAudioPlayer();
       let settled = false;
 
+      const guildId = connection.joinConfig?.guildId;
+      if (guildId && this.logger.isLevelEnabled('debug')) {
+        this.logger.debug({ guildId, action: 'silence_start' }, 'Playing silent frame');
+      }
+
       const silenceBuffer = Buffer.from(OPUS_SILENCE_FRAME);
       const silenceStream = Readable.from([silenceBuffer], { objectMode: true });
 
@@ -181,11 +192,13 @@ export class VoiceConnectionManager {
         if (settled) return;
         settled = true;
         player.stop();
-        const guildId = connection.joinConfig?.guildId;
-        if (!guildId) {
-          this.logger.debug('Silent frame played to initialize voice reception (guildId missing from connection.joinConfig)');
-        } else {
-          this.logger.debug({ guildId }, 'Silent frame played to initialize voice reception');
+        if (this.logger.isLevelEnabled('debug')) {
+          const guildId = connection.joinConfig?.guildId;
+          if (!guildId) {
+            this.logger.debug('Silent frame played to initialize voice reception (guildId missing from connection.joinConfig)');
+          } else {
+            this.logger.debug({ guildId }, 'Silent frame played to initialize voice reception');
+          }
         }
         resolve();
       });

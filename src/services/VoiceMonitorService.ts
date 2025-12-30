@@ -18,16 +18,28 @@ export class VoiceMonitorService {
   async handleUserJoin(channel: VoiceBasedChannel): Promise<void> {
     const guildId = channel.guild.id;
     const channelId = channel.id;
+    const memberCount = channel.members.filter(m => !m.user.bot).size;
+
+    if (this.logger.isLevelEnabled('debug')) {
+      this.logger.debug(
+        { guildId, channelId, action: 'user_join', memberCount },
+        'Handling user join to voice channel'
+      );
+    }
 
     const config = this.guildConfig.getConfig(guildId);
     if (!config.enabled) {
-      this.logger.debug({ guildId, channelId }, 'Guild monitoring not enabled');
+      if (this.logger.isLevelEnabled('debug')) {
+        this.logger.debug({ guildId, channelId }, 'Guild monitoring not enabled');
+      }
       return;
     }
 
     const isAlreadyInChannel = this.connectionManager.hasConnection(guildId);
     if (isAlreadyInChannel) {
-      this.logger.debug({ guildId, channelId }, 'Bot already in this channel');
+      if (this.logger.isLevelEnabled('debug')) {
+        this.logger.debug({ guildId, channelId }, 'Bot already in this channel');
+      }
       return;
     }
 
@@ -36,9 +48,18 @@ export class VoiceMonitorService {
   }
 
   async handleUserLeave(guildId: string, channelId: string): Promise<void> {
+    if (this.logger.isLevelEnabled('debug')) {
+      this.logger.debug(
+        { guildId, channelId, action: 'user_leave' },
+        'Handling user leave from voice channel'
+      );
+    }
+
     const isChannelEmpty = await this.isChannelEmpty(guildId, channelId);
     if (!isChannelEmpty) {
-      this.logger.debug({ guildId, channelId }, 'Channel still has users, staying connected');
+      if (this.logger.isLevelEnabled('debug')) {
+        this.logger.debug({ guildId, channelId }, 'Channel still has users, staying connected');
+      }
       return;
     }
 
@@ -52,33 +73,66 @@ export class VoiceMonitorService {
       const config = this.guildConfig.getConfig(guildId);
 
       if (!config.enabled) {
-        this.logger.debug({ guildId }, 'Guild monitoring not enabled, skipping scan');
+        if (this.logger.isLevelEnabled('debug')) {
+          this.logger.debug({ guildId }, 'Guild monitoring not enabled, skipping scan');
+        }
         return;
       }
 
       // Fetch all channels in the guild
-      this.rateLimiter.recordAction();
+      this.rateLimiter.recordAction('guild.channels.fetch');
       const channels = await guild.channels.fetch();
+
+      const voiceChannelCount = channels.filter(
+        (channel) => channel?.isVoiceBased()
+      ).size;
+
+      if (this.logger.isLevelEnabled('debug')) {
+        this.logger.debug(
+          { guildId, action: 'guild_scan', voiceChannelCount },
+          'Scanning guild for active voice channels'
+        );
+      }
 
       // Filter to voice-based channels with 2+ non-bot members
       const eligibleChannels = channels.filter((channel): channel is VoiceBasedChannel => {
         if (channel === null) return false;
         if (!channel.isVoiceBased()) return false;
         const nonBotCount = channel.members.filter(m => !m.user.bot).size;
-        return nonBotCount >= MIN_USERS_FOR_AFK_TRACKING;
+        const shouldTrack = nonBotCount >= MIN_USERS_FOR_AFK_TRACKING;
+
+        if (this.logger.isLevelEnabled('debug')) {
+          this.logger.debug(
+            {
+              guildId,
+              channelId: channel.id,
+              action: 'threshold_check',
+              nonBotCount,
+              threshold: MIN_USERS_FOR_AFK_TRACKING,
+              result: shouldTrack
+            },
+            'Threshold check for AFK tracking'
+          );
+        }
+
+        return shouldTrack;
       });
 
       if (eligibleChannels.size === 0) {
-        this.logger.debug(
-          { guildId },
-          'No voice channels with sufficient members found during scan'
-        );
+        if (this.logger.isLevelEnabled('debug')) {
+          this.logger.debug(
+            { guildId },
+            'No voice channels with sufficient members found during scan'
+          );
+        }
         return;
       }
 
       // Check if already connected to this guild
       if (this.connectionManager.hasConnection(guildId)) {
-        this.logger.debug({ guildId }, 'Bot already connected to guild, skipping scan');
+        if (this.logger.isLevelEnabled('debug')) {
+          this.logger.debug({ guildId }, 'Bot already connected to guild, skipping scan');
+        }
         return;
       }
 
@@ -128,9 +182,9 @@ export class VoiceMonitorService {
 
   private async isChannelEmpty(guildId: string, channelId: string): Promise<boolean> {
     try {
-      this.rateLimiter.recordAction();
+      this.rateLimiter.recordAction('client.guilds.fetch');
       const guild = await this.client.guilds.fetch(guildId);
-      this.rateLimiter.recordAction();
+      this.rateLimiter.recordAction('guild.channels.fetch');
       const channel = await guild.channels.fetch(channelId);
 
       if (!channel?.isVoiceBased()) {
@@ -141,10 +195,12 @@ export class VoiceMonitorService {
       const nonBotMembers = channel.members.filter(member => !member.user.bot);
       const isEmpty = nonBotMembers.size === 0;
 
-      this.logger.debug(
-        { guildId, channelId, memberCount: nonBotMembers.size },
-        `Channel empty check: ${isEmpty}`
-      );
+      if (this.logger.isLevelEnabled('debug')) {
+        this.logger.debug(
+          { guildId, channelId, memberCount: nonBotMembers.size },
+          `Channel empty check: ${isEmpty}`
+        );
+      }
 
       return isEmpty;
     } catch (error) {

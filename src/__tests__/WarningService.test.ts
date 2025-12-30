@@ -744,5 +744,826 @@ describe('WarningService', () => {
         expect(mockRateLimiter.recordAction).toHaveBeenCalledTimes(2);
       });
     });
+
+    describe('debug logging (WU-5)', () => {
+      describe('warning start logging', () => {
+        it('should log warning start with action warning_start', async () => {
+          const guildId = 'guild-debug-1';
+          const userId = 'user-debug-1';
+          const voiceChannelId = 'voice-debug-1';
+          const warningChannelId = 'warning-debug-1';
+
+          const config = createMockGuildSettings({
+            guildId,
+            enabled: true,
+            warningChannelId,
+          });
+
+          const mockSend = vi.fn().mockResolvedValue({ id: 'message-123' });
+          const mockPermissions = new PermissionsBitField([PermissionFlagsBits.SendMessages]);
+          const mockBotMember = { id: 'bot-member-id' } as GuildMember;
+
+          const mockWarningChannel = {
+            id: warningChannelId,
+            type: ChannelType.GuildText,
+            send: mockSend,
+            permissionsFor: vi.fn().mockReturnValue(mockPermissions),
+          } as unknown as TextChannel;
+
+          const mockChannelCollection = new Collection<string, GuildBasedChannel>();
+          mockChannelCollection.set(warningChannelId, mockWarningChannel);
+
+          const mockGuild = {
+            id: guildId,
+            channels: {
+              cache: mockChannelCollection,
+            },
+            members: {
+              me: mockBotMember,
+            },
+          } as unknown as Guild;
+
+          vi.mocked(mockConfigService.getConfig).mockReturnValue(config);
+          vi.mocked(mockClient.guilds.fetch).mockResolvedValue(mockGuild);
+
+          await service.sendWarning(guildId, userId, voiceChannelId);
+
+          // MUST log the start of warning process with action field
+          expect(mockLogger.debug).toHaveBeenCalledWith(
+            expect.objectContaining({
+              action: 'warning_start',
+              guildId,
+              userId,
+              voiceChannelId,
+            }),
+            expect.any(String)
+          );
+        });
+
+        it('should log warning_start before any other debug logs', async () => {
+          const guildId = 'guild-order-test';
+          const userId = 'user-order-test';
+          const voiceChannelId = 'voice-order-test';
+          const warningChannelId = 'warning-order-test';
+
+          const config = createMockGuildSettings({
+            guildId,
+            enabled: true,
+            warningChannelId,
+          });
+
+          const mockSend = vi.fn().mockResolvedValue({ id: 'message-123' });
+          const mockPermissions = new PermissionsBitField([PermissionFlagsBits.SendMessages]);
+          const mockBotMember = { id: 'bot-member-id' } as GuildMember;
+
+          const mockWarningChannel = {
+            id: warningChannelId,
+            type: ChannelType.GuildText,
+            send: mockSend,
+            permissionsFor: vi.fn().mockReturnValue(mockPermissions),
+          } as unknown as TextChannel;
+
+          const mockChannelCollection = new Collection<string, GuildBasedChannel>();
+          mockChannelCollection.set(warningChannelId, mockWarningChannel);
+
+          const mockGuild = {
+            id: guildId,
+            channels: {
+              cache: mockChannelCollection,
+            },
+            members: {
+              me: mockBotMember,
+            },
+          } as unknown as Guild;
+
+          vi.mocked(mockConfigService.getConfig).mockReturnValue(config);
+          vi.mocked(mockClient.guilds.fetch).mockResolvedValue(mockGuild);
+
+          await service.sendWarning(guildId, userId, voiceChannelId);
+
+          // First debug call MUST be warning_start
+          const firstDebugCall = mockLogger.debug.mock.calls[0];
+          if (firstDebugCall) {
+            expect(firstDebugCall[0]).toMatchObject({
+              action: 'warning_start',
+            });
+          }
+        });
+      });
+
+      describe('channel resolution logging', () => {
+        it('should log channel resolution with source=configured when using configured channel', async () => {
+          const guildId = 'guild-configured-log';
+          const userId = 'user-configured-log';
+          const voiceChannelId = 'voice-configured-log';
+          const warningChannelId = 'warning-configured-log';
+
+          const config = createMockGuildSettings({
+            guildId,
+            enabled: true,
+            warningChannelId,
+          });
+
+          const mockSend = vi.fn().mockResolvedValue({ id: 'message-123' });
+          const mockPermissions = new PermissionsBitField([PermissionFlagsBits.SendMessages]);
+          const mockBotMember = { id: 'bot-member-id' } as GuildMember;
+
+          const mockWarningChannel = {
+            id: warningChannelId,
+            type: ChannelType.GuildText,
+            send: mockSend,
+            permissionsFor: vi.fn().mockReturnValue(mockPermissions),
+          } as unknown as TextChannel;
+
+          const mockChannelCollection = new Collection<string, GuildBasedChannel>();
+          mockChannelCollection.set(warningChannelId, mockWarningChannel);
+
+          const mockGuild = {
+            id: guildId,
+            channels: {
+              cache: mockChannelCollection,
+            },
+            members: {
+              me: mockBotMember,
+            },
+          } as unknown as Guild;
+
+          vi.mocked(mockConfigService.getConfig).mockReturnValue(config);
+          vi.mocked(mockClient.guilds.fetch).mockResolvedValue(mockGuild);
+
+          await service.sendWarning(guildId, userId, voiceChannelId);
+
+          // MUST log which channel resolution strategy was used
+          expect(mockLogger.debug).toHaveBeenCalledWith(
+            expect.objectContaining({
+              action: 'channel_resolve',
+              source: 'configured',
+              channelId: warningChannelId,
+            }),
+            expect.any(String)
+          );
+        });
+
+        it('should log channel resolution with source=system when falling back to system channel', async () => {
+          const guildId = 'guild-system-log';
+          const userId = 'user-system-log';
+          const voiceChannelId = 'voice-system-log';
+          const systemChannelId = 'system-channel-log';
+
+          const config = createMockGuildSettings({
+            guildId,
+            enabled: true,
+            warningChannelId: null, // No configured channel
+          });
+
+          const mockSend = vi.fn().mockResolvedValue({ id: 'message-123' });
+          const mockPermissions = new PermissionsBitField([PermissionFlagsBits.SendMessages]);
+          const mockBotMember = { id: 'bot-member-id' } as GuildMember;
+
+          const mockSystemChannel = {
+            id: systemChannelId,
+            type: ChannelType.GuildText,
+            send: mockSend,
+            permissionsFor: vi.fn().mockReturnValue(mockPermissions),
+          } as unknown as TextChannel;
+
+          const mockChannelCollection = new Collection<string, GuildBasedChannel>();
+          mockChannelCollection.set(systemChannelId, mockSystemChannel);
+
+          const mockGuild = {
+            id: guildId,
+            channels: {
+              cache: mockChannelCollection,
+            },
+            systemChannel: mockSystemChannel,
+            members: {
+              me: mockBotMember,
+            },
+          } as unknown as Guild;
+
+          vi.mocked(mockConfigService.getConfig).mockReturnValue(config);
+          vi.mocked(mockClient.guilds.fetch).mockResolvedValue(mockGuild);
+
+          await service.sendWarning(guildId, userId, voiceChannelId);
+
+          // MUST log system channel fallback
+          expect(mockLogger.debug).toHaveBeenCalledWith(
+            expect.objectContaining({
+              action: 'channel_resolve',
+              source: 'system',
+              channelId: systemChannelId,
+            }),
+            expect.any(String)
+          );
+        });
+
+        it('should log channel resolution with source=first_text when using first text channel', async () => {
+          const guildId = 'guild-first-text-log';
+          const userId = 'user-first-text-log';
+          const voiceChannelId = 'voice-first-text-log';
+          const firstTextChannelId = 'first-text-log-456';
+
+          const config = createMockGuildSettings({
+            guildId,
+            enabled: true,
+            warningChannelId: null, // No configured channel
+          });
+
+          const mockSend = vi.fn().mockResolvedValue({ id: 'message-123' });
+          const mockPermissions = new PermissionsBitField([PermissionFlagsBits.SendMessages]);
+          const mockBotMember = { id: 'bot-member-id' } as GuildMember;
+
+          const mockVoiceChannel = {
+            id: 'voice-other-log',
+            type: ChannelType.GuildVoice,
+          } as unknown as GuildBasedChannel;
+
+          const mockFirstTextChannel = {
+            id: firstTextChannelId,
+            type: ChannelType.GuildText,
+            send: mockSend,
+            permissionsFor: vi.fn().mockReturnValue(mockPermissions),
+          } as unknown as TextChannel;
+
+          const mockChannelCollection = new Collection<string, GuildBasedChannel>();
+          mockChannelCollection.set('voice-other-log', mockVoiceChannel);
+          mockChannelCollection.set(firstTextChannelId, mockFirstTextChannel);
+
+          const mockGuild = {
+            id: guildId,
+            channels: {
+              cache: mockChannelCollection,
+            },
+            systemChannel: null,
+            members: {
+              me: mockBotMember,
+            },
+          } as unknown as Guild;
+
+          vi.mocked(mockConfigService.getConfig).mockReturnValue(config);
+          vi.mocked(mockClient.guilds.fetch).mockResolvedValue(mockGuild);
+
+          await service.sendWarning(guildId, userId, voiceChannelId);
+
+          // MUST log first text channel fallback
+          expect(mockLogger.debug).toHaveBeenCalledWith(
+            expect.objectContaining({
+              action: 'channel_resolve',
+              source: 'first_text',
+              channelId: firstTextChannelId,
+            }),
+            expect.any(String)
+          );
+        });
+
+        it('should log channel resolution failure when no channel found', async () => {
+          const guildId = 'guild-no-channel-log';
+          const userId = 'user-no-channel-log';
+          const voiceChannelId = 'voice-no-channel-log';
+
+          const config = createMockGuildSettings({
+            guildId,
+            enabled: true,
+            warningChannelId: null,
+          });
+
+          const mockChannelCollection = new Collection<string, GuildBasedChannel>();
+          // No text channels in guild
+
+          const mockGuild = {
+            id: guildId,
+            channels: {
+              cache: mockChannelCollection,
+            },
+            systemChannel: null,
+            members: {
+              me: { id: 'bot-id' } as GuildMember,
+            },
+          } as unknown as Guild;
+
+          vi.mocked(mockConfigService.getConfig).mockReturnValue(config);
+          vi.mocked(mockClient.guilds.fetch).mockResolvedValue(mockGuild);
+
+          await service.sendWarning(guildId, userId, voiceChannelId);
+
+          // MUST log channel resolution failure
+          expect(mockLogger.debug).toHaveBeenCalledWith(
+            expect.objectContaining({
+              action: 'channel_resolve',
+              source: 'none',
+            }),
+            expect.any(String)
+          );
+        });
+
+        it('should log when configured channel not found and falls back', async () => {
+          const guildId = 'guild-configured-missing';
+          const userId = 'user-configured-missing';
+          const voiceChannelId = 'voice-configured-missing';
+          const warningChannelId = 'warning-nonexistent';
+          const systemChannelId = 'system-fallback-456';
+
+          const config = createMockGuildSettings({
+            guildId,
+            enabled: true,
+            warningChannelId, // Configured but doesn't exist
+          });
+
+          const mockSend = vi.fn().mockResolvedValue({ id: 'message-123' });
+          const mockPermissions = new PermissionsBitField([PermissionFlagsBits.SendMessages]);
+          const mockBotMember = { id: 'bot-member-id' } as GuildMember;
+
+          const mockSystemChannel = {
+            id: systemChannelId,
+            type: ChannelType.GuildText,
+            send: mockSend,
+            permissionsFor: vi.fn().mockReturnValue(mockPermissions),
+          } as unknown as TextChannel;
+
+          const mockChannelCollection = new Collection<string, GuildBasedChannel>();
+          // Configured channel NOT in collection
+          mockChannelCollection.set(systemChannelId, mockSystemChannel);
+
+          const mockGuild = {
+            id: guildId,
+            channels: {
+              cache: mockChannelCollection,
+            },
+            systemChannel: mockSystemChannel,
+            members: {
+              me: mockBotMember,
+            },
+          } as unknown as Guild;
+
+          vi.mocked(mockConfigService.getConfig).mockReturnValue(config);
+          vi.mocked(mockClient.guilds.fetch).mockResolvedValue(mockGuild);
+
+          await service.sendWarning(guildId, userId, voiceChannelId);
+
+          // MUST log that configured channel was not found
+          expect(mockLogger.debug).toHaveBeenCalledWith(
+            expect.objectContaining({
+              action: 'channel_resolve',
+              configuredChannelId: warningChannelId,
+              configuredChannelFound: false,
+            }),
+            expect.any(String)
+          );
+
+          // MUST also log the fallback resolution
+          expect(mockLogger.debug).toHaveBeenCalledWith(
+            expect.objectContaining({
+              action: 'channel_resolve',
+              source: 'system',
+              channelId: systemChannelId,
+            }),
+            expect.any(String)
+          );
+        });
+      });
+
+      describe('permission check logging', () => {
+        it('should log permission check with action=permission_check when bot has permissions', async () => {
+          const guildId = 'guild-perm-log-yes';
+          const userId = 'user-perm-log-yes';
+          const voiceChannelId = 'voice-perm-log-yes';
+          const warningChannelId = 'warning-perm-log-yes';
+
+          const config = createMockGuildSettings({
+            guildId,
+            enabled: true,
+            warningChannelId,
+          });
+
+          const mockSend = vi.fn().mockResolvedValue({ id: 'message-123' });
+          const mockPermissions = new PermissionsBitField([PermissionFlagsBits.SendMessages]);
+          const mockBotMember = { id: 'bot-member-id' } as GuildMember;
+
+          const mockWarningChannel = {
+            id: warningChannelId,
+            type: ChannelType.GuildText,
+            send: mockSend,
+            permissionsFor: vi.fn().mockReturnValue(mockPermissions),
+          } as unknown as TextChannel;
+
+          const mockChannelCollection = new Collection<string, GuildBasedChannel>();
+          mockChannelCollection.set(warningChannelId, mockWarningChannel);
+
+          const mockGuild = {
+            id: guildId,
+            channels: {
+              cache: mockChannelCollection,
+            },
+            members: {
+              me: mockBotMember,
+            },
+          } as unknown as Guild;
+
+          vi.mocked(mockConfigService.getConfig).mockReturnValue(config);
+          vi.mocked(mockClient.guilds.fetch).mockResolvedValue(mockGuild);
+
+          await service.sendWarning(guildId, userId, voiceChannelId);
+
+          // MUST log permission check result
+          expect(mockLogger.debug).toHaveBeenCalledWith(
+            expect.objectContaining({
+              action: 'permission_check',
+              channelId: warningChannelId,
+              hasPermission: true,
+            }),
+            expect.any(String)
+          );
+        });
+
+        it('should log permission check with hasPermission=false when lacking permissions', async () => {
+          const guildId = 'guild-perm-log-no';
+          const userId = 'user-perm-log-no';
+          const voiceChannelId = 'voice-perm-log-no';
+          const warningChannelId = 'warning-perm-log-no';
+
+          const config = createMockGuildSettings({
+            guildId,
+            enabled: true,
+            warningChannelId,
+          });
+
+          const mockSend = vi.fn();
+          const mockPermissions = new PermissionsBitField([PermissionFlagsBits.ViewChannel]);
+          const mockBotMember = { id: 'bot-member-id' } as GuildMember;
+
+          const mockWarningChannel = {
+            id: warningChannelId,
+            type: ChannelType.GuildText,
+            send: mockSend,
+            permissionsFor: vi.fn().mockReturnValue(mockPermissions),
+          } as unknown as TextChannel;
+
+          const mockChannelCollection = new Collection<string, GuildBasedChannel>();
+          mockChannelCollection.set(warningChannelId, mockWarningChannel);
+
+          const mockGuild = {
+            id: guildId,
+            channels: {
+              cache: mockChannelCollection,
+            },
+            members: {
+              me: mockBotMember,
+            },
+          } as unknown as Guild;
+
+          vi.mocked(mockConfigService.getConfig).mockReturnValue(config);
+          vi.mocked(mockClient.guilds.fetch).mockResolvedValue(mockGuild);
+
+          await service.sendWarning(guildId, userId, voiceChannelId);
+
+          // MUST log permission check failure
+          expect(mockLogger.debug).toHaveBeenCalledWith(
+            expect.objectContaining({
+              action: 'permission_check',
+              channelId: warningChannelId,
+              hasPermission: false,
+            }),
+            expect.any(String)
+          );
+        });
+
+        it('should log permission check when permissionsFor returns null', async () => {
+          const guildId = 'guild-perm-null';
+          const userId = 'user-perm-null';
+          const voiceChannelId = 'voice-perm-null';
+          const warningChannelId = 'warning-perm-null';
+
+          const config = createMockGuildSettings({
+            guildId,
+            enabled: true,
+            warningChannelId,
+          });
+
+          const mockSend = vi.fn();
+          const mockBotMember = { id: 'bot-member-id' } as GuildMember;
+
+          const mockWarningChannel = {
+            id: warningChannelId,
+            type: ChannelType.GuildText,
+            send: mockSend,
+            permissionsFor: vi.fn().mockReturnValue(null),
+          } as unknown as TextChannel;
+
+          const mockChannelCollection = new Collection<string, GuildBasedChannel>();
+          mockChannelCollection.set(warningChannelId, mockWarningChannel);
+
+          const mockGuild = {
+            id: guildId,
+            channels: {
+              cache: mockChannelCollection,
+            },
+            members: {
+              me: mockBotMember,
+            },
+          } as unknown as Guild;
+
+          vi.mocked(mockConfigService.getConfig).mockReturnValue(config);
+          vi.mocked(mockClient.guilds.fetch).mockResolvedValue(mockGuild);
+
+          await service.sendWarning(guildId, userId, voiceChannelId);
+
+          // MUST log when permissions cannot be determined
+          expect(mockLogger.debug).toHaveBeenCalledWith(
+            expect.objectContaining({
+              action: 'permission_check',
+              channelId: warningChannelId,
+              hasPermission: false,
+              permissionsNull: true,
+            }),
+            expect.any(String)
+          );
+        });
+      });
+
+      describe('message send logging', () => {
+        it('should log message send attempt with action=message_send', async () => {
+          const guildId = 'guild-send-log';
+          const userId = 'user-send-log';
+          const voiceChannelId = 'voice-send-log';
+          const warningChannelId = 'warning-send-log';
+
+          const config = createMockGuildSettings({
+            guildId,
+            enabled: true,
+            warningChannelId,
+          });
+
+          const mockSend = vi.fn().mockResolvedValue({ id: 'message-123' });
+          const mockPermissions = new PermissionsBitField([PermissionFlagsBits.SendMessages]);
+          const mockBotMember = { id: 'bot-member-id' } as GuildMember;
+
+          const mockWarningChannel = {
+            id: warningChannelId,
+            type: ChannelType.GuildText,
+            send: mockSend,
+            permissionsFor: vi.fn().mockReturnValue(mockPermissions),
+          } as unknown as TextChannel;
+
+          const mockChannelCollection = new Collection<string, GuildBasedChannel>();
+          mockChannelCollection.set(warningChannelId, mockWarningChannel);
+
+          const mockGuild = {
+            id: guildId,
+            channels: {
+              cache: mockChannelCollection,
+            },
+            members: {
+              me: mockBotMember,
+            },
+          } as unknown as Guild;
+
+          vi.mocked(mockConfigService.getConfig).mockReturnValue(config);
+          vi.mocked(mockClient.guilds.fetch).mockResolvedValue(mockGuild);
+
+          await service.sendWarning(guildId, userId, voiceChannelId);
+
+          // MUST log message send attempt BEFORE actually sending
+          expect(mockLogger.debug).toHaveBeenCalledWith(
+            expect.objectContaining({
+              action: 'message_send',
+              channelId: warningChannelId,
+              userId,
+              voiceChannelId,
+            }),
+            expect.any(String)
+          );
+        });
+
+        it('should log message send attempt occurs after permission check', async () => {
+          const guildId = 'guild-send-order';
+          const userId = 'user-send-order';
+          const voiceChannelId = 'voice-send-order';
+          const warningChannelId = 'warning-send-order';
+
+          const config = createMockGuildSettings({
+            guildId,
+            enabled: true,
+            warningChannelId,
+          });
+
+          const mockSend = vi.fn().mockResolvedValue({ id: 'message-123' });
+          const mockPermissions = new PermissionsBitField([PermissionFlagsBits.SendMessages]);
+          const mockBotMember = { id: 'bot-member-id' } as GuildMember;
+
+          const mockWarningChannel = {
+            id: warningChannelId,
+            type: ChannelType.GuildText,
+            send: mockSend,
+            permissionsFor: vi.fn().mockReturnValue(mockPermissions),
+          } as unknown as TextChannel;
+
+          const mockChannelCollection = new Collection<string, GuildBasedChannel>();
+          mockChannelCollection.set(warningChannelId, mockWarningChannel);
+
+          const mockGuild = {
+            id: guildId,
+            channels: {
+              cache: mockChannelCollection,
+            },
+            members: {
+              me: mockBotMember,
+            },
+          } as unknown as Guild;
+
+          vi.mocked(mockConfigService.getConfig).mockReturnValue(config);
+          vi.mocked(mockClient.guilds.fetch).mockResolvedValue(mockGuild);
+
+          await service.sendWarning(guildId, userId, voiceChannelId);
+
+          // Find indices of permission_check and message_send debug calls
+          const debugCalls = mockLogger.debug.mock.calls;
+          const permissionCheckIndex = debugCalls.findIndex(
+            (call) => call[0]?.action === 'permission_check'
+          );
+          const messageSendIndex = debugCalls.findIndex(
+            (call) => call[0]?.action === 'message_send'
+          );
+
+          // MUST log permission_check before message_send
+          expect(permissionCheckIndex).toBeGreaterThanOrEqual(0);
+          expect(messageSendIndex).toBeGreaterThanOrEqual(0);
+          expect(permissionCheckIndex).toBeLessThan(messageSendIndex);
+        });
+
+        it('should not log message_send when permission check fails', async () => {
+          const guildId = 'guild-no-send-log';
+          const userId = 'user-no-send-log';
+          const voiceChannelId = 'voice-no-send-log';
+          const warningChannelId = 'warning-no-send-log';
+
+          const config = createMockGuildSettings({
+            guildId,
+            enabled: true,
+            warningChannelId,
+          });
+
+          const mockSend = vi.fn();
+          const mockPermissions = new PermissionsBitField([PermissionFlagsBits.ViewChannel]);
+          const mockBotMember = { id: 'bot-member-id' } as GuildMember;
+
+          const mockWarningChannel = {
+            id: warningChannelId,
+            type: ChannelType.GuildText,
+            send: mockSend,
+            permissionsFor: vi.fn().mockReturnValue(mockPermissions),
+          } as unknown as TextChannel;
+
+          const mockChannelCollection = new Collection<string, GuildBasedChannel>();
+          mockChannelCollection.set(warningChannelId, mockWarningChannel);
+
+          const mockGuild = {
+            id: guildId,
+            channels: {
+              cache: mockChannelCollection,
+            },
+            members: {
+              me: mockBotMember,
+            },
+          } as unknown as Guild;
+
+          vi.mocked(mockConfigService.getConfig).mockReturnValue(config);
+          vi.mocked(mockClient.guilds.fetch).mockResolvedValue(mockGuild);
+
+          await service.sendWarning(guildId, userId, voiceChannelId);
+
+          // MUST NOT log message_send when permissions are lacking
+          const debugCalls = mockLogger.debug.mock.calls;
+          const messageSendCall = debugCalls.find(
+            (call) => call[0]?.action === 'message_send'
+          );
+          expect(messageSendCall).toBeUndefined();
+        });
+      });
+
+      describe('complete debug logging flow', () => {
+        it('should log all debug actions in correct order for successful warning', async () => {
+          const guildId = 'guild-complete-flow';
+          const userId = 'user-complete-flow';
+          const voiceChannelId = 'voice-complete-flow';
+          const warningChannelId = 'warning-complete-flow';
+
+          const config = createMockGuildSettings({
+            guildId,
+            enabled: true,
+            warningChannelId,
+          });
+
+          const mockSend = vi.fn().mockResolvedValue({ id: 'message-123' });
+          const mockPermissions = new PermissionsBitField([PermissionFlagsBits.SendMessages]);
+          const mockBotMember = { id: 'bot-member-id' } as GuildMember;
+
+          const mockWarningChannel = {
+            id: warningChannelId,
+            type: ChannelType.GuildText,
+            send: mockSend,
+            permissionsFor: vi.fn().mockReturnValue(mockPermissions),
+          } as unknown as TextChannel;
+
+          const mockChannelCollection = new Collection<string, GuildBasedChannel>();
+          mockChannelCollection.set(warningChannelId, mockWarningChannel);
+
+          const mockGuild = {
+            id: guildId,
+            channels: {
+              cache: mockChannelCollection,
+            },
+            members: {
+              me: mockBotMember,
+            },
+          } as unknown as Guild;
+
+          vi.mocked(mockConfigService.getConfig).mockReturnValue(config);
+          vi.mocked(mockClient.guilds.fetch).mockResolvedValue(mockGuild);
+
+          await service.sendWarning(guildId, userId, voiceChannelId);
+
+          // MUST have all four debug log actions in correct order
+          const debugCalls = mockLogger.debug.mock.calls;
+          const actions = debugCalls.map((call) => call[0]?.action);
+
+          const warningStartIndex = actions.indexOf('warning_start');
+          const channelResolveIndex = actions.indexOf('channel_resolve');
+          const permissionCheckIndex = actions.indexOf('permission_check');
+          const messageSendIndex = actions.indexOf('message_send');
+
+          // All actions must be present
+          expect(warningStartIndex).toBeGreaterThanOrEqual(0);
+          expect(channelResolveIndex).toBeGreaterThanOrEqual(0);
+          expect(permissionCheckIndex).toBeGreaterThanOrEqual(0);
+          expect(messageSendIndex).toBeGreaterThanOrEqual(0);
+
+          // Actions must occur in order
+          expect(warningStartIndex).toBeLessThan(channelResolveIndex);
+          expect(channelResolveIndex).toBeLessThan(permissionCheckIndex);
+          expect(permissionCheckIndex).toBeLessThan(messageSendIndex);
+        });
+
+        it('should include all context fields in debug logs', async () => {
+          const guildId = 'guild-context-test';
+          const userId = 'user-context-test';
+          const voiceChannelId = 'voice-context-test';
+          const warningChannelId = 'warning-context-test';
+
+          const config = createMockGuildSettings({
+            guildId,
+            enabled: true,
+            warningChannelId,
+            warningSecondsBefore: 90,
+          });
+
+          const mockSend = vi.fn().mockResolvedValue({ id: 'message-123' });
+          const mockPermissions = new PermissionsBitField([PermissionFlagsBits.SendMessages]);
+          const mockBotMember = { id: 'bot-member-id' } as GuildMember;
+
+          const mockWarningChannel = {
+            id: warningChannelId,
+            type: ChannelType.GuildText,
+            send: mockSend,
+            permissionsFor: vi.fn().mockReturnValue(mockPermissions),
+          } as unknown as TextChannel;
+
+          const mockChannelCollection = new Collection<string, GuildBasedChannel>();
+          mockChannelCollection.set(warningChannelId, mockWarningChannel);
+
+          const mockGuild = {
+            id: guildId,
+            channels: {
+              cache: mockChannelCollection,
+            },
+            members: {
+              me: mockBotMember,
+            },
+          } as unknown as Guild;
+
+          vi.mocked(mockConfigService.getConfig).mockReturnValue(config);
+          vi.mocked(mockClient.guilds.fetch).mockResolvedValue(mockGuild);
+
+          await service.sendWarning(guildId, userId, voiceChannelId);
+
+          // All debug logs should include guildId context
+          const debugCalls = mockLogger.debug.mock.calls;
+          debugCalls.forEach((call) => {
+            expect(call[0]).toHaveProperty('guildId', guildId);
+          });
+
+          // message_send should include all relevant IDs
+          const messageSendCall = debugCalls.find(
+            (call) => call[0]?.action === 'message_send'
+          );
+          expect(messageSendCall?.[0]).toMatchObject({
+            action: 'message_send',
+            guildId,
+            userId,
+            voiceChannelId,
+            channelId: warningChannelId,
+          });
+        });
+      });
+    });
   });
 });

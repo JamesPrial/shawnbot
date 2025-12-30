@@ -48,7 +48,9 @@ export class SpeakingTracker extends EventEmitter {
     const receiver = connection.receiver;
 
     receiver.speaking.on('start', (userId: string) => {
-      this.logger.debug({ userId, guildId }, 'User started speaking');
+      if (this.logger.isLevelEnabled('debug')) {
+        this.logger.debug({ userId, guildId, action: 'speaking_start' }, 'User started speaking');
+      }
       try {
         this.emit('userStartedSpeaking', userId, guildId);
       } catch (error) {
@@ -57,7 +59,9 @@ export class SpeakingTracker extends EventEmitter {
     });
 
     receiver.speaking.on('end', (userId: string) => {
-      this.logger.debug({ userId, guildId }, 'User stopped speaking');
+      if (this.logger.isLevelEnabled('debug')) {
+        this.logger.debug({ userId, guildId, action: 'speaking_stop' }, 'User stopped speaking');
+      }
       try {
         this.emit('userStoppedSpeaking', userId, guildId);
       } catch (error) {
@@ -66,6 +70,9 @@ export class SpeakingTracker extends EventEmitter {
     });
 
     this.logger.info({ guildId }, 'Voice connection registered for speaking tracking');
+    if (this.logger.isLevelEnabled('debug')) {
+      this.logger.debug({ guildId, action: 'tracker_register' }, 'Registered speaking tracker for connection');
+    }
   }
 
   public unregisterConnection(guildId: string): void {

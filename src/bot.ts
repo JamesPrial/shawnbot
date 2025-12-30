@@ -58,7 +58,7 @@ export async function createBot(): Promise<BotDependencies> {
     ],
   });
 
-  const guildConfigService = new GuildConfigService(repository);
+  const guildConfigService = new GuildConfigService(repository, logger);
   const speakingTracker = new SpeakingTracker(logger);
   const voiceConnectionManager = new VoiceConnectionManager(
     speakingTracker,
@@ -83,30 +83,40 @@ export async function createBot(): Promise<BotDependencies> {
   );
 
   speakingTracker.on('userStartedSpeaking', async (userId: string, guildId: string) => {
-    logger.debug({ userId, guildId }, 'User started speaking, resetting AFK timer');
+    if (logger.isLevelEnabled('debug')) {
+      logger.debug({ userId, guildId, action: 'speaking_start' }, 'User started speaking, resetting AFK timer');
+    }
 
     try {
       const guild = client.guilds.cache.get(guildId);
       if (!guild) {
-        logger.debug({ userId, guildId }, 'Guild not in cache, skipping reset');
+        if (logger.isLevelEnabled('debug')) {
+          logger.debug({ userId, guildId }, 'Guild not in cache, skipping reset');
+        }
         return;
       }
 
       const member = guild.members.cache.get(userId);
       if (!member) {
-        logger.debug({ userId, guildId }, 'Member not in cache, skipping reset');
+        if (logger.isLevelEnabled('debug')) {
+          logger.debug({ userId, guildId }, 'Member not in cache, skipping reset');
+        }
         return;
       }
 
       const voiceChannel = member.voice?.channel;
       if (!voiceChannel) {
-        logger.debug({ userId, guildId }, 'Member not in voice channel, skipping reset');
+        if (logger.isLevelEnabled('debug')) {
+          logger.debug({ userId, guildId }, 'Member not in voice channel, skipping reset');
+        }
         return;
       }
 
       const nonBotCount = voiceChannel.members.filter((m) => !m.user.bot).size;
       if (nonBotCount < MIN_USERS_FOR_AFK_TRACKING) {
-        logger.debug({ userId, guildId, nonBotCount }, 'Below threshold, skipping reset');
+        if (logger.isLevelEnabled('debug')) {
+          logger.debug({ userId, guildId, nonBotCount }, 'Below threshold, skipping reset');
+        }
         return;
       }
 
@@ -117,36 +127,48 @@ export async function createBot(): Promise<BotDependencies> {
   });
 
   speakingTracker.on('userStoppedSpeaking', async (userId: string, guildId: string) => {
-    logger.debug({ userId, guildId }, 'User stopped speaking, starting AFK tracking');
+    if (logger.isLevelEnabled('debug')) {
+      logger.debug({ userId, guildId, action: 'speaking_stop' }, 'User stopped speaking, starting AFK tracking');
+    }
 
     try {
       const guild = client.guilds.cache.get(guildId);
       if (!guild) {
-        logger.debug({ userId, guildId }, 'Guild not in cache, skipping tracking');
+        if (logger.isLevelEnabled('debug')) {
+          logger.debug({ userId, guildId }, 'Guild not in cache, skipping tracking');
+        }
         return;
       }
 
       const member = guild.members.cache.get(userId);
       if (!member) {
-        logger.debug({ userId, guildId }, 'Member not in cache, skipping tracking');
+        if (logger.isLevelEnabled('debug')) {
+          logger.debug({ userId, guildId }, 'Member not in cache, skipping tracking');
+        }
         return;
       }
 
       const voiceChannel = member.voice?.channel;
       if (!voiceChannel) {
-        logger.debug({ userId, guildId }, 'Member not in voice channel, skipping tracking');
+        if (logger.isLevelEnabled('debug')) {
+          logger.debug({ userId, guildId }, 'Member not in voice channel, skipping tracking');
+        }
         return;
       }
 
       const nonBotCount = voiceChannel.members.filter((m) => !m.user.bot).size;
       if (nonBotCount < MIN_USERS_FOR_AFK_TRACKING) {
-        logger.debug({ userId, guildId, nonBotCount }, 'Below threshold, skipping tracking');
+        if (logger.isLevelEnabled('debug')) {
+          logger.debug({ userId, guildId, nonBotCount }, 'Below threshold, skipping tracking');
+        }
         return;
       }
 
       // Skip if already tracking - avoids duplicate starts after threshold events
       if (afkDetectionService.isTracking(guildId, userId)) {
-        logger.debug({ userId, guildId }, 'Already tracking user, skipping');
+        if (logger.isLevelEnabled('debug')) {
+          logger.debug({ userId, guildId }, 'Already tracking user, skipping');
+        }
         return;
       }
 
