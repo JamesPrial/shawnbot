@@ -47,6 +47,9 @@ describe('VoiceMonitorService', () => {
         const mockChannel = {
           id: channelId,
           guild: { id: guildId },
+          members: new Collection([
+            ['user1', { user: { bot: false } } as GuildMember],
+          ]),
         } as VoiceBasedChannel;
 
         vi.mocked(mockGuildConfig.getConfig).mockReturnValue(createMockGuildSettings({ enabled: true, guildId }));
@@ -63,6 +66,9 @@ describe('VoiceMonitorService', () => {
         const mockChannel = {
           id: channelId,
           guild: { id: guildId },
+          members: new Collection([
+            ['user1', { user: { bot: false } } as GuildMember],
+          ]),
         } as VoiceBasedChannel;
 
         vi.mocked(mockGuildConfig.getConfig).mockReturnValue(createMockGuildSettings({ enabled: true, guildId }));
@@ -79,6 +85,9 @@ describe('VoiceMonitorService', () => {
         const mockChannel = {
           id: channelId,
           guild: { id: guildId },
+          members: new Collection([
+            ['user1', { user: { bot: false } } as GuildMember],
+          ]),
         } as VoiceBasedChannel;
 
         vi.mocked(mockGuildConfig.getConfig).mockReturnValue(createMockGuildSettings({ enabled: true, guildId }));
@@ -100,6 +109,9 @@ describe('VoiceMonitorService', () => {
         const mockChannel = {
           id: channelId,
           guild: { id: guildId },
+          members: new Collection([
+            ['user1', { user: { bot: false } } as GuildMember],
+          ]),
         } as VoiceBasedChannel;
 
         const disabledConfig = createMockGuildSettings({ enabled: false, guildId });
@@ -118,6 +130,9 @@ describe('VoiceMonitorService', () => {
         const mockChannel = {
           id: channelId,
           guild: { id: guildId },
+          members: new Collection([
+            ['user1', { user: { bot: false } } as GuildMember],
+          ]),
         } as VoiceBasedChannel;
 
         const disabledConfig = createMockGuildSettings({ enabled: false, guildId });
@@ -1523,6 +1538,672 @@ describe('VoiceMonitorService', () => {
 
         // Should not join channels in disabled guilds
         expect(mockConnectionManager.joinChannel).not.toHaveBeenCalled();
+      });
+    });
+  });
+
+  describe('WU-4: structured debug logging with action metadata', () => {
+    describe('handleUserJoin logging', () => {
+      it('should log user_join with action and memberCount metadata', async () => {
+        const guildId = 'test-guild';
+        const channelId = 'test-channel';
+        const memberCount = 5;
+
+        const mockChannel = {
+          id: channelId,
+          guild: { id: guildId },
+          members: new Collection([
+            ['user1', { user: { bot: false } } as GuildMember],
+            ['user2', { user: { bot: false } } as GuildMember],
+            ['user3', { user: { bot: false } } as GuildMember],
+            ['user4', { user: { bot: false } } as GuildMember],
+            ['user5', { user: { bot: false } } as GuildMember],
+          ]),
+        } as VoiceBasedChannel;
+
+        vi.mocked(mockGuildConfig.getConfig).mockReturnValue(createMockGuildSettings({ enabled: true, guildId }));
+        vi.mocked(mockConnectionManager.hasConnection).mockReturnValue(false);
+
+        await service.handleUserJoin(mockChannel);
+
+        // Verify the first debug log includes action and memberCount
+        expect(mockLogger.debug).toHaveBeenCalledWith(
+          expect.objectContaining({
+            guildId,
+            channelId,
+            action: 'user_join',
+            memberCount: 5,
+          }),
+          'Handling user join to voice channel'
+        );
+      });
+
+      it('should correctly count non-bot members for memberCount', async () => {
+        const guildId = 'test-guild';
+        const channelId = 'test-channel';
+
+        const mockChannel = {
+          id: channelId,
+          guild: { id: guildId },
+          members: new Collection([
+            ['user1', { user: { bot: false } } as GuildMember],
+            ['user2', { user: { bot: false } } as GuildMember],
+            ['bot1', { user: { bot: true } } as GuildMember],
+            ['bot2', { user: { bot: true } } as GuildMember],
+          ]),
+        } as VoiceBasedChannel;
+
+        vi.mocked(mockGuildConfig.getConfig).mockReturnValue(createMockGuildSettings({ enabled: true, guildId }));
+        vi.mocked(mockConnectionManager.hasConnection).mockReturnValue(false);
+
+        await service.handleUserJoin(mockChannel);
+
+        // Should count only the 2 non-bot members
+        expect(mockLogger.debug).toHaveBeenCalledWith(
+          expect.objectContaining({
+            action: 'user_join',
+            memberCount: 2,
+          }),
+          expect.any(String)
+        );
+      });
+
+      it('should log memberCount of 0 when channel has only bots', async () => {
+        const guildId = 'test-guild';
+        const channelId = 'test-channel';
+
+        const mockChannel = {
+          id: channelId,
+          guild: { id: guildId },
+          members: new Collection([
+            ['bot1', { user: { bot: true } } as GuildMember],
+            ['bot2', { user: { bot: true } } as GuildMember],
+          ]),
+        } as VoiceBasedChannel;
+
+        vi.mocked(mockGuildConfig.getConfig).mockReturnValue(createMockGuildSettings({ enabled: true, guildId }));
+        vi.mocked(mockConnectionManager.hasConnection).mockReturnValue(false);
+
+        await service.handleUserJoin(mockChannel);
+
+        expect(mockLogger.debug).toHaveBeenCalledWith(
+          expect.objectContaining({
+            action: 'user_join',
+            memberCount: 0,
+          }),
+          expect.any(String)
+        );
+      });
+
+      it('should log memberCount of 1 when single user joins', async () => {
+        const guildId = 'test-guild';
+        const channelId = 'test-channel';
+
+        const mockChannel = {
+          id: channelId,
+          guild: { id: guildId },
+          members: new Collection([
+            ['user1', { user: { bot: false } } as GuildMember],
+          ]),
+        } as VoiceBasedChannel;
+
+        vi.mocked(mockGuildConfig.getConfig).mockReturnValue(createMockGuildSettings({ enabled: true, guildId }));
+        vi.mocked(mockConnectionManager.hasConnection).mockReturnValue(false);
+
+        await service.handleUserJoin(mockChannel);
+
+        expect(mockLogger.debug).toHaveBeenCalledWith(
+          expect.objectContaining({
+            action: 'user_join',
+            memberCount: 1,
+          }),
+          expect.any(String)
+        );
+      });
+
+      it('should log even when monitoring is disabled', async () => {
+        const guildId = 'disabled-guild';
+        const channelId = 'test-channel';
+
+        const mockChannel = {
+          id: channelId,
+          guild: { id: guildId },
+          members: new Collection([
+            ['user1', { user: { bot: false } } as GuildMember],
+          ]),
+        } as VoiceBasedChannel;
+
+        vi.mocked(mockGuildConfig.getConfig).mockReturnValue(createMockGuildSettings({ enabled: false, guildId }));
+
+        await service.handleUserJoin(mockChannel);
+
+        // Should still log the user_join action even if monitoring is disabled
+        expect(mockLogger.debug).toHaveBeenCalledWith(
+          expect.objectContaining({
+            action: 'user_join',
+            memberCount: 1,
+          }),
+          'Handling user join to voice channel'
+        );
+      });
+    });
+
+    describe('handleUserLeave logging', () => {
+      it('should log user_leave with action metadata', async () => {
+        const guildId = 'test-guild';
+        const channelId = 'test-channel';
+
+        const mockChannel = {
+          id: channelId,
+          isVoiceBased: () => true,
+          members: new Collection([
+            ['user1', { user: { bot: false } } as GuildMember],
+          ]),
+        };
+
+        const mockGuild = {
+          channels: {
+            fetch: vi.fn().mockResolvedValue(mockChannel),
+          },
+        };
+
+        mockClient.guilds = {
+          fetch: vi.fn().mockResolvedValue(mockGuild),
+        } as any;
+
+        await service.handleUserLeave(guildId, channelId);
+
+        expect(mockLogger.debug).toHaveBeenCalledWith(
+          expect.objectContaining({
+            guildId,
+            channelId,
+            action: 'user_leave',
+          }),
+          'Handling user leave from voice channel'
+        );
+      });
+
+      it('should log user_leave before checking if channel is empty', async () => {
+        const guildId = 'test-guild';
+        const channelId = 'test-channel';
+
+        const mockChannel = {
+          id: channelId,
+          isVoiceBased: () => true,
+          members: new Collection(),
+        };
+
+        const mockGuild = {
+          channels: {
+            fetch: vi.fn().mockResolvedValue(mockChannel),
+          },
+        };
+
+        mockClient.guilds = {
+          fetch: vi.fn().mockResolvedValue(mockGuild),
+        } as any;
+
+        await service.handleUserLeave(guildId, channelId);
+
+        // Get all debug calls
+        const debugCalls = vi.mocked(mockLogger.debug).mock.calls;
+
+        // First call should be the user_leave log
+        expect(debugCalls[0]).toEqual([
+          expect.objectContaining({
+            action: 'user_leave',
+          }),
+          'Handling user leave from voice channel',
+        ]);
+      });
+
+      it('should log user_leave even when errors occur', async () => {
+        const guildId = 'test-guild';
+        const channelId = 'test-channel';
+        const error = new Error('Channel fetch failed');
+
+        const mockGuild = {
+          channels: {
+            fetch: vi.fn().mockRejectedValue(error),
+          },
+        };
+
+        mockClient.guilds = {
+          fetch: vi.fn().mockResolvedValue(mockGuild),
+        } as any;
+
+        await service.handleUserLeave(guildId, channelId);
+
+        // Should still log user_leave before the error
+        expect(mockLogger.debug).toHaveBeenCalledWith(
+          expect.objectContaining({
+            action: 'user_leave',
+          }),
+          'Handling user leave from voice channel'
+        );
+      });
+    });
+
+    describe('scanGuild logging with action metadata', () => {
+      it('should log guild_scan with action and voiceChannelCount', async () => {
+        const guildId = 'test-guild';
+
+        const voiceChannel1: any = {
+          id: 'voice-1',
+          name: 'Voice 1',
+          isVoiceBased: () => true,
+          members: new Collection([
+            ['user1', { user: { bot: false } } as GuildMember],
+            ['user2', { user: { bot: false } } as GuildMember],
+          ]),
+          guild: { id: guildId },
+        };
+
+        const voiceChannel2: any = {
+          id: 'voice-2',
+          name: 'Voice 2',
+          isVoiceBased: () => true,
+          members: new Collection(),
+        };
+
+        const textChannel: any = {
+          id: 'text-1',
+          name: 'Text',
+          isVoiceBased: () => false,
+        };
+
+        const mockGuild: any = {
+          id: guildId,
+          name: 'Test Guild',
+          channels: {
+            fetch: vi.fn().mockResolvedValue(new Collection([
+              ['voice-1', voiceChannel1],
+              ['voice-2', voiceChannel2],
+              ['text-1', textChannel],
+            ])),
+          },
+        };
+
+        vi.mocked(mockGuildConfig.getConfig).mockReturnValue(createMockGuildSettings({ enabled: true, guildId }));
+        vi.mocked(mockConnectionManager.hasConnection).mockReturnValue(false);
+
+        await (service as any).scanGuild(mockGuild);
+
+        // Should log guild_scan with count of 2 voice channels
+        expect(mockLogger.debug).toHaveBeenCalledWith(
+          expect.objectContaining({
+            guildId,
+            action: 'guild_scan',
+            voiceChannelCount: 2,
+          }),
+          'Scanning guild for active voice channels'
+        );
+      });
+
+      it('should count all voice channels including empty ones', async () => {
+        const guildId = 'test-guild';
+
+        const emptyVoice1: any = {
+          id: 'empty-1',
+          isVoiceBased: () => true,
+          members: new Collection(),
+        };
+
+        const emptyVoice2: any = {
+          id: 'empty-2',
+          isVoiceBased: () => true,
+          members: new Collection(),
+        };
+
+        const mockGuild: any = {
+          id: guildId,
+          name: 'Empty Voices Guild',
+          channels: {
+            fetch: vi.fn().mockResolvedValue(new Collection([
+              ['empty-1', emptyVoice1],
+              ['empty-2', emptyVoice2],
+            ])),
+          },
+        };
+
+        vi.mocked(mockGuildConfig.getConfig).mockReturnValue(createMockGuildSettings({ enabled: true, guildId }));
+        vi.mocked(mockConnectionManager.hasConnection).mockReturnValue(false);
+
+        await (service as any).scanGuild(mockGuild);
+
+        expect(mockLogger.debug).toHaveBeenCalledWith(
+          expect.objectContaining({
+            action: 'guild_scan',
+            voiceChannelCount: 2,
+          }),
+          expect.any(String)
+        );
+      });
+
+      it('should log voiceChannelCount of 0 when guild has no voice channels', async () => {
+        const guildId = 'text-only-guild';
+
+        const textChannel: any = {
+          id: 'text-1',
+          isVoiceBased: () => false,
+        };
+
+        const mockGuild: any = {
+          id: guildId,
+          name: 'Text Only Guild',
+          channels: {
+            fetch: vi.fn().mockResolvedValue(new Collection([
+              ['text-1', textChannel],
+            ])),
+          },
+        };
+
+        vi.mocked(mockGuildConfig.getConfig).mockReturnValue(createMockGuildSettings({ enabled: true, guildId }));
+        vi.mocked(mockConnectionManager.hasConnection).mockReturnValue(false);
+
+        await (service as any).scanGuild(mockGuild);
+
+        expect(mockLogger.debug).toHaveBeenCalledWith(
+          expect.objectContaining({
+            action: 'guild_scan',
+            voiceChannelCount: 0,
+          }),
+          expect.any(String)
+        );
+      });
+
+      it('should handle null channels when counting voice channels', async () => {
+        const guildId = 'null-guild';
+
+        const voiceChannel: any = {
+          id: 'voice-1',
+          isVoiceBased: () => true,
+          members: new Collection(),
+        };
+
+        const mockGuild: any = {
+          id: guildId,
+          name: 'Null Guild',
+          channels: {
+            fetch: vi.fn().mockResolvedValue(new Collection([
+              ['null-1', null],
+              ['voice-1', voiceChannel],
+              ['null-2', null],
+            ])),
+          },
+        };
+
+        vi.mocked(mockGuildConfig.getConfig).mockReturnValue(createMockGuildSettings({ enabled: true, guildId }));
+        vi.mocked(mockConnectionManager.hasConnection).mockReturnValue(false);
+
+        await (service as any).scanGuild(mockGuild);
+
+        // Should count only the 1 non-null voice channel
+        expect(mockLogger.debug).toHaveBeenCalledWith(
+          expect.objectContaining({
+            action: 'guild_scan',
+            voiceChannelCount: 1,
+          }),
+          expect.any(String)
+        );
+      });
+    });
+
+    describe('threshold check logging', () => {
+      it('should log threshold_check with action, nonBotCount, and result for each channel', async () => {
+        const guildId = 'test-guild';
+
+        const activeChannel: any = {
+          id: 'active',
+          name: 'Active',
+          isVoiceBased: () => true,
+          members: new Collection([
+            ['user1', { user: { bot: false } } as GuildMember],
+            ['user2', { user: { bot: false } } as GuildMember],
+          ]),
+          guild: { id: guildId },
+        };
+
+        const mockGuild: any = {
+          id: guildId,
+          name: 'Test Guild',
+          channels: {
+            fetch: vi.fn().mockResolvedValue(new Collection([
+              ['active', activeChannel],
+            ])),
+          },
+        };
+
+        vi.mocked(mockGuildConfig.getConfig).mockReturnValue(createMockGuildSettings({ enabled: true, guildId }));
+        vi.mocked(mockConnectionManager.hasConnection).mockReturnValue(false);
+
+        await (service as any).scanGuild(mockGuild);
+
+        // Should log threshold check for the channel
+        expect(mockLogger.debug).toHaveBeenCalledWith(
+          expect.objectContaining({
+            guildId,
+            channelId: 'active',
+            action: 'threshold_check',
+            nonBotCount: 2,
+            threshold: 2, // MIN_USERS_FOR_AFK_TRACKING
+            result: true,
+          }),
+          'Threshold check for AFK tracking'
+        );
+      });
+
+      it('should log threshold_check with result false for channels below threshold', async () => {
+        const guildId = 'test-guild';
+
+        const oneUserChannel: any = {
+          id: 'one-user',
+          name: 'One User',
+          isVoiceBased: () => true,
+          members: new Collection([
+            ['user1', { user: { bot: false } } as GuildMember],
+          ]),
+        };
+
+        const mockGuild: any = {
+          id: guildId,
+          name: 'Test Guild',
+          channels: {
+            fetch: vi.fn().mockResolvedValue(new Collection([
+              ['one-user', oneUserChannel],
+            ])),
+          },
+        };
+
+        vi.mocked(mockGuildConfig.getConfig).mockReturnValue(createMockGuildSettings({ enabled: true, guildId }));
+        vi.mocked(mockConnectionManager.hasConnection).mockReturnValue(false);
+
+        await (service as any).scanGuild(mockGuild);
+
+        expect(mockLogger.debug).toHaveBeenCalledWith(
+          expect.objectContaining({
+            action: 'threshold_check',
+            nonBotCount: 1,
+            result: false,
+          }),
+          expect.any(String)
+        );
+      });
+
+      it('should log threshold_check for multiple channels independently', async () => {
+        const guildId = 'test-guild';
+
+        const channel1: any = {
+          id: 'channel-1',
+          isVoiceBased: () => true,
+          members: new Collection([
+            ['user1', { user: { bot: false } } as GuildMember],
+          ]),
+        };
+
+        const channel2: any = {
+          id: 'channel-2',
+          isVoiceBased: () => true,
+          members: new Collection([
+            ['user1', { user: { bot: false } } as GuildMember],
+            ['user2', { user: { bot: false } } as GuildMember],
+            ['user3', { user: { bot: false } } as GuildMember],
+          ]),
+          guild: { id: guildId },
+        };
+
+        const mockGuild: any = {
+          id: guildId,
+          name: 'Multi Channel Guild',
+          channels: {
+            fetch: vi.fn().mockResolvedValue(new Collection([
+              ['channel-1', channel1],
+              ['channel-2', channel2],
+            ])),
+          },
+        };
+
+        vi.mocked(mockGuildConfig.getConfig).mockReturnValue(createMockGuildSettings({ enabled: true, guildId }));
+        vi.mocked(mockConnectionManager.hasConnection).mockReturnValue(false);
+
+        await (service as any).scanGuild(mockGuild);
+
+        // Should log threshold check for channel-1 (below threshold)
+        expect(mockLogger.debug).toHaveBeenCalledWith(
+          expect.objectContaining({
+            channelId: 'channel-1',
+            action: 'threshold_check',
+            nonBotCount: 1,
+            result: false,
+          }),
+          expect.any(String)
+        );
+
+        // Should log threshold check for channel-2 (above threshold)
+        expect(mockLogger.debug).toHaveBeenCalledWith(
+          expect.objectContaining({
+            channelId: 'channel-2',
+            action: 'threshold_check',
+            nonBotCount: 3,
+            result: true,
+          }),
+          expect.any(String)
+        );
+      });
+
+      it('should exclude bots from nonBotCount in threshold check', async () => {
+        const guildId = 'test-guild';
+
+        const mixedChannel: any = {
+          id: 'mixed',
+          isVoiceBased: () => true,
+          members: new Collection([
+            ['user1', { user: { bot: false } } as GuildMember],
+            ['user2', { user: { bot: false } } as GuildMember],
+            ['bot1', { user: { bot: true } } as GuildMember],
+            ['bot2', { user: { bot: true } } as GuildMember],
+            ['bot3', { user: { bot: true } } as GuildMember],
+          ]),
+          guild: { id: guildId },
+        };
+
+        const mockGuild: any = {
+          id: guildId,
+          name: 'Mixed Guild',
+          channels: {
+            fetch: vi.fn().mockResolvedValue(new Collection([
+              ['mixed', mixedChannel],
+            ])),
+          },
+        };
+
+        vi.mocked(mockGuildConfig.getConfig).mockReturnValue(createMockGuildSettings({ enabled: true, guildId }));
+        vi.mocked(mockConnectionManager.hasConnection).mockReturnValue(false);
+
+        await (service as any).scanGuild(mockGuild);
+
+        // Should count only the 2 non-bot users
+        expect(mockLogger.debug).toHaveBeenCalledWith(
+          expect.objectContaining({
+            action: 'threshold_check',
+            nonBotCount: 2,
+            result: true,
+          }),
+          expect.any(String)
+        );
+      });
+
+      it('should log threshold_check with result true exactly at threshold', async () => {
+        const guildId = 'test-guild';
+
+        const exactThresholdChannel: any = {
+          id: 'exact',
+          isVoiceBased: () => true,
+          members: new Collection([
+            ['user1', { user: { bot: false } } as GuildMember],
+            ['user2', { user: { bot: false } } as GuildMember],
+          ]),
+          guild: { id: guildId },
+        };
+
+        const mockGuild: any = {
+          id: guildId,
+          name: 'Exact Guild',
+          channels: {
+            fetch: vi.fn().mockResolvedValue(new Collection([
+              ['exact', exactThresholdChannel],
+            ])),
+          },
+        };
+
+        vi.mocked(mockGuildConfig.getConfig).mockReturnValue(createMockGuildSettings({ enabled: true, guildId }));
+        vi.mocked(mockConnectionManager.hasConnection).mockReturnValue(false);
+
+        await (service as any).scanGuild(mockGuild);
+
+        expect(mockLogger.debug).toHaveBeenCalledWith(
+          expect.objectContaining({
+            action: 'threshold_check',
+            nonBotCount: 2,
+            threshold: 2,
+            result: true,
+          }),
+          expect.any(String)
+        );
+      });
+
+      it('should log threshold_check with result false for empty channels', async () => {
+        const guildId = 'test-guild';
+
+        const emptyChannel: any = {
+          id: 'empty',
+          isVoiceBased: () => true,
+          members: new Collection(),
+        };
+
+        const mockGuild: any = {
+          id: guildId,
+          name: 'Empty Guild',
+          channels: {
+            fetch: vi.fn().mockResolvedValue(new Collection([
+              ['empty', emptyChannel],
+            ])),
+          },
+        };
+
+        vi.mocked(mockGuildConfig.getConfig).mockReturnValue(createMockGuildSettings({ enabled: true, guildId }));
+        vi.mocked(mockConnectionManager.hasConnection).mockReturnValue(false);
+
+        await (service as any).scanGuild(mockGuild);
+
+        expect(mockLogger.debug).toHaveBeenCalledWith(
+          expect.objectContaining({
+            action: 'threshold_check',
+            nonBotCount: 0,
+            result: false,
+          }),
+          expect.any(String)
+        );
       });
     });
   });

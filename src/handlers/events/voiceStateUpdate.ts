@@ -23,20 +23,34 @@ export function createVoiceStateUpdateHandler(deps: VoiceStateHandlerDeps) {
       const userId = newState.member?.user.id || oldState.member?.user.id;
       const guildId = newState.guild.id;
 
+      if (logger.isLevelEnabled('debug')) {
+        const eventType = !oldState.channel && newState.channel ? 'join'
+          : oldState.channel && !newState.channel ? 'leave'
+          : oldState.channelId !== newState.channelId ? 'switch'
+          : 'other';
+        logger.debug({ guildId, userId, action: 'voice_state_change', eventType }, 'Processing voice state update');
+      }
+
       if (!userId) {
-        logger.debug('No userId found in voice state update');
+        if (logger.isLevelEnabled('debug')) {
+          logger.debug('No userId found in voice state update');
+        }
         return;
       }
 
       const isBot = newState.member?.user.bot || oldState.member?.user.bot;
       if (isBot) {
-        logger.debug({ userId, guildId }, 'Skipping bot user');
+        if (logger.isLevelEnabled('debug')) {
+          logger.debug({ userId, guildId }, 'Skipping bot user');
+        }
         return;
       }
 
       const config = guildConfig.getConfig(guildId);
       if (!config.enabled) {
-        logger.debug({ guildId }, 'Guild monitoring not enabled');
+        if (logger.isLevelEnabled('debug')) {
+          logger.debug({ guildId }, 'Guild monitoring not enabled');
+        }
         return;
       }
 
@@ -45,7 +59,9 @@ export function createVoiceStateUpdateHandler(deps: VoiceStateHandlerDeps) {
 
     // User joined a channel
     if (!oldChannel && newChannel) {
-      logger.debug({ userId, guildId, channelId: newChannel.id }, 'User joined voice channel');
+      if (logger.isLevelEnabled('debug')) {
+        logger.debug({ userId, guildId, channelId: newChannel.id }, 'User joined voice channel');
+      }
 
       await voiceMonitor.handleUserJoin(newChannel);
 
@@ -65,7 +81,9 @@ export function createVoiceStateUpdateHandler(deps: VoiceStateHandlerDeps) {
 
     // User left a channel
     if (oldChannel && !newChannel) {
-      logger.debug({ userId, guildId, channelId: oldChannel.id }, 'User left voice channel');
+      if (logger.isLevelEnabled('debug')) {
+        logger.debug({ userId, guildId, channelId: oldChannel.id }, 'User left voice channel');
+      }
 
       const remainingCount = countNonBotMembers(oldChannel);
       if (remainingCount < MIN_USERS_FOR_AFK_TRACKING) {
@@ -82,10 +100,12 @@ export function createVoiceStateUpdateHandler(deps: VoiceStateHandlerDeps) {
 
     // User switched channels
     if (oldChannel && newChannel && oldChannel.id !== newChannel.id) {
-      logger.debug(
-        { userId, guildId, oldChannelId: oldChannel.id, newChannelId: newChannel.id },
-        'User switched voice channels'
-      );
+      if (logger.isLevelEnabled('debug')) {
+        logger.debug(
+          { userId, guildId, oldChannelId: oldChannel.id, newChannelId: newChannel.id },
+          'User switched voice channels'
+        );
+      }
 
       // Apply leave logic to old channel
       const oldCount = countNonBotMembers(oldChannel);
@@ -114,7 +134,9 @@ export function createVoiceStateUpdateHandler(deps: VoiceStateHandlerDeps) {
     }
 
       // Other state changes (mute, deafen, etc.) - no action needed
-      logger.debug({ userId, guildId }, 'Voice state updated (no channel change)');
+      if (logger.isLevelEnabled('debug')) {
+        logger.debug({ userId, guildId }, 'Voice state updated (no channel change)');
+      }
     } catch (error) {
       const userId = newState.member?.user.id || oldState.member?.user.id;
       const guildId = newState.guild.id;

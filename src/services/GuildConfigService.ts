@@ -1,5 +1,5 @@
 import { GuildSettingsRepository, type GuildSettings } from '../database/repositories/GuildSettingsRepository';
-import { logger } from '../utils/logger';
+import type { Logger } from 'pino';
 import { formatError } from '../utils/errorUtils';
 
 const DEFAULT_CONFIG: Omit<GuildSettings, 'guildId' | 'createdAt' | 'updatedAt'> = {
@@ -64,9 +64,11 @@ class LRUCache<K, V> {
 export class GuildConfigService {
   private repository: GuildSettingsRepository;
   private cache: LRUCache<string, GuildSettings>;
+  private logger: Logger;
 
-  constructor(repository: GuildSettingsRepository, maxCacheSize: number = 1000) {
+  constructor(repository: GuildSettingsRepository, logger: Logger, maxCacheSize: number = 1000) {
     this.repository = repository;
+    this.logger = logger;
     this.cache = new LRUCache(maxCacheSize);
   }
 
@@ -88,16 +90,19 @@ export class GuildConfigService {
   getConfig(guildId: string): GuildSettings {
     const cached = this.cache.get(guildId);
     if (cached) {
+      this.logger.debug({ guildId, action: 'cache_hit' }, 'Config retrieved from cache');
       return cached;
     }
 
     const fromDatabase = this.repository.findByGuildId(guildId);
     if (fromDatabase) {
+      this.logger.debug({ guildId, action: 'cache_miss', source: 'database' }, 'Config loaded from database');
       const withDefaults = this.applyDefaults(fromDatabase);
       this.cache.set(guildId, withDefaults);
       return withDefaults;
     }
 
+    this.logger.debug({ guildId, action: 'cache_miss', source: 'default' }, 'Using default config');
     const defaultConfig: GuildSettings = {
       guildId,
       ...DEFAULT_CONFIG,
@@ -115,7 +120,7 @@ export class GuildConfigService {
         ...updates,
       });
     } catch (error) {
-      logger.error({ error, guildId, updates }, 'Failed to upsert guild settings to database');
+      this.logger.error({ error, guildId, updates }, 'Failed to upsert guild settings to database');
       throw new Error(
         `Failed to update guild settings for guild ${guildId}: ${formatError(error).message}`
       );
@@ -145,6 +150,6 @@ export class GuildConfigService {
    */
   onGuildDelete(guildId: string): void {
     this.cache.delete(guildId);
-    logger.debug({ guildId }, 'Cleared guild config cache on guild delete');
+    this.logger.debug({ guildId }, 'Cleared guild config cache on guild delete');
   }
 }

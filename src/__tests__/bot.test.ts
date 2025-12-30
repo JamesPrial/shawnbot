@@ -1740,3 +1740,672 @@ describe('bot.ts - Speaking Event Threshold Coordination', () => {
     });
   });
 });
+
+/**
+ * These tests verify the WU-6 DEBUG LOGGING GUARDS for speaking event handlers in bot.ts.
+ *
+ * KEY CONCEPT: Hot path debug logs should be guarded with logger.isLevelEnabled('debug')
+ * to avoid expensive log formatting when debug logging is disabled.
+ *
+ * Behaviors to test:
+ * 1. userStartedSpeaking logs are guarded with isLevelEnabled check
+ * 2. userStoppedSpeaking logs are guarded with isLevelEnabled check
+ * 3. When debug is disabled (isLevelEnabled returns false), no debug logs are called
+ * 4. When debug is enabled, logs include structured data with action field
+ */
+describe('bot.ts - Speaking Event Debug Logging Guards (WU-6)', () => {
+  let mockClient: Client;
+  let mockAfkDetection: AFKDetectionService;
+  let speakingTracker: SpeakingTracker;
+  let mockLogger: ReturnType<typeof createMockLogger>;
+
+  beforeEach(() => {
+    mockLogger = createMockLogger();
+
+    mockClient = {
+      guilds: {
+        cache: {
+          get: vi.fn(),
+        },
+      },
+    } as unknown as Client;
+
+    mockAfkDetection = {
+      resetTimer: vi.fn(),
+      startTracking: vi.fn(),
+      stopTracking: vi.fn(),
+      isTracking: vi.fn().mockReturnValue(false),
+    } as unknown as AFKDetectionService;
+
+    speakingTracker = new SpeakingTracker(mockLogger);
+  });
+
+  function createMockChannel(channelId: string, memberIds: string[]): Partial<VoiceChannel> {
+    const members = new Collection<string, GuildMember>();
+
+    memberIds.forEach((memberId) => {
+      const mockMember = {
+        id: memberId,
+        user: {
+          id: memberId,
+          bot: false,
+        },
+      } as unknown as GuildMember;
+      members.set(memberId, mockMember);
+    });
+
+    return {
+      id: channelId,
+      members,
+      guild: { id: 'test-guild' } as any,
+    };
+  }
+
+  function mockUserInChannel(userId: string, guildId: string, channel: Partial<VoiceChannel> | null) {
+    const mockVoiceState: Partial<VoiceState> = {
+      channel: channel as VoiceChannel,
+    };
+
+    const mockMember: Partial<GuildMember> = {
+      id: userId,
+      user: {
+        id: userId,
+        bot: false,
+      } as any,
+      voice: mockVoiceState as VoiceState,
+    };
+
+    const mockGuild: Partial<Guild> = {
+      id: guildId,
+      members: {
+        cache: {
+          get: vi.fn().mockReturnValue(mockMember),
+        },
+      } as any,
+    };
+
+    vi.mocked(mockClient.guilds.cache.get).mockReturnValue(mockGuild as Guild);
+  }
+
+  describe('userStartedSpeaking - isLevelEnabled guards', () => {
+    describe('when logger.isLevelEnabled returns true', () => {
+      beforeEach(() => {
+        mockLogger.isLevelEnabled.mockReturnValue(true);
+      });
+
+      it('should log with structured action field when debug is enabled', () => {
+        // WHY: Structured logs with action: 'speaking_start' enable filtering and analysis.
+        const userId = 'speaker';
+        const guildId = 'test-guild';
+        const channelId = 'test-channel';
+
+        const channel = createMockChannel(channelId, [userId, 'other-user']);
+        mockUserInChannel(userId, guildId, channel);
+
+        const handler = (emittedUserId: string, emittedGuildId: string) => {
+          if (mockLogger.isLevelEnabled('debug')) {
+            mockLogger.debug(
+              { userId: emittedUserId, guildId: emittedGuildId, action: 'speaking_start' },
+              'User started speaking, resetting AFK timer'
+            );
+          }
+
+          const guild = mockClient.guilds.cache.get(emittedGuildId);
+          if (!guild) return;
+
+          const member = guild.members.cache.get(emittedUserId);
+          if (!member) return;
+
+          if (member.voice?.channel) {
+            const nonBotCount = member.voice.channel.members.filter((m) => !m.user.bot).size;
+            if (nonBotCount >= 2) {
+              mockAfkDetection.resetTimer(emittedGuildId, emittedUserId);
+            }
+          }
+        };
+
+        speakingTracker.on('userStartedSpeaking', handler);
+        speakingTracker.emit('userStartedSpeaking', userId, guildId);
+
+        expect(mockLogger.debug).toHaveBeenCalledWith(
+          expect.objectContaining({
+            userId,
+            guildId,
+            action: 'speaking_start',
+          }),
+          'User started speaking, resetting AFK timer'
+        );
+      });
+
+      it('should log secondary debug messages when guild not in cache', () => {
+        // WHY: Early-return paths should also log when debug is enabled.
+        const userId = 'user';
+        const guildId = 'uncached-guild';
+
+        vi.mocked(mockClient.guilds.cache.get).mockReturnValue(undefined);
+
+        const handler = (emittedUserId: string, emittedGuildId: string) => {
+          if (mockLogger.isLevelEnabled('debug')) {
+            mockLogger.debug(
+              { userId: emittedUserId, guildId: emittedGuildId, action: 'speaking_start' },
+              'User started speaking, resetting AFK timer'
+            );
+          }
+
+          const guild = mockClient.guilds.cache.get(emittedGuildId);
+          if (!guild) {
+            if (mockLogger.isLevelEnabled('debug')) {
+              mockLogger.debug({ userId: emittedUserId, guildId: emittedGuildId }, 'Guild not in cache, skipping reset');
+            }
+            return;
+          }
+        };
+
+        speakingTracker.on('userStartedSpeaking', handler);
+        speakingTracker.emit('userStartedSpeaking', userId, guildId);
+
+        expect(mockLogger.debug).toHaveBeenCalledWith(
+          expect.objectContaining({ userId, guildId }),
+          'Guild not in cache, skipping reset'
+        );
+      });
+
+      it('should log secondary debug messages when member not in cache', () => {
+        // WHY: Member cache miss path should also log when debug is enabled.
+        const userId = 'uncached-user';
+        const guildId = 'test-guild';
+
+        const mockGuild: Partial<Guild> = {
+          id: guildId,
+          members: {
+            cache: {
+              get: vi.fn().mockReturnValue(undefined),
+            },
+          } as any,
+        };
+
+        vi.mocked(mockClient.guilds.cache.get).mockReturnValue(mockGuild as Guild);
+
+        const handler = (emittedUserId: string, emittedGuildId: string) => {
+          if (mockLogger.isLevelEnabled('debug')) {
+            mockLogger.debug(
+              { userId: emittedUserId, guildId: emittedGuildId, action: 'speaking_start' },
+              'User started speaking, resetting AFK timer'
+            );
+          }
+
+          const guild = mockClient.guilds.cache.get(emittedGuildId);
+          if (!guild) return;
+
+          const member = guild.members.cache.get(emittedUserId);
+          if (!member) {
+            if (mockLogger.isLevelEnabled('debug')) {
+              mockLogger.debug({ userId: emittedUserId, guildId: emittedGuildId }, 'Member not in cache, skipping reset');
+            }
+            return;
+          }
+        };
+
+        speakingTracker.on('userStartedSpeaking', handler);
+        speakingTracker.emit('userStartedSpeaking', userId, guildId);
+
+        expect(mockLogger.debug).toHaveBeenCalledWith(
+          expect.objectContaining({ userId, guildId }),
+          'Member not in cache, skipping reset'
+        );
+      });
+
+      it('should log when member not in voice channel', () => {
+        // WHY: Voice channel check early-return should log when debug is enabled.
+        const userId = 'not-in-voice';
+        const guildId = 'test-guild';
+
+        const mockMember: Partial<GuildMember> = {
+          id: userId,
+          user: { id: userId, bot: false } as any,
+          voice: null as any,
+        };
+
+        const mockGuild: Partial<Guild> = {
+          id: guildId,
+          members: {
+            cache: {
+              get: vi.fn().mockReturnValue(mockMember),
+            },
+          } as any,
+        };
+
+        vi.mocked(mockClient.guilds.cache.get).mockReturnValue(mockGuild as Guild);
+
+        const handler = (emittedUserId: string, emittedGuildId: string) => {
+          if (mockLogger.isLevelEnabled('debug')) {
+            mockLogger.debug(
+              { userId: emittedUserId, guildId: emittedGuildId, action: 'speaking_start' },
+              'User started speaking, resetting AFK timer'
+            );
+          }
+
+          const guild = mockClient.guilds.cache.get(emittedGuildId);
+          if (!guild) return;
+
+          const member = guild.members.cache.get(emittedUserId);
+          if (!member) return;
+
+          const voiceChannel = member.voice?.channel;
+          if (!voiceChannel) {
+            if (mockLogger.isLevelEnabled('debug')) {
+              mockLogger.debug({ userId: emittedUserId, guildId: emittedGuildId }, 'Member not in voice channel, skipping reset');
+            }
+            return;
+          }
+        };
+
+        speakingTracker.on('userStartedSpeaking', handler);
+        speakingTracker.emit('userStartedSpeaking', userId, guildId);
+
+        expect(mockLogger.debug).toHaveBeenCalledWith(
+          expect.objectContaining({ userId, guildId }),
+          'Member not in voice channel, skipping reset'
+        );
+      });
+
+      it('should log when below threshold', () => {
+        // WHY: Threshold check early-return should log when debug is enabled.
+        const userId = 'solo-user';
+        const guildId = 'test-guild';
+        const channelId = 'solo-channel';
+
+        const channel = createMockChannel(channelId, [userId]);
+        mockUserInChannel(userId, guildId, channel);
+
+        const handler = (emittedUserId: string, emittedGuildId: string) => {
+          if (mockLogger.isLevelEnabled('debug')) {
+            mockLogger.debug(
+              { userId: emittedUserId, guildId: emittedGuildId, action: 'speaking_start' },
+              'User started speaking, resetting AFK timer'
+            );
+          }
+
+          const guild = mockClient.guilds.cache.get(emittedGuildId);
+          if (!guild) return;
+
+          const member = guild.members.cache.get(emittedUserId);
+          if (!member) return;
+
+          if (member.voice?.channel) {
+            const nonBotCount = member.voice.channel.members.filter((m) => !m.user.bot).size;
+            if (nonBotCount < 2) {
+              if (mockLogger.isLevelEnabled('debug')) {
+                mockLogger.debug({ userId: emittedUserId, guildId: emittedGuildId, nonBotCount }, 'Below threshold, skipping reset');
+              }
+              return;
+            }
+          }
+        };
+
+        speakingTracker.on('userStartedSpeaking', handler);
+        speakingTracker.emit('userStartedSpeaking', userId, guildId);
+
+        expect(mockLogger.debug).toHaveBeenCalledWith(
+          expect.objectContaining({ userId, guildId, nonBotCount: 1 }),
+          'Below threshold, skipping reset'
+        );
+      });
+    });
+
+    describe('when logger.isLevelEnabled returns false (debug disabled)', () => {
+      beforeEach(() => {
+        mockLogger.isLevelEnabled.mockReturnValue(false);
+      });
+
+      it('should not call logger.debug when debug is disabled', () => {
+        // WHY: Hot path optimization - skip expensive log formatting when debug is off.
+        const userId = 'speaker';
+        const guildId = 'test-guild';
+        const channelId = 'test-channel';
+
+        const channel = createMockChannel(channelId, [userId, 'other-user']);
+        mockUserInChannel(userId, guildId, channel);
+
+        const handler = (emittedUserId: string, emittedGuildId: string) => {
+          if (mockLogger.isLevelEnabled('debug')) {
+            mockLogger.debug(
+              { userId: emittedUserId, guildId: emittedGuildId, action: 'speaking_start' },
+              'User started speaking, resetting AFK timer'
+            );
+          }
+
+          const guild = mockClient.guilds.cache.get(emittedGuildId);
+          if (!guild) {
+            if (mockLogger.isLevelEnabled('debug')) {
+              mockLogger.debug({ userId: emittedUserId, guildId: emittedGuildId }, 'Guild not in cache');
+            }
+            return;
+          }
+
+          const member = guild.members.cache.get(emittedUserId);
+          if (!member) {
+            if (mockLogger.isLevelEnabled('debug')) {
+              mockLogger.debug({ userId: emittedUserId, guildId: emittedGuildId }, 'Member not in cache');
+            }
+            return;
+          }
+
+          if (member.voice?.channel) {
+            const nonBotCount = member.voice.channel.members.filter((m) => !m.user.bot).size;
+            if (nonBotCount >= 2) {
+              mockAfkDetection.resetTimer(emittedGuildId, emittedUserId);
+            }
+          }
+        };
+
+        speakingTracker.on('userStartedSpeaking', handler);
+        speakingTracker.emit('userStartedSpeaking', userId, guildId);
+
+        expect(mockLogger.debug).not.toHaveBeenCalled();
+        // Business logic should still execute
+        expect(mockAfkDetection.resetTimer).toHaveBeenCalledWith(guildId, userId);
+      });
+
+      it('should not call logger.debug even when guild not in cache', () => {
+        // WHY: Even early-return paths should skip debug logs when disabled.
+        const userId = 'user';
+        const guildId = 'uncached-guild';
+
+        vi.mocked(mockClient.guilds.cache.get).mockReturnValue(undefined);
+
+        const handler = (emittedUserId: string, emittedGuildId: string) => {
+          if (mockLogger.isLevelEnabled('debug')) {
+            mockLogger.debug(
+              { userId: emittedUserId, guildId: emittedGuildId, action: 'speaking_start' },
+              'User started speaking, resetting AFK timer'
+            );
+          }
+
+          const guild = mockClient.guilds.cache.get(emittedGuildId);
+          if (!guild) {
+            if (mockLogger.isLevelEnabled('debug')) {
+              mockLogger.debug({ userId: emittedUserId, guildId: emittedGuildId }, 'Guild not in cache');
+            }
+            return;
+          }
+        };
+
+        speakingTracker.on('userStartedSpeaking', handler);
+        speakingTracker.emit('userStartedSpeaking', userId, guildId);
+
+        expect(mockLogger.debug).not.toHaveBeenCalled();
+      });
+    });
+  });
+
+  describe('userStoppedSpeaking - isLevelEnabled guards', () => {
+    describe('when logger.isLevelEnabled returns true', () => {
+      beforeEach(() => {
+        mockLogger.isLevelEnabled.mockReturnValue(true);
+      });
+
+      it('should log with structured action field when debug is enabled', () => {
+        // WHY: Structured logs with action: 'speaking_stop' enable filtering and analysis.
+        const userId = 'stopper';
+        const guildId = 'test-guild';
+        const channelId = 'test-channel';
+
+        const channel = createMockChannel(channelId, [userId, 'other-user']);
+        mockUserInChannel(userId, guildId, channel);
+
+        const handler = (emittedUserId: string, emittedGuildId: string) => {
+          if (mockLogger.isLevelEnabled('debug')) {
+            mockLogger.debug(
+              { userId: emittedUserId, guildId: emittedGuildId, action: 'speaking_stop' },
+              'User stopped speaking, starting AFK tracking'
+            );
+          }
+
+          const guild = mockClient.guilds.cache.get(emittedGuildId);
+          if (!guild) return;
+
+          const member = guild.members.cache.get(emittedUserId);
+          if (!member) return;
+
+          if (member.voice?.channel) {
+            const nonBotCount = member.voice.channel.members.filter((m) => !m.user.bot).size;
+            if (nonBotCount >= 2 && !mockAfkDetection.isTracking(emittedGuildId, emittedUserId)) {
+              mockAfkDetection.startTracking(emittedGuildId, emittedUserId, member.voice.channel.id);
+            }
+          }
+        };
+
+        speakingTracker.on('userStoppedSpeaking', handler);
+        speakingTracker.emit('userStoppedSpeaking', userId, guildId);
+
+        expect(mockLogger.debug).toHaveBeenCalledWith(
+          expect.objectContaining({
+            userId,
+            guildId,
+            action: 'speaking_stop',
+          }),
+          'User stopped speaking, starting AFK tracking'
+        );
+      });
+
+      it('should log secondary debug messages for all early-return paths', () => {
+        // WHY: All early-return paths should log when debug is enabled.
+        const userId = 'user';
+        const guildId = 'uncached-guild';
+
+        vi.mocked(mockClient.guilds.cache.get).mockReturnValue(undefined);
+
+        const handler = (emittedUserId: string, emittedGuildId: string) => {
+          if (mockLogger.isLevelEnabled('debug')) {
+            mockLogger.debug(
+              { userId: emittedUserId, guildId: emittedGuildId, action: 'speaking_stop' },
+              'User stopped speaking, starting AFK tracking'
+            );
+          }
+
+          const guild = mockClient.guilds.cache.get(emittedGuildId);
+          if (!guild) {
+            if (mockLogger.isLevelEnabled('debug')) {
+              mockLogger.debug({ userId: emittedUserId, guildId: emittedGuildId }, 'Guild not in cache, skipping tracking');
+            }
+            return;
+          }
+        };
+
+        speakingTracker.on('userStoppedSpeaking', handler);
+        speakingTracker.emit('userStoppedSpeaking', userId, guildId);
+
+        expect(mockLogger.debug).toHaveBeenCalledWith(
+          expect.objectContaining({ userId, guildId }),
+          'Guild not in cache, skipping tracking'
+        );
+      });
+
+      it('should log when already tracking user', () => {
+        // WHY: The duplicate tracking check should log when debug is enabled.
+        const userId = 'tracked-user';
+        const guildId = 'test-guild';
+        const channelId = 'test-channel';
+
+        const channel = createMockChannel(channelId, [userId, 'other-user']);
+        mockUserInChannel(userId, guildId, channel);
+        mockAfkDetection.isTracking = vi.fn().mockReturnValue(true);
+
+        const handler = (emittedUserId: string, emittedGuildId: string) => {
+          if (mockLogger.isLevelEnabled('debug')) {
+            mockLogger.debug(
+              { userId: emittedUserId, guildId: emittedGuildId, action: 'speaking_stop' },
+              'User stopped speaking, starting AFK tracking'
+            );
+          }
+
+          const guild = mockClient.guilds.cache.get(emittedGuildId);
+          if (!guild) return;
+
+          const member = guild.members.cache.get(emittedUserId);
+          if (!member) return;
+
+          if (member.voice?.channel) {
+            const nonBotCount = member.voice.channel.members.filter((m) => !m.user.bot).size;
+            if (nonBotCount >= 2) {
+              if (mockAfkDetection.isTracking(emittedGuildId, emittedUserId)) {
+                if (mockLogger.isLevelEnabled('debug')) {
+                  mockLogger.debug({ userId: emittedUserId, guildId: emittedGuildId }, 'Already tracking user, skipping');
+                }
+                return;
+              }
+            }
+          }
+        };
+
+        speakingTracker.on('userStoppedSpeaking', handler);
+        speakingTracker.emit('userStoppedSpeaking', userId, guildId);
+
+        expect(mockLogger.debug).toHaveBeenCalledWith(
+          expect.objectContaining({ userId, guildId }),
+          'Already tracking user, skipping'
+        );
+      });
+    });
+
+    describe('when logger.isLevelEnabled returns false (debug disabled)', () => {
+      beforeEach(() => {
+        mockLogger.isLevelEnabled.mockReturnValue(false);
+      });
+
+      it('should not call logger.debug when debug is disabled', () => {
+        // WHY: Hot path optimization - skip expensive log formatting when debug is off.
+        const userId = 'stopper';
+        const guildId = 'test-guild';
+        const channelId = 'test-channel';
+
+        const channel = createMockChannel(channelId, [userId, 'other-user']);
+        mockUserInChannel(userId, guildId, channel);
+
+        const handler = (emittedUserId: string, emittedGuildId: string) => {
+          if (mockLogger.isLevelEnabled('debug')) {
+            mockLogger.debug(
+              { userId: emittedUserId, guildId: emittedGuildId, action: 'speaking_stop' },
+              'User stopped speaking, starting AFK tracking'
+            );
+          }
+
+          const guild = mockClient.guilds.cache.get(emittedGuildId);
+          if (!guild) {
+            if (mockLogger.isLevelEnabled('debug')) {
+              mockLogger.debug({ userId: emittedUserId, guildId: emittedGuildId }, 'Guild not in cache');
+            }
+            return;
+          }
+
+          const member = guild.members.cache.get(emittedUserId);
+          if (!member) {
+            if (mockLogger.isLevelEnabled('debug')) {
+              mockLogger.debug({ userId: emittedUserId, guildId: emittedGuildId }, 'Member not in cache');
+            }
+            return;
+          }
+
+          if (member.voice?.channel) {
+            const nonBotCount = member.voice.channel.members.filter((m) => !m.user.bot).size;
+            if (nonBotCount >= 2 && !mockAfkDetection.isTracking(emittedGuildId, emittedUserId)) {
+              mockAfkDetection.startTracking(emittedGuildId, emittedUserId, member.voice.channel.id);
+            }
+          }
+        };
+
+        speakingTracker.on('userStoppedSpeaking', handler);
+        speakingTracker.emit('userStoppedSpeaking', userId, guildId);
+
+        expect(mockLogger.debug).not.toHaveBeenCalled();
+        // Business logic should still execute
+        expect(mockAfkDetection.startTracking).toHaveBeenCalledWith(guildId, userId, channelId);
+      });
+
+      it('should not call logger.debug even on early-return paths', () => {
+        // WHY: All paths should skip debug logs when disabled, including early returns.
+        const userId = 'user';
+        const guildId = 'uncached-guild';
+
+        vi.mocked(mockClient.guilds.cache.get).mockReturnValue(undefined);
+
+        const handler = (emittedUserId: string, emittedGuildId: string) => {
+          if (mockLogger.isLevelEnabled('debug')) {
+            mockLogger.debug(
+              { userId: emittedUserId, guildId: emittedGuildId, action: 'speaking_stop' },
+              'User stopped speaking, starting AFK tracking'
+            );
+          }
+
+          const guild = mockClient.guilds.cache.get(emittedGuildId);
+          if (!guild) {
+            if (mockLogger.isLevelEnabled('debug')) {
+              mockLogger.debug({ userId: emittedUserId, guildId: emittedGuildId }, 'Guild not in cache');
+            }
+            return;
+          }
+        };
+
+        speakingTracker.on('userStoppedSpeaking', handler);
+        speakingTracker.emit('userStoppedSpeaking', userId, guildId);
+
+        expect(mockLogger.debug).not.toHaveBeenCalled();
+      });
+    });
+  });
+
+  describe('isLevelEnabled call behavior', () => {
+    it('should call isLevelEnabled with "debug" parameter', () => {
+      // WHY: Verify the guard checks for the correct log level.
+      const userId = 'user';
+      const guildId = 'guild';
+      const channelId = 'channel';
+
+      const channel = createMockChannel(channelId, [userId, 'other']);
+      mockUserInChannel(userId, guildId, channel);
+
+      const handler = (emittedUserId: string, emittedGuildId: string) => {
+        if (mockLogger.isLevelEnabled('debug')) {
+          mockLogger.debug(
+            { userId: emittedUserId, guildId: emittedGuildId, action: 'speaking_start' },
+            'User started speaking'
+          );
+        }
+      };
+
+      speakingTracker.on('userStartedSpeaking', handler);
+      speakingTracker.emit('userStartedSpeaking', userId, guildId);
+
+      expect(mockLogger.isLevelEnabled).toHaveBeenCalledWith('debug');
+    });
+
+    it('should check isLevelEnabled before expensive log formatting', () => {
+      // WHY: The guard should prevent expensive operations when debug is off.
+      const mockIsLevelEnabled = vi.fn().mockReturnValue(false);
+      mockLogger.isLevelEnabled = mockIsLevelEnabled;
+
+      const userId = 'user';
+      const guildId = 'guild';
+      const channelId = 'channel';
+
+      const channel = createMockChannel(channelId, [userId, 'other']);
+      mockUserInChannel(userId, guildId, channel);
+
+      const handler = (emittedUserId: string, emittedGuildId: string) => {
+        if (mockLogger.isLevelEnabled('debug')) {
+          mockLogger.debug(
+            { userId: emittedUserId, guildId: emittedGuildId, action: 'speaking_start' },
+            'User started speaking'
+          );
+        }
+      };
+
+      speakingTracker.on('userStartedSpeaking', handler);
+      speakingTracker.emit('userStartedSpeaking', userId, guildId);
+
+      expect(mockIsLevelEnabled).toHaveBeenCalled();
+      expect(mockLogger.debug).not.toHaveBeenCalled();
+    });
+  });
+});

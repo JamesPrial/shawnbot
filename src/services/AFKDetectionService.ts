@@ -52,15 +52,18 @@ export class AFKDetectionService {
     // Check exempt roles
     if (config.exemptRoleIds.length > 0) {
       try {
-        this.rateLimiter.recordAction();
+        this.rateLimiter.recordAction('client.guilds.fetch');
         const guild = await this.client.guilds.fetch(guildId);
-        this.rateLimiter.recordAction();
+        this.rateLimiter.recordAction('guild.members.fetch');
         const member = await guild.members.fetch(userId);
-        const isExempt = member.roles.cache.some(role =>
+        const matchedRole = member.roles.cache.find(role =>
           config.exemptRoleIds.includes(role.id)
         );
-        if (isExempt) {
-          this.logger.debug({ guildId, userId }, 'User is exempt from AFK tracking');
+        if (matchedRole) {
+          this.logger.debug(
+            { guildId, userId, action: 'exempt_check', matchedRoleId: matchedRole.id },
+            'User is exempt from AFK tracking'
+          );
           return;
         }
       } catch (error) {
@@ -75,7 +78,7 @@ export class AFKDetectionService {
     // Validate config before creating timers
     if (Number.isNaN(config.afkTimeoutSeconds) || Number.isNaN(config.warningSecondsBefore)) {
       this.logger.error(
-        { guildId, afkTimeoutSeconds: config.afkTimeoutSeconds, warningSecondsBefore: config.warningSecondsBefore },
+        { guildId, afkTimeoutSeconds: config.afkTimeoutSeconds, warningSecondsBefore: config.warningSecondsBefore, action: 'validation_failed', reason: 'nan_values' },
         'Invalid config: timeout and warning must be valid numbers'
       );
       return;
@@ -83,7 +86,7 @@ export class AFKDetectionService {
 
     if (config.afkTimeoutSeconds <= 0 || config.warningSecondsBefore < 0) {
       this.logger.error(
-        { guildId, afkTimeoutSeconds: config.afkTimeoutSeconds, warningSecondsBefore: config.warningSecondsBefore },
+        { guildId, afkTimeoutSeconds: config.afkTimeoutSeconds, warningSecondsBefore: config.warningSecondsBefore, action: 'validation_failed', reason: 'negative_values' },
         'Invalid config: timeout must be positive and warning must be non-negative'
       );
       return;
@@ -91,7 +94,7 @@ export class AFKDetectionService {
 
     if (config.warningSecondsBefore >= config.afkTimeoutSeconds) {
       this.logger.error(
-        { guildId, afkTimeoutSeconds: config.afkTimeoutSeconds, warningSecondsBefore: config.warningSecondsBefore },
+        { guildId, afkTimeoutSeconds: config.afkTimeoutSeconds, warningSecondsBefore: config.warningSecondsBefore, action: 'validation_failed', reason: 'warning_exceeds_timeout' },
         'Invalid config: warning time must be less than timeout'
       );
       return;
@@ -128,7 +131,7 @@ export class AFKDetectionService {
     });
 
     this.logger.debug(
-      { guildId, userId, channelId, warningTimeMs, kickTimeMs },
+      { guildId, userId, channelId, action: 'timer_start', warningTimeMs, kickTimeMs },
       'Started tracking user for AFK'
     );
   }
@@ -141,7 +144,7 @@ export class AFKDetectionService {
       return;
     }
 
-    this.logger.debug({ guildId, userId }, 'User activity detected, resetting timer');
+    this.logger.debug({ guildId, userId, action: 'timer_reset' }, 'User activity detected, resetting timer');
 
     await this.startTracking(guildId, userId, state.channelId);
   }
@@ -164,7 +167,7 @@ export class AFKDetectionService {
 
     this.tracking.delete(key);
 
-    this.logger.debug({ guildId, userId }, 'Stopped tracking user');
+    this.logger.debug({ guildId, userId, action: 'timer_stop' }, 'Stopped tracking user');
   }
 
   isTracking(guildId: string, userId: string): boolean {
@@ -240,13 +243,13 @@ export class AFKDetectionService {
     }
 
     try {
-      this.rateLimiter.recordAction();
+      this.rateLimiter.recordAction('client.guilds.fetch');
       const guild = await this.client.guilds.fetch(state.guildId);
-      this.rateLimiter.recordAction();
+      this.rateLimiter.recordAction('guild.members.fetch');
       const member = await guild.members.fetch(state.userId);
 
       if (member.voice.channel) {
-        this.rateLimiter.recordAction();
+        this.rateLimiter.recordAction('voice.disconnect');
         await member.voice.disconnect('AFK timeout');
 
         this.logger.info(

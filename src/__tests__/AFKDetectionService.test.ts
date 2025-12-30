@@ -1358,6 +1358,643 @@ describe('AFKDetectionService', () => {
     });
   });
 
+  describe('debug logging enhancements', () => {
+    describe('timer start logging', () => {
+      it('should log timer start with action and timer values', async () => {
+        const guildId = 'log-start-guild';
+        const userId = 'log-start-user';
+        const channelId = 'log-start-channel';
+
+        vi.mocked(mockConfigService.getConfig).mockReturnValue(
+          createMockGuildSettings({
+            guildId,
+            enabled: true,
+            afkTimeoutSeconds: 300,
+            warningSecondsBefore: 60,
+          })
+        );
+
+        await service.startTracking(guildId, userId, channelId);
+
+        expect(mockLogger.debug).toHaveBeenCalledWith(
+          expect.objectContaining({
+            action: 'timer_start',
+            guildId,
+            userId,
+            channelId,
+            warningTimeMs: 240000, // (300 - 60) * 1000
+            kickTimeMs: 300000, // 300 * 1000
+          }),
+          expect.any(String)
+        );
+      });
+
+      it('should include correct timer calculations for different timeout values', async () => {
+        const guildId = 'calc-log-guild';
+        const userId = 'calc-log-user';
+        const channelId = 'calc-log-channel';
+
+        vi.mocked(mockConfigService.getConfig).mockReturnValue(
+          createMockGuildSettings({
+            guildId,
+            enabled: true,
+            afkTimeoutSeconds: 600, // 10 minutes
+            warningSecondsBefore: 120, // 2 minutes before
+          })
+        );
+
+        await service.startTracking(guildId, userId, channelId);
+
+        expect(mockLogger.debug).toHaveBeenCalledWith(
+          expect.objectContaining({
+            action: 'timer_start',
+            warningTimeMs: 480000, // (600 - 120) * 1000
+            kickTimeMs: 600000, // 600 * 1000
+          }),
+          expect.any(String)
+        );
+      });
+
+      it('should include timer values even with minimal warning time', async () => {
+        const guildId = 'minimal-warning-guild';
+        const userId = 'minimal-warning-user';
+        const channelId = 'minimal-warning-channel';
+
+        vi.mocked(mockConfigService.getConfig).mockReturnValue(
+          createMockGuildSettings({
+            guildId,
+            enabled: true,
+            afkTimeoutSeconds: 60,
+            warningSecondsBefore: 1, // 1 second before kick
+          })
+        );
+
+        await service.startTracking(guildId, userId, channelId);
+
+        expect(mockLogger.debug).toHaveBeenCalledWith(
+          expect.objectContaining({
+            action: 'timer_start',
+            warningTimeMs: 59000, // (60 - 1) * 1000
+            kickTimeMs: 60000, // 60 * 1000
+          }),
+          expect.any(String)
+        );
+      });
+    });
+
+    describe('timer stop logging', () => {
+      it('should log timer stop with action when stopTracking is called', async () => {
+        const guildId = 'log-stop-guild';
+        const userId = 'log-stop-user';
+        const channelId = 'log-stop-channel';
+
+        vi.mocked(mockConfigService.getConfig).mockReturnValue(
+          createMockGuildSettings({ guildId, enabled: true })
+        );
+
+        await service.startTracking(guildId, userId, channelId);
+
+        // Clear previous calls
+        mockLogger.debug.mockClear();
+
+        service.stopTracking(guildId, userId);
+
+        expect(mockLogger.debug).toHaveBeenCalledWith(
+          expect.objectContaining({
+            action: 'timer_stop',
+            guildId,
+            userId,
+          }),
+          expect.any(String)
+        );
+      });
+
+      it('should not log timer stop when user was not being tracked', () => {
+        const guildId = 'not-tracked-guild';
+        const userId = 'not-tracked-user';
+
+        service.stopTracking(guildId, userId);
+
+        // Should not log when there's nothing to stop
+        expect(mockLogger.debug).not.toHaveBeenCalledWith(
+          expect.objectContaining({ action: 'timer_stop' }),
+          expect.any(String)
+        );
+      });
+
+      it('should log timer stop for each user in bulk stop', async () => {
+        const guildId = 'bulk-stop-log-guild';
+        const channelId = 'bulk-stop-log-channel';
+        const user1 = 'bulk-user-1';
+        const user2 = 'bulk-user-2';
+        const user3 = 'bulk-user-3';
+
+        vi.mocked(mockConfigService.getConfig).mockReturnValue(
+          createMockGuildSettings({ guildId, enabled: true })
+        );
+
+        await service.startTracking(guildId, user1, channelId);
+        await service.startTracking(guildId, user2, channelId);
+        await service.startTracking(guildId, user3, channelId);
+
+        // Clear previous calls
+        mockLogger.debug.mockClear();
+
+        service.stopAllTrackingForChannel(guildId, channelId);
+
+        // Should log timer_stop for each stopped user
+        const stopCalls = mockLogger.debug.mock.calls.filter(
+          call => call[0]?.action === 'timer_stop'
+        );
+        expect(stopCalls).toHaveLength(3);
+      });
+    });
+
+    describe('timer reset logging', () => {
+      it('should log timer reset with action when resetTimer is called', async () => {
+        const guildId = 'log-reset-guild';
+        const userId = 'log-reset-user';
+        const channelId = 'log-reset-channel';
+
+        vi.mocked(mockConfigService.getConfig).mockReturnValue(
+          createMockGuildSettings({
+            guildId,
+            enabled: true,
+            afkTimeoutSeconds: 300,
+            warningSecondsBefore: 60,
+          })
+        );
+
+        await service.startTracking(guildId, userId, channelId);
+
+        // Clear previous calls
+        mockLogger.debug.mockClear();
+
+        await service.resetTimer(guildId, userId);
+
+        expect(mockLogger.debug).toHaveBeenCalledWith(
+          expect.objectContaining({
+            action: 'timer_reset',
+            guildId,
+            userId,
+          }),
+          expect.any(String)
+        );
+      });
+
+      it('should not log timer reset when user was not being tracked', async () => {
+        const guildId = 'not-tracked-reset-guild';
+        const userId = 'not-tracked-reset-user';
+
+        await service.resetTimer(guildId, userId);
+
+        // Should not log when there's nothing to reset
+        expect(mockLogger.debug).not.toHaveBeenCalledWith(
+          expect.objectContaining({ action: 'timer_reset' }),
+          expect.any(String)
+        );
+      });
+
+      it('should log both timer_reset and timer_start when resetting', async () => {
+        const guildId = 'reset-sequence-guild';
+        const userId = 'reset-sequence-user';
+        const channelId = 'reset-sequence-channel';
+
+        vi.mocked(mockConfigService.getConfig).mockReturnValue(
+          createMockGuildSettings({
+            guildId,
+            enabled: true,
+            afkTimeoutSeconds: 300,
+            warningSecondsBefore: 60,
+          })
+        );
+
+        await service.startTracking(guildId, userId, channelId);
+
+        // Clear to see only reset logs
+        mockLogger.debug.mockClear();
+
+        await service.resetTimer(guildId, userId);
+
+        // Should log timer_reset first
+        expect(mockLogger.debug).toHaveBeenCalledWith(
+          expect.objectContaining({
+            action: 'timer_reset',
+            guildId,
+            userId,
+          }),
+          expect.any(String)
+        );
+
+        // Then log timer_start as tracking restarts
+        expect(mockLogger.debug).toHaveBeenCalledWith(
+          expect.objectContaining({
+            action: 'timer_start',
+            guildId,
+            userId,
+          }),
+          expect.any(String)
+        );
+      });
+    });
+
+    describe('exempt role check logging', () => {
+      it('should log exempt check with action and matched role when user has exempt role', async () => {
+        const guildId = 'exempt-log-guild';
+        const userId = 'exempt-log-user';
+        const channelId = 'exempt-log-channel';
+        const exemptRoleId = 'exempt-role-123';
+
+        const mockRole = { id: exemptRoleId };
+        const mockRolesCache = new Map([[exemptRoleId, mockRole as any]]);
+        // Add .find() method to mock Map to behave like Discord.js Collection
+        (mockRolesCache as any).find = function(predicate: (role: any) => boolean) {
+          for (const [_, role] of this.entries()) {
+            if (predicate(role)) return role;
+          }
+          return undefined;
+        };
+
+        const mockMember: Partial<GuildMember> = {
+          roles: {
+            cache: mockRolesCache,
+          } as any,
+        };
+
+        const mockGuild: Partial<Guild> = {
+          members: {
+            fetch: vi.fn().mockResolvedValue(mockMember),
+          } as any,
+        };
+
+        vi.mocked(mockConfigService.getConfig).mockReturnValue(
+          createMockGuildSettings({
+            guildId,
+            enabled: true,
+            exemptRoleIds: [exemptRoleId],
+          })
+        );
+        vi.mocked(mockClient.guilds.fetch).mockResolvedValue(mockGuild as Guild);
+
+        await service.startTracking(guildId, userId, channelId);
+
+        expect(mockLogger.debug).toHaveBeenCalledWith(
+          expect.objectContaining({
+            action: 'exempt_check',
+            guildId,
+            userId,
+            matchedRoleId: exemptRoleId,
+          }),
+          expect.any(String)
+        );
+      });
+
+      it('should log first matched role when user has multiple exempt roles', async () => {
+        const guildId = 'multi-exempt-guild';
+        const userId = 'multi-exempt-user';
+        const channelId = 'multi-exempt-channel';
+        const exemptRole1 = 'exempt-role-1';
+        const exemptRole2 = 'exempt-role-2';
+
+        const mockRolesCache = new Map([
+          [exemptRole1, { id: exemptRole1 } as any],
+          [exemptRole2, { id: exemptRole2 } as any],
+        ]);
+        // Add .find() method to mock Map to behave like Discord.js Collection
+        (mockRolesCache as any).find = function(predicate: (role: any) => boolean) {
+          for (const [_, role] of this.entries()) {
+            if (predicate(role)) return role;
+          }
+          return undefined;
+        };
+
+        const mockMember: Partial<GuildMember> = {
+          roles: {
+            cache: mockRolesCache,
+          } as any,
+        };
+
+        const mockGuild: Partial<Guild> = {
+          members: {
+            fetch: vi.fn().mockResolvedValue(mockMember),
+          } as any,
+        };
+
+        vi.mocked(mockConfigService.getConfig).mockReturnValue(
+          createMockGuildSettings({
+            guildId,
+            enabled: true,
+            exemptRoleIds: [exemptRole1, exemptRole2],
+          })
+        );
+        vi.mocked(mockClient.guilds.fetch).mockResolvedValue(mockGuild as Guild);
+
+        await service.startTracking(guildId, userId, channelId);
+
+        // Should log with one of the matched roles
+        expect(mockLogger.debug).toHaveBeenCalledWith(
+          expect.objectContaining({
+            action: 'exempt_check',
+            guildId,
+            userId,
+            matchedRoleId: expect.stringMatching(/exempt-role-[12]/),
+          }),
+          expect.any(String)
+        );
+      });
+
+      it('should not log exempt check when user has no exempt roles', async () => {
+        const guildId = 'no-exempt-guild';
+        const userId = 'no-exempt-user';
+        const channelId = 'no-exempt-channel';
+
+        const mockRolesCache = new Map([
+          ['regular-role-1', { id: 'regular-role-1' } as any],
+        ]);
+
+        const mockMember: Partial<GuildMember> = {
+          roles: {
+            cache: mockRolesCache,
+          } as any,
+        };
+
+        const mockGuild: Partial<Guild> = {
+          members: {
+            fetch: vi.fn().mockResolvedValue(mockMember),
+          } as any,
+        };
+
+        vi.mocked(mockConfigService.getConfig).mockReturnValue(
+          createMockGuildSettings({
+            guildId,
+            enabled: true,
+            exemptRoleIds: ['exempt-role-999'],
+          })
+        );
+        vi.mocked(mockClient.guilds.fetch).mockResolvedValue(mockGuild as Guild);
+
+        await service.startTracking(guildId, userId, channelId);
+
+        // Should not log exempt_check when no roles match
+        expect(mockLogger.debug).not.toHaveBeenCalledWith(
+          expect.objectContaining({
+            action: 'exempt_check',
+            matchedRoleId: expect.anything(),
+          }),
+          expect.any(String)
+        );
+      });
+
+      it('should not log exempt check when exemptRoleIds is empty', async () => {
+        const guildId = 'no-config-exempt-guild';
+        const userId = 'no-config-exempt-user';
+        const channelId = 'no-config-exempt-channel';
+
+        vi.mocked(mockConfigService.getConfig).mockReturnValue(
+          createMockGuildSettings({
+            guildId,
+            enabled: true,
+            exemptRoleIds: [],
+          })
+        );
+
+        await service.startTracking(guildId, userId, channelId);
+
+        // Should not perform exempt check when list is empty
+        expect(mockLogger.debug).not.toHaveBeenCalledWith(
+          expect.objectContaining({
+            action: 'exempt_check',
+          }),
+          expect.any(String)
+        );
+      });
+    });
+
+    describe('validation failure logging', () => {
+      it('should log validation failed when timeout is NaN', async () => {
+        const guildId = 'nan-timeout-guild';
+        const userId = 'nan-timeout-user';
+        const channelId = 'nan-timeout-channel';
+
+        vi.mocked(mockConfigService.getConfig).mockReturnValue(
+          createMockGuildSettings({
+            guildId,
+            enabled: true,
+            afkTimeoutSeconds: NaN,
+            warningSecondsBefore: 60,
+          })
+        );
+
+        await service.startTracking(guildId, userId, channelId);
+
+        expect(mockLogger.error).toHaveBeenCalledWith(
+          expect.objectContaining({
+            action: 'validation_failed',
+            guildId,
+            reason: 'nan_values',
+            afkTimeoutSeconds: NaN,
+          }),
+          expect.any(String)
+        );
+      });
+
+      it('should log validation failed when warning is NaN', async () => {
+        const guildId = 'nan-warning-guild';
+        const userId = 'nan-warning-user';
+        const channelId = 'nan-warning-channel';
+
+        vi.mocked(mockConfigService.getConfig).mockReturnValue(
+          createMockGuildSettings({
+            guildId,
+            enabled: true,
+            afkTimeoutSeconds: 300,
+            warningSecondsBefore: NaN,
+          })
+        );
+
+        await service.startTracking(guildId, userId, channelId);
+
+        expect(mockLogger.error).toHaveBeenCalledWith(
+          expect.objectContaining({
+            action: 'validation_failed',
+            guildId,
+            reason: 'nan_values',
+            warningSecondsBefore: NaN,
+          }),
+          expect.any(String)
+        );
+      });
+
+      it('should log validation failed when timeout is negative', async () => {
+        const guildId = 'negative-timeout-guild';
+        const userId = 'negative-timeout-user';
+        const channelId = 'negative-timeout-channel';
+
+        vi.mocked(mockConfigService.getConfig).mockReturnValue(
+          createMockGuildSettings({
+            guildId,
+            enabled: true,
+            afkTimeoutSeconds: -100,
+            warningSecondsBefore: 30,
+          })
+        );
+
+        await service.startTracking(guildId, userId, channelId);
+
+        expect(mockLogger.error).toHaveBeenCalledWith(
+          expect.objectContaining({
+            action: 'validation_failed',
+            guildId,
+            reason: 'negative_values',
+            afkTimeoutSeconds: -100,
+          }),
+          expect.any(String)
+        );
+      });
+
+      it('should log validation failed when timeout is zero', async () => {
+        const guildId = 'zero-timeout-guild';
+        const userId = 'zero-timeout-user';
+        const channelId = 'zero-timeout-channel';
+
+        vi.mocked(mockConfigService.getConfig).mockReturnValue(
+          createMockGuildSettings({
+            guildId,
+            enabled: true,
+            afkTimeoutSeconds: 0,
+            warningSecondsBefore: 0,
+          })
+        );
+
+        await service.startTracking(guildId, userId, channelId);
+
+        expect(mockLogger.error).toHaveBeenCalledWith(
+          expect.objectContaining({
+            action: 'validation_failed',
+            guildId,
+            reason: 'negative_values',
+            afkTimeoutSeconds: 0,
+          }),
+          expect.any(String)
+        );
+      });
+
+      it('should log validation failed when warning is negative', async () => {
+        const guildId = 'negative-warning-guild';
+        const userId = 'negative-warning-user';
+        const channelId = 'negative-warning-channel';
+
+        vi.mocked(mockConfigService.getConfig).mockReturnValue(
+          createMockGuildSettings({
+            guildId,
+            enabled: true,
+            afkTimeoutSeconds: 300,
+            warningSecondsBefore: -30,
+          })
+        );
+
+        await service.startTracking(guildId, userId, channelId);
+
+        expect(mockLogger.error).toHaveBeenCalledWith(
+          expect.objectContaining({
+            action: 'validation_failed',
+            guildId,
+            reason: 'negative_values',
+            warningSecondsBefore: -30,
+          }),
+          expect.any(String)
+        );
+      });
+
+      it('should log validation failed when warning time equals timeout', async () => {
+        const guildId = 'equal-times-guild';
+        const userId = 'equal-times-user';
+        const channelId = 'equal-times-channel';
+
+        vi.mocked(mockConfigService.getConfig).mockReturnValue(
+          createMockGuildSettings({
+            guildId,
+            enabled: true,
+            afkTimeoutSeconds: 300,
+            warningSecondsBefore: 300,
+          })
+        );
+
+        await service.startTracking(guildId, userId, channelId);
+
+        expect(mockLogger.error).toHaveBeenCalledWith(
+          expect.objectContaining({
+            action: 'validation_failed',
+            guildId,
+            reason: 'warning_exceeds_timeout',
+            afkTimeoutSeconds: 300,
+            warningSecondsBefore: 300,
+          }),
+          expect.any(String)
+        );
+      });
+
+      it('should log validation failed when warning time exceeds timeout', async () => {
+        const guildId = 'warning-exceeds-guild';
+        const userId = 'warning-exceeds-user';
+        const channelId = 'warning-exceeds-channel';
+
+        vi.mocked(mockConfigService.getConfig).mockReturnValue(
+          createMockGuildSettings({
+            guildId,
+            enabled: true,
+            afkTimeoutSeconds: 300,
+            warningSecondsBefore: 400,
+          })
+        );
+
+        await service.startTracking(guildId, userId, channelId);
+
+        expect(mockLogger.error).toHaveBeenCalledWith(
+          expect.objectContaining({
+            action: 'validation_failed',
+            guildId,
+            reason: 'warning_exceeds_timeout',
+            afkTimeoutSeconds: 300,
+            warningSecondsBefore: 400,
+          }),
+          expect.any(String)
+        );
+      });
+
+      it('should use error level for validation failures, not debug', async () => {
+        const guildId = 'error-level-guild';
+        const userId = 'error-level-user';
+        const channelId = 'error-level-channel';
+
+        vi.mocked(mockConfigService.getConfig).mockReturnValue(
+          createMockGuildSettings({
+            guildId,
+            enabled: true,
+            afkTimeoutSeconds: -100,
+          })
+        );
+
+        await service.startTracking(guildId, userId, channelId);
+
+        // Should use error, not debug
+        expect(mockLogger.error).toHaveBeenCalledWith(
+          expect.objectContaining({
+            action: 'validation_failed',
+          }),
+          expect.any(String)
+        );
+
+        expect(mockLogger.debug).not.toHaveBeenCalledWith(
+          expect.objectContaining({
+            action: 'validation_failed',
+          }),
+          expect.any(String)
+        );
+      });
+    });
+  });
+
   describe('RateLimiter integration', () => {
     const createEnabledConfig = (guildId: string): GuildSettings =>
       createMockGuildSettings({

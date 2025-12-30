@@ -92,6 +92,7 @@ describe('voiceStateUpdate - Threshold Coordination', () => {
   ): Partial<VoiceState> {
     return {
       channel: channel as VoiceChannel,
+      channelId: channel?.id ?? null,
       member: {
         user: {
           id: userId,
@@ -719,6 +720,462 @@ describe('voiceStateUpdate - Threshold Coordination', () => {
 
       // Should have logged and returned early
       expect(mockLogger.debug).toHaveBeenCalledWith('No userId found in voice state update');
+    });
+  });
+
+  describe('WU-6: Debug Logging with eventType detection', () => {
+    describe('when logger.isLevelEnabled returns true', () => {
+      beforeEach(() => {
+        mockLogger.isLevelEnabled.mockReturnValue(true);
+      });
+
+      it('should log with eventType "join" when user joins a channel', async () => {
+        // WHY: The structured log should identify join events for observability.
+        const joiningUserId = 'user-joining';
+        const channelId = 'channel-123';
+
+        const channelAfterJoin = createMockChannel(channelId, [joiningUserId]);
+        const oldState = createMockVoiceState(joiningUserId, null);
+        const newState = createMockVoiceState(joiningUserId, channelAfterJoin);
+
+        await handler(oldState as VoiceState, newState as VoiceState);
+
+        expect(mockLogger.debug).toHaveBeenCalledWith(
+          expect.objectContaining({
+            action: 'voice_state_change',
+            eventType: 'join',
+            guildId: 'test-guild',
+            userId: joiningUserId,
+          }),
+          'Processing voice state update'
+        );
+      });
+
+      it('should log with eventType "leave" when user leaves a channel', async () => {
+        // WHY: The structured log should identify leave events for observability.
+        const leavingUserId = 'user-leaving';
+        const channelId = 'channel-456';
+
+        const channelBeforeLeave = createMockChannel(channelId, [leavingUserId]);
+        const oldState = createMockVoiceState(leavingUserId, channelBeforeLeave);
+        const newState = createMockVoiceState(leavingUserId, null);
+
+        await handler(oldState as VoiceState, newState as VoiceState);
+
+        expect(mockLogger.debug).toHaveBeenCalledWith(
+          expect.objectContaining({
+            action: 'voice_state_change',
+            eventType: 'leave',
+            guildId: 'test-guild',
+            userId: leavingUserId,
+          }),
+          'Processing voice state update'
+        );
+      });
+
+      it('should log with eventType "switch" when user switches channels', async () => {
+        // WHY: The structured log should identify channel switch events for observability.
+        const switchingUserId = 'user-switching';
+        const oldChannelId = 'channel-old';
+        const newChannelId = 'channel-new';
+
+        const oldChannel = createMockChannel(oldChannelId, ['other-user', switchingUserId]);
+        const newChannel = createMockChannel(newChannelId, ['another-user', switchingUserId]);
+
+        const oldState = createMockVoiceState(switchingUserId, oldChannel);
+        const newState = createMockVoiceState(switchingUserId, newChannel);
+
+        await handler(oldState as VoiceState, newState as VoiceState);
+
+        expect(mockLogger.debug).toHaveBeenCalledWith(
+          expect.objectContaining({
+            action: 'voice_state_change',
+            eventType: 'switch',
+            guildId: 'test-guild',
+            userId: switchingUserId,
+          }),
+          'Processing voice state update'
+        );
+      });
+
+      it('should log with eventType "other" for state changes without channel change', async () => {
+        // WHY: Mute/deafen events should be logged as 'other' to distinguish from movement.
+        const userId = 'user-123';
+        const channelId = 'channel-same';
+
+        const channel = createMockChannel(channelId, [userId, 'other-user']);
+
+        // Same channel in both states simulates mute/deafen/etc
+        const oldState = createMockVoiceState(userId, channel);
+        const newState = createMockVoiceState(userId, channel);
+
+        await handler(oldState as VoiceState, newState as VoiceState);
+
+        expect(mockLogger.debug).toHaveBeenCalledWith(
+          expect.objectContaining({
+            action: 'voice_state_change',
+            eventType: 'other',
+            guildId: 'test-guild',
+            userId: userId,
+          }),
+          'Processing voice state update'
+        );
+      });
+
+      it('should log additional debug message for join events', async () => {
+        // WHY: Join events have a secondary debug log with channel details.
+        const joiningUserId = 'user-joining';
+        const channelId = 'channel-detail';
+
+        const channelAfterJoin = createMockChannel(channelId, [joiningUserId]);
+        const oldState = createMockVoiceState(joiningUserId, null);
+        const newState = createMockVoiceState(joiningUserId, channelAfterJoin);
+
+        await handler(oldState as VoiceState, newState as VoiceState);
+
+        expect(mockLogger.debug).toHaveBeenCalledWith(
+          expect.objectContaining({
+            userId: joiningUserId,
+            guildId: 'test-guild',
+            channelId: channelId,
+          }),
+          'User joined voice channel'
+        );
+      });
+
+      it('should log additional debug message for leave events', async () => {
+        // WHY: Leave events have a secondary debug log with channel details.
+        const leavingUserId = 'user-leaving';
+        const channelId = 'channel-detail';
+
+        const channelBeforeLeave = createMockChannel(channelId, [leavingUserId]);
+        const oldState = createMockVoiceState(leavingUserId, channelBeforeLeave);
+        const newState = createMockVoiceState(leavingUserId, null);
+
+        await handler(oldState as VoiceState, newState as VoiceState);
+
+        expect(mockLogger.debug).toHaveBeenCalledWith(
+          expect.objectContaining({
+            userId: leavingUserId,
+            guildId: 'test-guild',
+            channelId: channelId,
+          }),
+          'User left voice channel'
+        );
+      });
+
+      it('should log additional debug message for switch events with both channel IDs', async () => {
+        // WHY: Switch events have a secondary debug log with old and new channel IDs.
+        const switchingUserId = 'user-switching';
+        const oldChannelId = 'channel-old';
+        const newChannelId = 'channel-new';
+
+        const oldChannel = createMockChannel(oldChannelId, ['other-user', switchingUserId]);
+        const newChannel = createMockChannel(newChannelId, ['another-user', switchingUserId]);
+
+        const oldState = createMockVoiceState(switchingUserId, oldChannel);
+        const newState = createMockVoiceState(switchingUserId, newChannel);
+
+        await handler(oldState as VoiceState, newState as VoiceState);
+
+        expect(mockLogger.debug).toHaveBeenCalledWith(
+          expect.objectContaining({
+            userId: switchingUserId,
+            guildId: 'test-guild',
+            oldChannelId: oldChannelId,
+            newChannelId: newChannelId,
+          }),
+          'User switched voice channels'
+        );
+      });
+
+      it('should log additional debug message for other events', async () => {
+        // WHY: Other state changes (mute/deafen) have their own debug log.
+        const userId = 'user-123';
+        const channelId = 'channel-same';
+
+        const channel = createMockChannel(channelId, [userId, 'other-user']);
+
+        const oldState = createMockVoiceState(userId, channel);
+        const newState = createMockVoiceState(userId, channel);
+
+        await handler(oldState as VoiceState, newState as VoiceState);
+
+        expect(mockLogger.debug).toHaveBeenCalledWith(
+          expect.objectContaining({
+            userId: userId,
+            guildId: 'test-guild',
+          }),
+          'Voice state updated (no channel change)'
+        );
+      });
+    });
+
+    describe('when logger.isLevelEnabled returns false (debug disabled)', () => {
+      beforeEach(() => {
+        mockLogger.isLevelEnabled.mockReturnValue(false);
+      });
+
+      it('should not call logger.debug when user joins a channel', async () => {
+        // WHY: Hot path optimization - skip expensive log formatting when debug is disabled.
+        const joiningUserId = 'user-joining';
+        const channelId = 'channel-123';
+
+        const channelAfterJoin = createMockChannel(channelId, [joiningUserId]);
+        const oldState = createMockVoiceState(joiningUserId, null);
+        const newState = createMockVoiceState(joiningUserId, channelAfterJoin);
+
+        await handler(oldState as VoiceState, newState as VoiceState);
+
+        expect(mockLogger.debug).not.toHaveBeenCalled();
+      });
+
+      it('should not call logger.debug when user leaves a channel', async () => {
+        // WHY: Hot path optimization - skip expensive log formatting when debug is disabled.
+        const leavingUserId = 'user-leaving';
+        const channelId = 'channel-456';
+
+        const channelBeforeLeave = createMockChannel(channelId, [leavingUserId]);
+        const oldState = createMockVoiceState(leavingUserId, channelBeforeLeave);
+        const newState = createMockVoiceState(leavingUserId, null);
+
+        await handler(oldState as VoiceState, newState as VoiceState);
+
+        expect(mockLogger.debug).not.toHaveBeenCalled();
+      });
+
+      it('should not call logger.debug when user switches channels', async () => {
+        // WHY: Hot path optimization - skip expensive log formatting when debug is disabled.
+        const switchingUserId = 'user-switching';
+        const oldChannelId = 'channel-old';
+        const newChannelId = 'channel-new';
+
+        const oldChannel = createMockChannel(oldChannelId, ['other-user', switchingUserId]);
+        const newChannel = createMockChannel(newChannelId, ['another-user', switchingUserId]);
+
+        const oldState = createMockVoiceState(switchingUserId, oldChannel);
+        const newState = createMockVoiceState(switchingUserId, newChannel);
+
+        await handler(oldState as VoiceState, newState as VoiceState);
+
+        expect(mockLogger.debug).not.toHaveBeenCalled();
+      });
+
+      it('should not call logger.debug for other state changes', async () => {
+        // WHY: Hot path optimization - skip expensive log formatting when debug is disabled.
+        const userId = 'user-123';
+        const channelId = 'channel-same';
+
+        const channel = createMockChannel(channelId, [userId, 'other-user']);
+
+        const oldState = createMockVoiceState(userId, channel);
+        const newState = createMockVoiceState(userId, channel);
+
+        await handler(oldState as VoiceState, newState as VoiceState);
+
+        expect(mockLogger.debug).not.toHaveBeenCalled();
+      });
+
+      it('should not call logger.debug when no userId is found', async () => {
+        // WHY: Even early-return paths should respect the isLevelEnabled guard.
+        const oldState: Partial<VoiceState> = {
+          channel: null as any,
+          member: undefined,
+          guild: { id: 'test-guild' } as any,
+        };
+        const newState: Partial<VoiceState> = {
+          channel: createMockChannel('channel-123', []) as VoiceChannel,
+          member: undefined,
+          guild: { id: 'test-guild' } as any,
+        };
+
+        await handler(oldState as VoiceState, newState as VoiceState);
+
+        expect(mockLogger.debug).not.toHaveBeenCalled();
+      });
+
+      it('should not call logger.debug when bot user is detected', async () => {
+        // WHY: Bot detection early-return should also respect the isLevelEnabled guard.
+        const botUserId = 'bot-123';
+        const channelId = 'channel-test';
+
+        const channel = createMockChannel(channelId, ['user-1']);
+        const oldState: Partial<VoiceState> = {
+          channel: null as any,
+          member: {
+            user: {
+              id: botUserId,
+              bot: true,
+            },
+          } as GuildMember,
+          guild: { id: 'test-guild' } as any,
+        };
+        const newState: Partial<VoiceState> = {
+          channel: channel as VoiceChannel,
+          member: {
+            user: {
+              id: botUserId,
+              bot: true,
+            },
+          } as GuildMember,
+          guild: { id: 'test-guild' } as any,
+        };
+
+        await handler(oldState as VoiceState, newState as VoiceState);
+
+        expect(mockLogger.debug).not.toHaveBeenCalled();
+      });
+
+      it('should not call logger.debug when guild monitoring is disabled', async () => {
+        // WHY: Even config check early-returns should respect the isLevelEnabled guard.
+        vi.mocked(mockGuildConfig.getConfig).mockReturnValue({
+          ...enabledConfig,
+          enabled: false,
+        });
+
+        const joiningUserId = 'user-1';
+        const channelId = 'channel-disabled';
+
+        const channelAfterJoin = createMockChannel(channelId, [joiningUserId]);
+        const oldState = createMockVoiceState(joiningUserId, null);
+        const newState = createMockVoiceState(joiningUserId, channelAfterJoin);
+
+        await handler(oldState as VoiceState, newState as VoiceState);
+
+        expect(mockLogger.debug).not.toHaveBeenCalled();
+      });
+
+      it('should still execute core logic even when debug is disabled', async () => {
+        // WHY: isLevelEnabled should only affect logging, not business logic.
+        const joiningUserId = 'user-1';
+        const existingUserId = 'user-2';
+        const channelId = 'channel-active';
+
+        const channelAfterJoin = createMockChannel(channelId, [existingUserId, joiningUserId]);
+        const oldState = createMockVoiceState(joiningUserId, null);
+        const newState = createMockVoiceState(joiningUserId, channelAfterJoin);
+
+        await handler(oldState as VoiceState, newState as VoiceState);
+
+        // Should still trigger tracking logic
+        expect(mockAfkDetection.startTrackingAllInChannel).toHaveBeenCalledWith(
+          'test-guild',
+          channelId,
+          expect.arrayContaining([existingUserId, joiningUserId])
+        );
+        expect(mockVoiceMonitor.handleUserJoin).toHaveBeenCalledWith(channelAfterJoin);
+      });
+    });
+
+    describe('isLevelEnabled call behavior', () => {
+      it('should call isLevelEnabled with "debug" parameter at the start', async () => {
+        // WHY: Verify the guard checks for the correct log level.
+        const joiningUserId = 'user-joining';
+        const channelId = 'channel-123';
+
+        const channelAfterJoin = createMockChannel(channelId, [joiningUserId]);
+        const oldState = createMockVoiceState(joiningUserId, null);
+        const newState = createMockVoiceState(joiningUserId, channelAfterJoin);
+
+        await handler(oldState as VoiceState, newState as VoiceState);
+
+        expect(mockLogger.isLevelEnabled).toHaveBeenCalledWith('debug');
+      });
+
+      it('should call isLevelEnabled before computing eventType', async () => {
+        // WHY: The guard should prevent expensive eventType computation when debug is off.
+        // This test verifies the guard is checked BEFORE the eventType logic runs.
+        const mockIsLevelEnabled = vi.fn().mockReturnValue(false);
+        mockLogger.isLevelEnabled = mockIsLevelEnabled;
+
+        const joiningUserId = 'user-joining';
+        const channelId = 'channel-123';
+
+        const channelAfterJoin = createMockChannel(channelId, [joiningUserId]);
+        const oldState = createMockVoiceState(joiningUserId, null);
+        const newState = createMockVoiceState(joiningUserId, channelAfterJoin);
+
+        await handler(oldState as VoiceState, newState as VoiceState);
+
+        // isLevelEnabled should have been called
+        expect(mockIsLevelEnabled).toHaveBeenCalled();
+        // debug should NOT have been called
+        expect(mockLogger.debug).not.toHaveBeenCalled();
+      });
+    });
+
+    describe('eventType detection edge cases', () => {
+      it('should detect "join" when oldState.channel is null and newState.channel exists', async () => {
+        // WHY: Boundary test - null channel = not in voice, so joining.
+        const userId = 'user-join';
+        const channelId = 'channel-test';
+
+        const channel = createMockChannel(channelId, [userId]);
+        const oldState = createMockVoiceState(userId, null);
+        const newState = createMockVoiceState(userId, channel);
+
+        await handler(oldState as VoiceState, newState as VoiceState);
+
+        expect(mockLogger.debug).toHaveBeenCalledWith(
+          expect.objectContaining({ eventType: 'join' }),
+          expect.any(String)
+        );
+      });
+
+      it('should detect "leave" when oldState.channel exists and newState.channel is null', async () => {
+        // WHY: Boundary test - going from channel to null = leaving voice.
+        const userId = 'user-leave';
+        const channelId = 'channel-test';
+
+        const channel = createMockChannel(channelId, [userId]);
+        const oldState = createMockVoiceState(userId, channel);
+        const newState = createMockVoiceState(userId, null);
+
+        await handler(oldState as VoiceState, newState as VoiceState);
+
+        expect(mockLogger.debug).toHaveBeenCalledWith(
+          expect.objectContaining({ eventType: 'leave' }),
+          expect.any(String)
+        );
+      });
+
+      it('should detect "switch" when channel IDs differ', async () => {
+        // WHY: Different channel IDs = user switched channels.
+        const userId = 'user-switch';
+        const oldChannelId = 'channel-1';
+        const newChannelId = 'channel-2';
+
+        const oldChannel = createMockChannel(oldChannelId, [userId, 'other']);
+        const newChannel = createMockChannel(newChannelId, [userId, 'other']);
+
+        const oldState = createMockVoiceState(userId, oldChannel);
+        const newState = createMockVoiceState(userId, newChannel);
+
+        await handler(oldState as VoiceState, newState as VoiceState);
+
+        expect(mockLogger.debug).toHaveBeenCalledWith(
+          expect.objectContaining({ eventType: 'switch' }),
+          expect.any(String)
+        );
+      });
+
+      it('should detect "other" when both channels are the same', async () => {
+        // WHY: Same channel ID = state change without movement (mute/deafen/etc).
+        const userId = 'user-mute';
+        const channelId = 'channel-same';
+
+        const channel = createMockChannel(channelId, [userId, 'other']);
+
+        const oldState = createMockVoiceState(userId, channel);
+        const newState = createMockVoiceState(userId, channel);
+
+        await handler(oldState as VoiceState, newState as VoiceState);
+
+        expect(mockLogger.debug).toHaveBeenCalledWith(
+          expect.objectContaining({ eventType: 'other' }),
+          expect.any(String)
+        );
+      });
     });
   });
 });

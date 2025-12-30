@@ -13,6 +13,7 @@ export interface MockLogger {
   fatal: ReturnType<typeof vi.fn>;
   trace: ReturnType<typeof vi.fn>;
   child: ReturnType<typeof vi.fn>;
+  isLevelEnabled: ReturnType<typeof vi.fn>;
 }
 
 /**
@@ -30,6 +31,7 @@ export function createMockLogger(): MockLogger {
     fatal: vi.fn(),
     trace: vi.fn(),
     child: vi.fn(),
+    isLevelEnabled: vi.fn().mockReturnValue(true), // Default to enabled for most tests
   };
   logger.child.mockReturnValue(logger);
   return logger;

@@ -53,8 +53,10 @@ export class RateLimiter {
    *
    * Prunes old timestamps outside the sliding window, adds the current timestamp,
    * and enforces warn/crash thresholds.
+   *
+   * @param actionType - Optional description of the action being rate-limited for debug logging
    */
-  recordAction(): void {
+  recordAction(actionType?: string): void {
     const now = Date.now();
     const windowStart = now - this.config.windowMs;
 
@@ -68,11 +70,19 @@ export class RateLimiter {
 
     const count = this.timestamps.length;
 
+    // Guard debug log with level check since this is called frequently
+    if (this.logger.isLevelEnabled('debug')) {
+      this.logger.debug(
+        { actionCount: count, windowMs: this.config.windowMs, actionType },
+        'Action recorded'
+      );
+    }
+
     // Check crash threshold first (more severe)
     if (count >= this.config.crashThreshold && !this.exited) {
       this.exited = true;
       this.logger.error(
-        { actionCount: count, crashThreshold: this.config.crashThreshold },
+        { actionCount: count, crashThreshold: this.config.crashThreshold, actionType },
         'Rate limit exceeded - crashing bot to prevent API ban'
       );
       process.exit(1);
@@ -81,7 +91,7 @@ export class RateLimiter {
     // Check warn threshold
     if (count >= this.config.warnThreshold && !this.exited) {
       this.logger.warn(
-        { actionCount: count, warnThreshold: this.config.warnThreshold },
+        { actionCount: count, warnThreshold: this.config.warnThreshold, actionType },
         'Rate limit warning: approaching threshold'
       );
     }
