@@ -11,7 +11,10 @@ npm start        # Run bot with tsx
 npm run dev      # Same as npm start
 npm test         # Run tests in watch mode (vitest)
 npm run test:run # Run tests once
+npm run test:run -- src/__tests__/AFKDetectionService.test.ts  # Run single test file
 npm run typecheck # Type check without emitting
+npm run lint     # Check for lint errors
+npm run lint:fix # Auto-fix lint errors
 ```
 
 ## Environment Setup
@@ -66,3 +69,14 @@ Discord bots can only be in one voice channel per guild. The bot follows users w
 ### Testing
 
 Tests use Vitest with fake timers for timer-based logic. Tests are in `src/__tests__/` and follow the pattern `*.test.ts`. The test suite mocks Discord.js objects and services extensively - see `AFKDetectionService.test.ts` for patterns.
+
+Shared test fixtures are in `src/__tests__/fixtures.ts`:
+- `createMockLogger()` - Mock pino logger with vi.fn() methods
+- `createMockRateLimiter()` - Mock rate limiter
+- `createMockGuildSettings(overrides)` - Guild config with sensible defaults
+- `ENABLED_CONFIG` / `DISABLED_CONFIG` - Preset configurations
+- `INVALID_CONFIGS` - Array of invalid config cases for parameterized tests
+
+### TypeScript Strictness
+
+The project uses strict TypeScript with `noUncheckedIndexedAccess: true`. Array/object indexing returns `T | undefined`, requiring explicit checks before use.
