@@ -1323,6 +1323,485 @@ describe('GuildConfigService', () => {
     });
   });
 
+  describe('null value handling from database', () => {
+    describe('when database returns settings with null numeric fields', () => {
+      it('should apply default timeout (300) when database has null afkTimeoutSeconds', () => {
+        const guildId = 'null-timeout-guild';
+        const settingsWithNullTimeout: GuildSettings = {
+          guildId,
+          enabled: true,
+          afkTimeoutSeconds: null as unknown as number, // Simulating DB null
+          warningSecondsBefore: 120,
+          warningChannelId: 'channel-123',
+          exemptRoleIds: ['role-1'],
+          adminRoleIds: [],
+          createdAt: '2024-01-01T00:00:00.000Z',
+          updatedAt: '2024-01-01T00:00:00.000Z',
+        };
+
+        vi.mocked(mockRepository.findByGuildId).mockReturnValue(settingsWithNullTimeout);
+
+        const config = service.getConfig(guildId);
+
+        // CRITICAL: Service must replace null with default value
+        expect(config.afkTimeoutSeconds).toBe(300);
+        // Verify other fields preserved
+        expect(config.enabled).toBe(true);
+        expect(config.warningSecondsBefore).toBe(120);
+        expect(config.warningChannelId).toBe('channel-123');
+        expect(config.exemptRoleIds).toEqual(['role-1']);
+      });
+
+      it('should apply default warning (60) when database has null warningSecondsBefore', () => {
+        const guildId = 'null-warning-guild';
+        const settingsWithNullWarning: GuildSettings = {
+          guildId,
+          enabled: false,
+          afkTimeoutSeconds: 450,
+          warningSecondsBefore: null as unknown as number, // Simulating DB null
+          warningChannelId: null,
+          exemptRoleIds: [],
+          adminRoleIds: [],
+          createdAt: '2024-01-01T00:00:00.000Z',
+          updatedAt: '2024-01-01T00:00:00.000Z',
+        };
+
+        vi.mocked(mockRepository.findByGuildId).mockReturnValue(settingsWithNullWarning);
+
+        const config = service.getConfig(guildId);
+
+        // CRITICAL: Service must replace null with default value
+        expect(config.warningSecondsBefore).toBe(60);
+        // Verify other fields preserved
+        expect(config.enabled).toBe(false);
+        expect(config.afkTimeoutSeconds).toBe(450);
+        expect(config.warningChannelId).toBeNull();
+      });
+
+      it('should apply defaults for both timeout and warning when both are null', () => {
+        const guildId = 'both-null-guild';
+        const settingsWithBothNull: GuildSettings = {
+          guildId,
+          enabled: true,
+          afkTimeoutSeconds: null as unknown as number, // Simulating DB null
+          warningSecondsBefore: null as unknown as number, // Simulating DB null
+          warningChannelId: 'channel-999',
+          exemptRoleIds: ['role-admin', 'role-mod'],
+          adminRoleIds: ['admin-1'],
+          createdAt: '2024-01-01T00:00:00.000Z',
+          updatedAt: '2024-01-01T00:00:00.000Z',
+        };
+
+        vi.mocked(mockRepository.findByGuildId).mockReturnValue(settingsWithBothNull);
+
+        const config = service.getConfig(guildId);
+
+        // CRITICAL: Both nulls must be replaced with defaults
+        expect(config.afkTimeoutSeconds).toBe(300);
+        expect(config.warningSecondsBefore).toBe(60);
+        // Verify other fields preserved exactly
+        expect(config.enabled).toBe(true);
+        expect(config.warningChannelId).toBe('channel-999');
+        expect(config.exemptRoleIds).toEqual(['role-admin', 'role-mod']);
+        expect(config.adminRoleIds).toEqual(['admin-1']);
+      });
+
+      it('should preserve non-null numeric values from database without overwriting', () => {
+        // This test proves the service doesn't blindly overwrite valid custom values
+        const guildId = 'custom-values-guild';
+        const settingsWithCustomValues: GuildSettings = {
+          guildId,
+          enabled: true,
+          afkTimeoutSeconds: 999, // Custom non-default value
+          warningSecondsBefore: 150, // Custom non-default value
+          warningChannelId: 'channel-custom',
+          exemptRoleIds: ['custom-role'],
+          adminRoleIds: [],
+          createdAt: '2024-01-01T00:00:00.000Z',
+          updatedAt: '2024-01-01T00:00:00.000Z',
+        };
+
+        vi.mocked(mockRepository.findByGuildId).mockReturnValue(settingsWithCustomValues);
+
+        const config = service.getConfig(guildId);
+
+        // CRITICAL: Must preserve the custom values, not replace with defaults
+        expect(config.afkTimeoutSeconds).toBe(999);
+        expect(config.warningSecondsBefore).toBe(150);
+        // Verify no field was modified
+        expect(config).toEqual(settingsWithCustomValues);
+      });
+
+      it('should preserve zero values without treating them as null', () => {
+        // Edge case: 0 is a valid value and should not be replaced with default
+        const guildId = 'zero-values-guild';
+        const settingsWithZero: GuildSettings = {
+          guildId,
+          enabled: true,
+          afkTimeoutSeconds: 0, // Zero is valid, means immediate timeout
+          warningSecondsBefore: 0, // Zero is valid, means no warning
+          warningChannelId: null,
+          exemptRoleIds: [],
+          adminRoleIds: [],
+          createdAt: '2024-01-01T00:00:00.000Z',
+          updatedAt: '2024-01-01T00:00:00.000Z',
+        };
+
+        vi.mocked(mockRepository.findByGuildId).mockReturnValue(settingsWithZero);
+
+        const config = service.getConfig(guildId);
+
+        // CRITICAL: Zero must be preserved, not replaced with defaults
+        expect(config.afkTimeoutSeconds).toBe(0);
+        expect(config.warningSecondsBefore).toBe(0);
+      });
+
+      it('should handle mix of null and valid values correctly', () => {
+        // Real-world scenario: partial null corruption from database migration
+        const guildId = 'mixed-null-guild';
+        const settingsWithMixedNulls: GuildSettings = {
+          guildId,
+          enabled: true,
+          afkTimeoutSeconds: 600, // Valid value
+          warningSecondsBefore: null as unknown as number, // Null value
+          warningChannelId: 'channel-mixed',
+          exemptRoleIds: [],
+          adminRoleIds: [],
+          createdAt: '2024-01-01T00:00:00.000Z',
+          updatedAt: '2024-01-01T00:00:00.000Z',
+        };
+
+        vi.mocked(mockRepository.findByGuildId).mockReturnValue(settingsWithMixedNulls);
+
+        const config = service.getConfig(guildId);
+
+        // Valid value preserved, null replaced
+        expect(config.afkTimeoutSeconds).toBe(600);
+        expect(config.warningSecondsBefore).toBe(60);
+        expect(config.warningChannelId).toBe('channel-mixed');
+      });
+    });
+
+    describe('when updateConfig returns settings with null fields', () => {
+      it('should apply defaults to null fields in returned config after update', () => {
+        // Tests that updateConfig also applies defaults when DB returns nulls
+        const guildId = 'update-null-guild';
+        const updatedSettingsWithNull: GuildSettings = {
+          guildId,
+          enabled: true,
+          afkTimeoutSeconds: null as unknown as number, // DB returned null after update
+          warningSecondsBefore: 90,
+          warningChannelId: 'new-channel',
+          exemptRoleIds: ['new-role'],
+          adminRoleIds: [],
+          createdAt: '2024-01-01T00:00:00.000Z',
+          updatedAt: '2024-01-02T10:00:00.000Z',
+        };
+
+        vi.mocked(mockRepository.findByGuildId).mockReturnValue(updatedSettingsWithNull);
+
+        const result = service.updateConfig(guildId, { enabled: true });
+
+        // CRITICAL: Returned config must have defaults applied
+        expect(result.afkTimeoutSeconds).toBe(300);
+        expect(result.warningSecondsBefore).toBe(90);
+        expect(result.enabled).toBe(true);
+      });
+
+      it('should apply defaults to both null fields when updateConfig returns both null', () => {
+        const guildId = 'update-both-null-guild';
+        const updatedWithBothNull: GuildSettings = {
+          guildId,
+          enabled: false,
+          afkTimeoutSeconds: null as unknown as number,
+          warningSecondsBefore: null as unknown as number,
+          warningChannelId: null,
+          exemptRoleIds: [],
+          adminRoleIds: [],
+          createdAt: '2024-01-01T00:00:00.000Z',
+          updatedAt: '2024-01-02T11:00:00.000Z',
+        };
+
+        vi.mocked(mockRepository.findByGuildId).mockReturnValue(updatedWithBothNull);
+
+        const result = service.updateConfig(guildId, { warningChannelId: null });
+
+        // CRITICAL: Both nulls replaced with defaults
+        expect(result.afkTimeoutSeconds).toBe(300);
+        expect(result.warningSecondsBefore).toBe(60);
+        expect(result.enabled).toBe(false);
+      });
+
+      it('should preserve custom non-null values in updateConfig result', () => {
+        // Ensures updateConfig doesn't overwrite valid custom values with defaults
+        const guildId = 'update-preserve-guild';
+        const updatedWithCustomValues: GuildSettings = {
+          guildId,
+          enabled: true,
+          afkTimeoutSeconds: 888,
+          warningSecondsBefore: 200,
+          warningChannelId: 'preserved-channel',
+          exemptRoleIds: ['preserved-role'],
+          adminRoleIds: [],
+          createdAt: '2024-01-01T00:00:00.000Z',
+          updatedAt: '2024-01-02T12:00:00.000Z',
+        };
+
+        vi.mocked(mockRepository.findByGuildId).mockReturnValue(updatedWithCustomValues);
+
+        const result = service.updateConfig(guildId, { afkTimeoutSeconds: 888 });
+
+        // CRITICAL: Custom values must not be replaced
+        expect(result.afkTimeoutSeconds).toBe(888);
+        expect(result.warningSecondsBefore).toBe(200);
+      });
+    });
+
+    describe('when cached values have null fields', () => {
+      it('should apply defaults before caching so subsequent calls have correct values', () => {
+        // This test proves that nulls are fixed BEFORE caching, not on every access
+        const guildId = 'cache-with-nulls-guild';
+        const settingsWithNull: GuildSettings = {
+          guildId,
+          enabled: true,
+          afkTimeoutSeconds: null as unknown as number,
+          warningSecondsBefore: null as unknown as number,
+          warningChannelId: 'channel-cache',
+          exemptRoleIds: [],
+          adminRoleIds: [],
+          createdAt: '2024-01-01T00:00:00.000Z',
+          updatedAt: '2024-01-01T00:00:00.000Z',
+        };
+
+        vi.mocked(mockRepository.findByGuildId).mockReturnValue(settingsWithNull);
+
+        // First call - hits DB
+        const firstCall = service.getConfig(guildId);
+        expect(firstCall.afkTimeoutSeconds).toBe(300);
+        expect(firstCall.warningSecondsBefore).toBe(60);
+
+        // Clear mock to verify cache is used
+        vi.mocked(mockRepository.findByGuildId).mockClear();
+
+        // Second call - should use cache AND still have defaults applied
+        const secondCall = service.getConfig(guildId);
+        expect(mockRepository.findByGuildId).not.toHaveBeenCalled(); // Proves cache hit
+        expect(secondCall.afkTimeoutSeconds).toBe(300); // CRITICAL: Defaults still present
+        expect(secondCall.warningSecondsBefore).toBe(60);
+      });
+
+      it('should return same object reference from cache with defaults already applied', () => {
+        // Tests that the cached object already has defaults, ensuring performance
+        const guildId = 'cache-reference-nulls';
+        const settingsWithNull: GuildSettings = {
+          guildId,
+          enabled: false,
+          afkTimeoutSeconds: null as unknown as number,
+          warningSecondsBefore: 45,
+          warningChannelId: null,
+          exemptRoleIds: [],
+          adminRoleIds: [],
+          createdAt: '2024-01-01T00:00:00.000Z',
+          updatedAt: '2024-01-01T00:00:00.000Z',
+        };
+
+        vi.mocked(mockRepository.findByGuildId).mockReturnValue(settingsWithNull);
+
+        const call1 = service.getConfig(guildId);
+        const call2 = service.getConfig(guildId);
+
+        // Should be same reference (cached)
+        expect(call1).toBe(call2);
+        // And both should have defaults
+        expect(call1.afkTimeoutSeconds).toBe(300);
+        expect(call2.afkTimeoutSeconds).toBe(300);
+      });
+
+      it('should not hit database on subsequent calls after defaults are applied and cached', () => {
+        // Proves that default application happens once, then cache is used
+        const guildId = 'cache-efficiency-nulls';
+        const settingsWithNull: GuildSettings = {
+          guildId,
+          enabled: true,
+          afkTimeoutSeconds: null as unknown as number,
+          warningSecondsBefore: null as unknown as number,
+          warningChannelId: 'efficient-channel',
+          exemptRoleIds: ['role-eff'],
+          adminRoleIds: [],
+          createdAt: '2024-01-01T00:00:00.000Z',
+          updatedAt: '2024-01-01T00:00:00.000Z',
+        };
+
+        let dbCallCount = 0;
+        vi.mocked(mockRepository.findByGuildId).mockImplementation(() => {
+          dbCallCount++;
+          return settingsWithNull;
+        });
+
+        // Call multiple times
+        service.getConfig(guildId);
+        service.getConfig(guildId);
+        service.getConfig(guildId);
+
+        // Should only hit DB once
+        expect(dbCallCount).toBe(1);
+      });
+    });
+
+    describe('edge cases with null value handling', () => {
+      it('should handle undefined as different from null and treat it as missing', () => {
+        // Edge case: undefined vs null behavior
+        const guildId = 'undefined-field-guild';
+        const settingsWithUndefined: GuildSettings = {
+          guildId,
+          enabled: true,
+          afkTimeoutSeconds: undefined as unknown as number,
+          warningSecondsBefore: 75,
+          warningChannelId: null,
+          exemptRoleIds: [],
+          adminRoleIds: [],
+          createdAt: '2024-01-01T00:00:00.000Z',
+          updatedAt: '2024-01-01T00:00:00.000Z',
+        };
+
+        vi.mocked(mockRepository.findByGuildId).mockReturnValue(settingsWithUndefined);
+
+        const config = service.getConfig(guildId);
+
+        // Should apply default for undefined as well
+        expect(config.afkTimeoutSeconds).toBe(300);
+        expect(config.warningSecondsBefore).toBe(75);
+      });
+
+      it('should handle negative values by preserving them (they are technically valid numbers)', () => {
+        // Edge case: negative numbers might indicate disabled features
+        const guildId = 'negative-values-guild';
+        const settingsWithNegatives: GuildSettings = {
+          guildId,
+          enabled: true,
+          afkTimeoutSeconds: -1, // Might mean "disabled"
+          warningSecondsBefore: -1, // Might mean "no warning"
+          warningChannelId: null,
+          exemptRoleIds: [],
+          adminRoleIds: [],
+          createdAt: '2024-01-01T00:00:00.000Z',
+          updatedAt: '2024-01-01T00:00:00.000Z',
+        };
+
+        vi.mocked(mockRepository.findByGuildId).mockReturnValue(settingsWithNegatives);
+
+        const config = service.getConfig(guildId);
+
+        // Negative numbers should be preserved as they might be valid sentinel values
+        expect(config.afkTimeoutSeconds).toBe(-1);
+        expect(config.warningSecondsBefore).toBe(-1);
+      });
+
+      it('should handle very large numbers without replacing them', () => {
+        // Edge case: MAX_SAFE_INTEGER and beyond
+        const guildId = 'large-numbers-guild';
+        const settingsWithLargeNumbers: GuildSettings = {
+          guildId,
+          enabled: true,
+          afkTimeoutSeconds: Number.MAX_SAFE_INTEGER,
+          warningSecondsBefore: 999999999,
+          warningChannelId: null,
+          exemptRoleIds: [],
+          adminRoleIds: [],
+          createdAt: '2024-01-01T00:00:00.000Z',
+          updatedAt: '2024-01-01T00:00:00.000Z',
+        };
+
+        vi.mocked(mockRepository.findByGuildId).mockReturnValue(settingsWithLargeNumbers);
+
+        const config = service.getConfig(guildId);
+
+        // Large valid numbers should be preserved
+        expect(config.afkTimeoutSeconds).toBe(Number.MAX_SAFE_INTEGER);
+        expect(config.warningSecondsBefore).toBe(999999999);
+      });
+    });
+
+    describe('integration with cache clearing and null values', () => {
+      it('should reapply defaults after cache clear if DB still returns nulls', () => {
+        // Tests that defaults are applied on every fetch from DB, not just once
+        const guildId = 'reclear-nulls-guild';
+        const settingsWithNull: GuildSettings = {
+          guildId,
+          enabled: true,
+          afkTimeoutSeconds: null as unknown as number,
+          warningSecondsBefore: null as unknown as number,
+          warningChannelId: null,
+          exemptRoleIds: [],
+          adminRoleIds: [],
+          createdAt: '2024-01-01T00:00:00.000Z',
+          updatedAt: '2024-01-01T00:00:00.000Z',
+        };
+
+        vi.mocked(mockRepository.findByGuildId).mockReturnValue(settingsWithNull);
+
+        // First fetch
+        const first = service.getConfig(guildId);
+        expect(first.afkTimeoutSeconds).toBe(300);
+
+        // Clear cache
+        service.clearCache(guildId);
+
+        // Second fetch - should apply defaults again
+        const second = service.getConfig(guildId);
+        expect(second.afkTimeoutSeconds).toBe(300);
+        expect(second.warningSecondsBefore).toBe(60);
+      });
+
+      it('should handle update that changes value from null to custom, then to null again', () => {
+        // Complex scenario: tracking default application through multiple updates
+        const guildId = 'null-cycle-guild';
+
+        // Initial state: null in DB
+        const initialNull: GuildSettings = {
+          guildId,
+          enabled: true,
+          afkTimeoutSeconds: null as unknown as number,
+          warningSecondsBefore: 60,
+          warningChannelId: null,
+          exemptRoleIds: [],
+          adminRoleIds: [],
+          createdAt: '2024-01-01T00:00:00.000Z',
+          updatedAt: '2024-01-01T00:00:00.000Z',
+        };
+
+        vi.mocked(mockRepository.findByGuildId).mockReturnValue(initialNull);
+
+        // First fetch - applies default
+        const firstFetch = service.getConfig(guildId);
+        expect(firstFetch.afkTimeoutSeconds).toBe(300);
+
+        // Update to custom value
+        const customValue: GuildSettings = {
+          ...initialNull,
+          afkTimeoutSeconds: 500,
+          updatedAt: '2024-01-02T00:00:00.000Z',
+        };
+        vi.mocked(mockRepository.findByGuildId).mockReturnValue(customValue);
+
+        const afterUpdate = service.updateConfig(guildId, { afkTimeoutSeconds: 500 });
+        expect(afterUpdate.afkTimeoutSeconds).toBe(500);
+
+        // Update back to null (DB corruption scenario)
+        const backToNull: GuildSettings = {
+          ...customValue,
+          afkTimeoutSeconds: null as unknown as number,
+          updatedAt: '2024-01-03T00:00:00.000Z',
+        };
+        vi.mocked(mockRepository.findByGuildId).mockReturnValue(backToNull);
+
+        service.clearCache(guildId);
+        const afterCorruption = service.getConfig(guildId);
+        expect(afterCorruption.afkTimeoutSeconds).toBe(300); // Default reapplied
+      });
+    });
+  });
+
   describe('onGuildDelete', () => {
     describe('when guild exists in cache', () => {
       it('should clear cache entry for specified guild', () => {

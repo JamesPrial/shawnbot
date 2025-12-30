@@ -70,6 +70,21 @@ export class GuildConfigService {
     this.cache = new LRUCache(maxCacheSize);
   }
 
+  /**
+   * Applies default values to a guild settings object for any null fields.
+   * Uses nullish coalescing to preserve explicit falsy values like 0 or false.
+   *
+   * @param config - The guild settings object that may have null values
+   * @returns A new guild settings object with defaults applied
+   */
+  private applyDefaults(config: GuildSettings): GuildSettings {
+    return {
+      ...config,
+      afkTimeoutSeconds: config.afkTimeoutSeconds ?? DEFAULT_CONFIG.afkTimeoutSeconds,
+      warningSecondsBefore: config.warningSecondsBefore ?? DEFAULT_CONFIG.warningSecondsBefore,
+    };
+  }
+
   getConfig(guildId: string): GuildSettings {
     const cached = this.cache.get(guildId);
     if (cached) {
@@ -78,8 +93,9 @@ export class GuildConfigService {
 
     const fromDatabase = this.repository.findByGuildId(guildId);
     if (fromDatabase) {
-      this.cache.set(guildId, fromDatabase);
-      return fromDatabase;
+      const withDefaults = this.applyDefaults(fromDatabase);
+      this.cache.set(guildId, withDefaults);
+      return withDefaults;
     }
 
     const defaultConfig: GuildSettings = {
@@ -110,8 +126,9 @@ export class GuildConfigService {
       throw new Error(`Failed to retrieve updated config for guild ${guildId}`);
     }
 
-    this.cache.set(guildId, updatedConfig);
-    return updatedConfig;
+    const withDefaults = this.applyDefaults(updatedConfig);
+    this.cache.set(guildId, withDefaults);
+    return withDefaults;
   }
 
   clearCache(guildId?: string): void {
