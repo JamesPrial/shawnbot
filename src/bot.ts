@@ -86,12 +86,19 @@ export async function createBot(): Promise<BotDependencies> {
     logger.debug({ userId, guildId }, 'User started speaking, resetting AFK timer');
 
     try {
-      rateLimiter.recordAction();
-      const guild = await client.guilds.fetch(guildId);
-      rateLimiter.recordAction();
-      const member = await guild.members.fetch(userId);
-      const voiceChannel = member.voice?.channel;
+      const guild = client.guilds.cache.get(guildId);
+      if (!guild) {
+        logger.debug({ userId, guildId }, 'Guild not in cache, skipping reset');
+        return;
+      }
 
+      const member = guild.members.cache.get(userId);
+      if (!member) {
+        logger.debug({ userId, guildId }, 'Member not in cache, skipping reset');
+        return;
+      }
+
+      const voiceChannel = member.voice?.channel;
       if (!voiceChannel) {
         logger.debug({ userId, guildId }, 'Member not in voice channel, skipping reset');
         return;
@@ -113,12 +120,19 @@ export async function createBot(): Promise<BotDependencies> {
     logger.debug({ userId, guildId }, 'User stopped speaking, starting AFK tracking');
 
     try {
-      rateLimiter.recordAction();
-      const guild = await client.guilds.fetch(guildId);
-      rateLimiter.recordAction();
-      const member = await guild.members.fetch(userId);
-      const voiceChannel = member.voice?.channel;
+      const guild = client.guilds.cache.get(guildId);
+      if (!guild) {
+        logger.debug({ userId, guildId }, 'Guild not in cache, skipping tracking');
+        return;
+      }
 
+      const member = guild.members.cache.get(userId);
+      if (!member) {
+        logger.debug({ userId, guildId }, 'Member not in cache, skipping tracking');
+        return;
+      }
+
+      const voiceChannel = member.voice?.channel;
       if (!voiceChannel) {
         logger.debug({ userId, guildId }, 'Member not in voice channel, skipping tracking');
         return;
