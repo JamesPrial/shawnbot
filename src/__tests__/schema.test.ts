@@ -1,23 +1,13 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
 import Database from 'better-sqlite3';
-import type { Logger } from 'pino';
 import { createTables } from '../database/schema';
+import { createMockLogger } from './fixtures';
 
 describe('schema', () => {
-  let mockLogger: Logger;
+  let mockLogger: ReturnType<typeof createMockLogger>;
 
   beforeEach(() => {
-    // Create a mock logger for each test
-    mockLogger = {
-      debug: vi.fn(),
-      info: vi.fn(),
-      warn: vi.fn(),
-      error: vi.fn(),
-      fatal: vi.fn(),
-      trace: vi.fn(),
-      child: vi.fn(() => mockLogger),
-      level: 'info',
-    } as unknown as Logger;
+    mockLogger = createMockLogger();
   });
 
   describe('createTables', () => {

@@ -9,6 +9,7 @@ import {
 import { GuildConfigService } from '../services/GuildConfigService';
 import { hasAFKAdminPermission } from '../utils/permissions';
 import type { GuildSettings } from '../database/repositories/GuildSettingsRepository';
+import { createMockGuildSettings } from './fixtures';
 
 /**
  * ADMIN ROLES FEATURE TEST SUITE
@@ -79,34 +80,13 @@ describe('Admin Roles Feature', () => {
     };
   }
 
-  /**
-   * Creates a mock GuildSettings object with configurable admin roles.
-   *
-   * @param guildId - The guild ID
-   * @param adminRoleIds - Array of role IDs that are configured as admin roles
-   * @returns GuildSettings object
-   */
-  function createMockConfig(guildId: string, adminRoleIds: string[]): GuildSettings {
-    return {
-      guildId,
-      enabled: true,
-      afkTimeoutSeconds: 300,
-      warningSecondsBefore: 60,
-      warningChannelId: null,
-      exemptRoleIds: [],
-      adminRoleIds,
-      createdAt: '2024-01-01T00:00:00.000Z',
-      updatedAt: '2024-01-01T00:00:00.000Z',
-    };
-  }
-
   describe('Permission Checks', () => {
     const guildId = 'test-guild-123';
 
     describe('when user has Discord Administrator permission', () => {
       it('should allow access when no admin roles are configured', () => {
         const interaction = createMockInteraction(guildId, true, []);
-        const config = createMockConfig(guildId, []);
+        const config = createMockGuildSettings({ guildId, adminRoleIds: [] });
 
         vi.mocked(mockConfigService.getConfig).mockReturnValue(config);
 
@@ -117,7 +97,7 @@ describe('Admin Roles Feature', () => {
 
       it('should allow access when admin roles are configured but user does not have them', () => {
         const interaction = createMockInteraction(guildId, true, ['user-role-1']);
-        const config = createMockConfig(guildId, ['admin-role-1', 'admin-role-2']);
+        const config = createMockGuildSettings({ guildId, adminRoleIds: ['admin-role-1', 'admin-role-2'] });
 
         vi.mocked(mockConfigService.getConfig).mockReturnValue(config);
 
@@ -128,7 +108,7 @@ describe('Admin Roles Feature', () => {
 
       it('should allow access when admin roles are configured and user has them', () => {
         const interaction = createMockInteraction(guildId, true, ['admin-role-1']);
-        const config = createMockConfig(guildId, ['admin-role-1']);
+        const config = createMockGuildSettings({ guildId, adminRoleIds: ['admin-role-1'] });
 
         vi.mocked(mockConfigService.getConfig).mockReturnValue(config);
 
@@ -139,7 +119,7 @@ describe('Admin Roles Feature', () => {
 
       it('should allow access even when user has no roles at all', () => {
         const interaction = createMockInteraction(guildId, true, []);
-        const config = createMockConfig(guildId, ['admin-role-1']);
+        const config = createMockGuildSettings({ guildId, adminRoleIds: ['admin-role-1'] });
 
         vi.mocked(mockConfigService.getConfig).mockReturnValue(config);
 
@@ -153,7 +133,7 @@ describe('Admin Roles Feature', () => {
     describe('when user has configured admin role', () => {
       it('should allow access when user has one of the admin roles', () => {
         const interaction = createMockInteraction(guildId, false, ['admin-role-1']);
-        const config = createMockConfig(guildId, ['admin-role-1']);
+        const config = createMockGuildSettings({ guildId, adminRoleIds: ['admin-role-1'] });
 
         vi.mocked(mockConfigService.getConfig).mockReturnValue(config);
 
@@ -164,7 +144,7 @@ describe('Admin Roles Feature', () => {
 
       it('should allow access when user has multiple roles including an admin role', () => {
         const interaction = createMockInteraction(guildId, false, ['regular-role', 'admin-role-2', 'other-role']);
-        const config = createMockConfig(guildId, ['admin-role-1', 'admin-role-2']);
+        const config = createMockGuildSettings({ guildId, adminRoleIds: ['admin-role-1', 'admin-role-2'] });
 
         vi.mocked(mockConfigService.getConfig).mockReturnValue(config);
 
@@ -175,7 +155,7 @@ describe('Admin Roles Feature', () => {
 
       it('should allow access when user has any of multiple configured admin roles', () => {
         const interaction = createMockInteraction(guildId, false, ['admin-role-3']);
-        const config = createMockConfig(guildId, ['admin-role-1', 'admin-role-2', 'admin-role-3']);
+        const config = createMockGuildSettings({ guildId, adminRoleIds: ['admin-role-1', 'admin-role-2', 'admin-role-3'] });
 
         vi.mocked(mockConfigService.getConfig).mockReturnValue(config);
 
@@ -186,7 +166,7 @@ describe('Admin Roles Feature', () => {
 
       it('should allow access when user has all configured admin roles', () => {
         const interaction = createMockInteraction(guildId, false, ['admin-role-1', 'admin-role-2']);
-        const config = createMockConfig(guildId, ['admin-role-1', 'admin-role-2']);
+        const config = createMockGuildSettings({ guildId, adminRoleIds: ['admin-role-1', 'admin-role-2'] });
 
         vi.mocked(mockConfigService.getConfig).mockReturnValue(config);
 
@@ -199,7 +179,7 @@ describe('Admin Roles Feature', () => {
     describe('when user lacks both Administrator permission and admin roles', () => {
       it('should deny access when user has no roles and no admin roles configured', () => {
         const interaction = createMockInteraction(guildId, false, []);
-        const config = createMockConfig(guildId, []);
+        const config = createMockGuildSettings({ guildId, adminRoleIds: [] });
 
         vi.mocked(mockConfigService.getConfig).mockReturnValue(config);
 
@@ -211,7 +191,7 @@ describe('Admin Roles Feature', () => {
 
       it('should deny access when user has roles but none are admin roles', () => {
         const interaction = createMockInteraction(guildId, false, ['regular-role-1', 'regular-role-2']);
-        const config = createMockConfig(guildId, ['admin-role-1', 'admin-role-2']);
+        const config = createMockGuildSettings({ guildId, adminRoleIds: ['admin-role-1', 'admin-role-2'] });
 
         vi.mocked(mockConfigService.getConfig).mockReturnValue(config);
 
@@ -222,7 +202,7 @@ describe('Admin Roles Feature', () => {
 
       it('should deny access when user has no roles and admin roles are configured', () => {
         const interaction = createMockInteraction(guildId, false, []);
-        const config = createMockConfig(guildId, ['admin-role-1']);
+        const config = createMockGuildSettings({ guildId, adminRoleIds: ['admin-role-1'] });
 
         vi.mocked(mockConfigService.getConfig).mockReturnValue(config);
 
@@ -233,7 +213,7 @@ describe('Admin Roles Feature', () => {
 
       it('should deny access when user has similar but not exact admin role ID', () => {
         const interaction = createMockInteraction(guildId, false, ['admin-role-1-similar']);
-        const config = createMockConfig(guildId, ['admin-role-1']);
+        const config = createMockGuildSettings({ guildId, adminRoleIds: ['admin-role-1'] });
 
         vi.mocked(mockConfigService.getConfig).mockReturnValue(config);
 
@@ -247,7 +227,7 @@ describe('Admin Roles Feature', () => {
     describe('default behavior with empty admin roles list', () => {
       it('should deny access to non-Administrators when admin roles list is empty', () => {
         const interaction = createMockInteraction(guildId, false, ['some-role']);
-        const config = createMockConfig(guildId, []);
+        const config = createMockGuildSettings({ guildId, adminRoleIds: [] });
 
         vi.mocked(mockConfigService.getConfig).mockReturnValue(config);
 
@@ -259,7 +239,7 @@ describe('Admin Roles Feature', () => {
       it('should only allow Administrators when admin roles list is empty', () => {
         const adminInteraction = createMockInteraction(guildId, true, []);
         const regularInteraction = createMockInteraction(guildId, false, ['moderator-role']);
-        const config = createMockConfig(guildId, []);
+        const config = createMockGuildSettings({ guildId, adminRoleIds: [] });
 
         vi.mocked(mockConfigService.getConfig).mockReturnValue(config);
 
@@ -271,7 +251,7 @@ describe('Admin Roles Feature', () => {
     describe('edge cases in permission checking', () => {
       it('should deny access when guildId is null', () => {
         const interaction = createMockInteraction(null, false, ['admin-role-1']);
-        const config = createMockConfig(guildId, ['admin-role-1']);
+        const config = createMockGuildSettings({ guildId, adminRoleIds: ['admin-role-1'] });
 
         vi.mocked(mockConfigService.getConfig).mockReturnValue(config);
 
@@ -283,7 +263,7 @@ describe('Admin Roles Feature', () => {
 
       it('should handle user with empty roles array correctly', () => {
         const interaction = createMockInteraction(guildId, false, []);
-        const config = createMockConfig(guildId, ['admin-role-1']);
+        const config = createMockGuildSettings({ guildId, adminRoleIds: ['admin-role-1'] });
 
         vi.mocked(mockConfigService.getConfig).mockReturnValue(config);
 
@@ -295,7 +275,7 @@ describe('Admin Roles Feature', () => {
       it('should handle config with single admin role', () => {
         const allowedInteraction = createMockInteraction(guildId, false, ['the-one-role']);
         const deniedInteraction = createMockInteraction(guildId, false, ['other-role']);
-        const config = createMockConfig(guildId, ['the-one-role']);
+        const config = createMockGuildSettings({ guildId, adminRoleIds: ['the-one-role'] });
 
         vi.mocked(mockConfigService.getConfig).mockReturnValue(config);
 
@@ -306,7 +286,7 @@ describe('Admin Roles Feature', () => {
       it('should handle config with many admin roles', () => {
         const manyRoles = Array.from({ length: 20 }, (_, i) => `admin-role-${i}`);
         const interaction = createMockInteraction(guildId, false, ['admin-role-15']);
-        const config = createMockConfig(guildId, manyRoles);
+        const config = createMockGuildSettings({ guildId, adminRoleIds: manyRoles });
 
         vi.mocked(mockConfigService.getConfig).mockReturnValue(config);
 
@@ -318,7 +298,7 @@ describe('Admin Roles Feature', () => {
       it('should correctly handle role ID string matching', () => {
         // Discord role IDs are strings, not numbers
         const interaction = createMockInteraction(guildId, false, ['123456789']);
-        const config = createMockConfig(guildId, ['123456789']);
+        const config = createMockGuildSettings({ guildId, adminRoleIds: ['123456789'] });
 
         vi.mocked(mockConfigService.getConfig).mockReturnValue(config);
 
@@ -329,7 +309,7 @@ describe('Admin Roles Feature', () => {
 
       it('should be case-sensitive for role IDs', () => {
         const interaction = createMockInteraction(guildId, false, ['AdminRole']);
-        const config = createMockConfig(guildId, ['adminrole']); // Different case
+        const config = createMockGuildSettings({ guildId, adminRoleIds: ['adminrole'] }); // Different case
 
         vi.mocked(mockConfigService.getConfig).mockReturnValue(config);
 
@@ -343,7 +323,7 @@ describe('Admin Roles Feature', () => {
     describe('permission check performance with role matching', () => {
       it('should correctly match when user has first role in admin list', () => {
         const interaction = createMockInteraction(guildId, false, ['admin-role-1']);
-        const config = createMockConfig(guildId, ['admin-role-1', 'admin-role-2', 'admin-role-3']);
+        const config = createMockGuildSettings({ guildId, adminRoleIds: ['admin-role-1', 'admin-role-2', 'admin-role-3'] });
 
         vi.mocked(mockConfigService.getConfig).mockReturnValue(config);
 
@@ -354,7 +334,7 @@ describe('Admin Roles Feature', () => {
 
       it('should correctly match when user has last role in admin list', () => {
         const interaction = createMockInteraction(guildId, false, ['admin-role-3']);
-        const config = createMockConfig(guildId, ['admin-role-1', 'admin-role-2', 'admin-role-3']);
+        const config = createMockGuildSettings({ guildId, adminRoleIds: ['admin-role-1', 'admin-role-2', 'admin-role-3'] });
 
         vi.mocked(mockConfigService.getConfig).mockReturnValue(config);
 
@@ -365,7 +345,7 @@ describe('Admin Roles Feature', () => {
 
       it('should correctly match when user has middle role in admin list', () => {
         const interaction = createMockInteraction(guildId, false, ['admin-role-2']);
-        const config = createMockConfig(guildId, ['admin-role-1', 'admin-role-2', 'admin-role-3']);
+        const config = createMockGuildSettings({ guildId, adminRoleIds: ['admin-role-1', 'admin-role-2', 'admin-role-3'] });
 
         vi.mocked(mockConfigService.getConfig).mockReturnValue(config);
 
@@ -381,7 +361,7 @@ describe('Admin Roles Feature', () => {
 
     describe('permission checks with different user scenarios', () => {
       it('should handle server owner with Administrator permission', () => {
-        const config = createMockConfig(guildId, ['moderator-role']);
+        const config = createMockGuildSettings({ guildId, adminRoleIds: ['moderator-role'] });
         const ownerInteraction = createMockInteraction(guildId, true, ['owner-role']);
 
         vi.mocked(mockConfigService.getConfig).mockReturnValue(config);
@@ -393,7 +373,7 @@ describe('Admin Roles Feature', () => {
       });
 
       it('should handle moderator with admin role but not Administrator', () => {
-        const config = createMockConfig(guildId, ['moderator-role']);
+        const config = createMockGuildSettings({ guildId, adminRoleIds: ['moderator-role'] });
         const modInteraction = createMockInteraction(guildId, false, ['moderator-role']);
 
         vi.mocked(mockConfigService.getConfig).mockReturnValue(config);
@@ -404,7 +384,7 @@ describe('Admin Roles Feature', () => {
       });
 
       it('should handle regular user with no special permissions', () => {
-        const config = createMockConfig(guildId, ['admin-role']);
+        const config = createMockGuildSettings({ guildId, adminRoleIds: ['admin-role'] });
         const regularInteraction = createMockInteraction(guildId, false, ['everyone-role']);
 
         vi.mocked(mockConfigService.getConfig).mockReturnValue(config);
@@ -415,7 +395,7 @@ describe('Admin Roles Feature', () => {
       });
 
       it('should handle user with multiple roles where one is admin', () => {
-        const config = createMockConfig(guildId, ['staff-role']);
+        const config = createMockGuildSettings({ guildId, adminRoleIds: ['staff-role'] });
         const userInteraction = createMockInteraction(guildId, false, [
           'everyone-role',
           'verified-role',
@@ -436,24 +416,24 @@ describe('Admin Roles Feature', () => {
         const interaction = createMockInteraction(guildId, false, ['moderator-role']);
 
         // Initially no admin roles
-        let config = createMockConfig(guildId, []);
+        let config = createMockGuildSettings({ guildId, adminRoleIds: [] });
         vi.mocked(mockConfigService.getConfig).mockReturnValue(config);
         expect(hasAFKAdminPermission(interaction as ChatInputCommandInteraction, mockConfigService)).toBe(false);
 
         // Config updated to include moderator role
-        config = createMockConfig(guildId, ['moderator-role']);
+        config = createMockGuildSettings({ guildId, adminRoleIds: ['moderator-role'] });
         vi.mocked(mockConfigService.getConfig).mockReturnValue(config);
         expect(hasAFKAdminPermission(interaction as ChatInputCommandInteraction, mockConfigService)).toBe(true);
 
         // Config updated to remove moderator role
-        config = createMockConfig(guildId, ['different-role']);
+        config = createMockGuildSettings({ guildId, adminRoleIds: ['different-role'] });
         vi.mocked(mockConfigService.getConfig).mockReturnValue(config);
         expect(hasAFKAdminPermission(interaction as ChatInputCommandInteraction, mockConfigService)).toBe(false);
       });
 
       it('should call getConfig with correct guild ID', () => {
         const interaction = createMockInteraction(guildId, false, ['admin-role-1']);
-        const config = createMockConfig(guildId, ['admin-role-1']);
+        const config = createMockGuildSettings({ guildId, adminRoleIds: ['admin-role-1'] });
 
         vi.mocked(mockConfigService.getConfig).mockReturnValue(config);
 

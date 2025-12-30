@@ -4,22 +4,19 @@ import { VoiceMonitorService } from '../services/VoiceMonitorService';
 import { VoiceConnectionManager } from '../voice/VoiceConnectionManager';
 import { GuildConfigService } from '../services/GuildConfigService';
 import type { GuildSettings } from '../database/repositories/GuildSettingsRepository';
+import { createMockLogger, createMockRateLimiter, createMockGuildSettings } from './fixtures';
 
 describe('VoiceMonitorService', () => {
   let mockClient: Client;
   let mockConnectionManager: VoiceConnectionManager;
   let mockGuildConfig: GuildConfigService;
-  let mockLogger: any;
-  let mockRateLimiter: any;
+  let mockLogger: ReturnType<typeof createMockLogger>;
+  let mockRateLimiter: ReturnType<typeof createMockRateLimiter>;
   let service: VoiceMonitorService;
 
   beforeEach(() => {
-    mockLogger = {
-      debug: vi.fn(),
-      info: vi.fn(),
-      warn: vi.fn(),
-      error: vi.fn(),
-    };
+    mockLogger = createMockLogger();
+    mockRateLimiter = createMockRateLimiter();
 
     mockClient = {} as Client;
 
@@ -33,10 +30,6 @@ describe('VoiceMonitorService', () => {
       getConfig: vi.fn(),
     } as unknown as GuildConfigService;
 
-    mockRateLimiter = {
-      recordAction: vi.fn(),
-    };
-
     service = new VoiceMonitorService(
       mockConnectionManager,
       mockGuildConfig,
@@ -47,18 +40,6 @@ describe('VoiceMonitorService', () => {
   });
 
   describe('handleUserJoin', () => {
-    const createEnabledConfig = (guildId: string): GuildSettings => ({
-      guildId,
-      enabled: true,
-      afkTimeoutSeconds: 300,
-      warningSecondsBefore: 60,
-      warningChannelId: null,
-      exemptRoleIds: [],
-      adminRoleIds: [],
-      createdAt: '2024-01-01T00:00:00.000Z',
-      updatedAt: '2024-01-01T00:00:00.000Z',
-    });
-
     describe('when monitoring is enabled', () => {
       it('should join channel when user joins and bot is not already connected', async () => {
         const guildId = 'guild-1';
@@ -68,7 +49,7 @@ describe('VoiceMonitorService', () => {
           guild: { id: guildId },
         } as VoiceBasedChannel;
 
-        vi.mocked(mockGuildConfig.getConfig).mockReturnValue(createEnabledConfig(guildId));
+        vi.mocked(mockGuildConfig.getConfig).mockReturnValue(createMockGuildSettings({ enabled: true, guildId }));
         vi.mocked(mockConnectionManager.hasConnection).mockReturnValue(false);
 
         await service.handleUserJoin(mockChannel);
@@ -84,7 +65,7 @@ describe('VoiceMonitorService', () => {
           guild: { id: guildId },
         } as VoiceBasedChannel;
 
-        vi.mocked(mockGuildConfig.getConfig).mockReturnValue(createEnabledConfig(guildId));
+        vi.mocked(mockGuildConfig.getConfig).mockReturnValue(createMockGuildSettings({ enabled: true, guildId }));
         vi.mocked(mockConnectionManager.hasConnection).mockReturnValue(true);
 
         await service.handleUserJoin(mockChannel);
@@ -100,7 +81,7 @@ describe('VoiceMonitorService', () => {
           guild: { id: guildId },
         } as VoiceBasedChannel;
 
-        vi.mocked(mockGuildConfig.getConfig).mockReturnValue(createEnabledConfig(guildId));
+        vi.mocked(mockGuildConfig.getConfig).mockReturnValue(createMockGuildSettings({ enabled: true, guildId }));
         vi.mocked(mockConnectionManager.hasConnection).mockReturnValue(false);
 
         await service.handleUserJoin(mockChannel);
@@ -121,17 +102,7 @@ describe('VoiceMonitorService', () => {
           guild: { id: guildId },
         } as VoiceBasedChannel;
 
-        const disabledConfig: GuildSettings = {
-          guildId,
-          enabled: false,
-          afkTimeoutSeconds: 300,
-          warningSecondsBefore: 60,
-          warningChannelId: null,
-          exemptRoleIds: [],
-          adminRoleIds: [],
-          createdAt: '2024-01-01T00:00:00.000Z',
-          updatedAt: '2024-01-01T00:00:00.000Z',
-        };
+        const disabledConfig = createMockGuildSettings({ enabled: false, guildId });
 
         vi.mocked(mockGuildConfig.getConfig).mockReturnValue(disabledConfig);
         vi.mocked(mockConnectionManager.hasConnection).mockReturnValue(false);
@@ -149,17 +120,7 @@ describe('VoiceMonitorService', () => {
           guild: { id: guildId },
         } as VoiceBasedChannel;
 
-        const disabledConfig: GuildSettings = {
-          guildId,
-          enabled: false,
-          afkTimeoutSeconds: 300,
-          warningSecondsBefore: 60,
-          warningChannelId: null,
-          exemptRoleIds: [],
-          adminRoleIds: [],
-          createdAt: '2024-01-01T00:00:00.000Z',
-          updatedAt: '2024-01-01T00:00:00.000Z',
-        };
+        const disabledConfig = createMockGuildSettings({ enabled: false, guildId });
 
         vi.mocked(mockGuildConfig.getConfig).mockReturnValue(disabledConfig);
 
@@ -396,32 +357,10 @@ describe('VoiceMonitorService', () => {
   });
 
   describe('scanGuild', () => {
-    const createEnabledConfig = (guildId: string): GuildSettings => ({
-      guildId,
-      enabled: true,
-      afkTimeoutSeconds: 300,
-      warningSecondsBefore: 60,
-      warningChannelId: null,
-      exemptRoleIds: [],
-      adminRoleIds: [],
-      createdAt: '2024-01-01T00:00:00.000Z',
-      updatedAt: '2024-01-01T00:00:00.000Z',
-    });
-
     describe('when guild monitoring is disabled', () => {
       it('should skip disabled guilds without joining any channel', async () => {
         const guildId = 'disabled-guild';
-        const disabledConfig: GuildSettings = {
-          guildId,
-          enabled: false,
-          afkTimeoutSeconds: 300,
-          warningSecondsBefore: 60,
-          warningChannelId: null,
-          exemptRoleIds: [],
-          adminRoleIds: [],
-          createdAt: '2024-01-01T00:00:00.000Z',
-          updatedAt: '2024-01-01T00:00:00.000Z',
-        };
+        const disabledConfig = createMockGuildSettings({ enabled: false, guildId });
 
         const mockChannel: any = {
           id: 'channel-1',
@@ -454,17 +393,7 @@ describe('VoiceMonitorService', () => {
 
       it('should log debug message when skipping disabled guild', async () => {
         const guildId = 'disabled-guild';
-        const disabledConfig: GuildSettings = {
-          guildId,
-          enabled: false,
-          afkTimeoutSeconds: 300,
-          warningSecondsBefore: 60,
-          warningChannelId: null,
-          exemptRoleIds: [],
-          adminRoleIds: [],
-          createdAt: '2024-01-01T00:00:00.000Z',
-          updatedAt: '2024-01-01T00:00:00.000Z',
-        };
+        const disabledConfig = createMockGuildSettings({ enabled: false, guildId });
 
         const mockGuild: any = {
           id: guildId,
@@ -511,7 +440,7 @@ describe('VoiceMonitorService', () => {
           },
         };
 
-        vi.mocked(mockGuildConfig.getConfig).mockReturnValue(createEnabledConfig(guildId));
+        vi.mocked(mockGuildConfig.getConfig).mockReturnValue(createMockGuildSettings({ enabled: true, guildId }));
         vi.mocked(mockConnectionManager.hasConnection).mockReturnValue(false);
 
         await (service as any).scanGuild(mockGuild);
@@ -561,7 +490,7 @@ describe('VoiceMonitorService', () => {
           },
         };
 
-        vi.mocked(mockGuildConfig.getConfig).mockReturnValue(createEnabledConfig(guildId));
+        vi.mocked(mockGuildConfig.getConfig).mockReturnValue(createMockGuildSettings({ enabled: true, guildId }));
         vi.mocked(mockConnectionManager.hasConnection).mockReturnValue(false);
 
         await (service as any).scanGuild(mockGuild);
@@ -619,7 +548,7 @@ describe('VoiceMonitorService', () => {
           },
         };
 
-        vi.mocked(mockGuildConfig.getConfig).mockReturnValue(createEnabledConfig(guildId));
+        vi.mocked(mockGuildConfig.getConfig).mockReturnValue(createMockGuildSettings({ enabled: true, guildId }));
         vi.mocked(mockConnectionManager.hasConnection).mockReturnValue(false);
 
         await (service as any).scanGuild(mockGuild);
@@ -665,7 +594,7 @@ describe('VoiceMonitorService', () => {
           },
         };
 
-        vi.mocked(mockGuildConfig.getConfig).mockReturnValue(createEnabledConfig(guildId));
+        vi.mocked(mockGuildConfig.getConfig).mockReturnValue(createMockGuildSettings({ enabled: true, guildId }));
         vi.mocked(mockConnectionManager.hasConnection).mockReturnValue(false);
 
         await (service as any).scanGuild(mockGuild);
@@ -699,7 +628,7 @@ describe('VoiceMonitorService', () => {
           },
         };
 
-        vi.mocked(mockGuildConfig.getConfig).mockReturnValue(createEnabledConfig(guildId));
+        vi.mocked(mockGuildConfig.getConfig).mockReturnValue(createMockGuildSettings({ enabled: true, guildId }));
         vi.mocked(mockConnectionManager.hasConnection).mockReturnValue(true);
 
         await (service as any).scanGuild(mockGuild);
@@ -732,7 +661,7 @@ describe('VoiceMonitorService', () => {
           },
         };
 
-        vi.mocked(mockGuildConfig.getConfig).mockReturnValue(createEnabledConfig(guildId));
+        vi.mocked(mockGuildConfig.getConfig).mockReturnValue(createMockGuildSettings({ enabled: true, guildId }));
         vi.mocked(mockConnectionManager.hasConnection).mockReturnValue(false);
 
         await (service as any).scanGuild(mockGuild);
@@ -760,7 +689,7 @@ describe('VoiceMonitorService', () => {
           },
         };
 
-        vi.mocked(mockGuildConfig.getConfig).mockReturnValue(createEnabledConfig(guildId));
+        vi.mocked(mockGuildConfig.getConfig).mockReturnValue(createMockGuildSettings({ enabled: true, guildId }));
         vi.mocked(mockConnectionManager.hasConnection).mockReturnValue(false);
 
         await expect((service as any).scanGuild(mockGuild)).resolves.not.toThrow();
@@ -785,7 +714,7 @@ describe('VoiceMonitorService', () => {
           },
         };
 
-        vi.mocked(mockGuildConfig.getConfig).mockReturnValue(createEnabledConfig(guildId));
+        vi.mocked(mockGuildConfig.getConfig).mockReturnValue(createMockGuildSettings({ enabled: true, guildId }));
         vi.mocked(mockConnectionManager.hasConnection).mockReturnValue(false);
 
         await (service as any).scanGuild(mockGuild);
@@ -813,7 +742,7 @@ describe('VoiceMonitorService', () => {
           },
         };
 
-        vi.mocked(mockGuildConfig.getConfig).mockReturnValue(createEnabledConfig(guildId));
+        vi.mocked(mockGuildConfig.getConfig).mockReturnValue(createMockGuildSettings({ enabled: true, guildId }));
         vi.mocked(mockConnectionManager.hasConnection).mockReturnValue(false);
 
         await (service as any).scanGuild(mockGuild);
@@ -838,7 +767,7 @@ describe('VoiceMonitorService', () => {
           },
         };
 
-        vi.mocked(mockGuildConfig.getConfig).mockReturnValue(createEnabledConfig(guildId));
+        vi.mocked(mockGuildConfig.getConfig).mockReturnValue(createMockGuildSettings({ enabled: true, guildId }));
 
         await expect((service as any).scanGuild(mockGuild)).resolves.not.toThrow();
       });
@@ -855,7 +784,7 @@ describe('VoiceMonitorService', () => {
           },
         };
 
-        vi.mocked(mockGuildConfig.getConfig).mockReturnValue(createEnabledConfig(guildId));
+        vi.mocked(mockGuildConfig.getConfig).mockReturnValue(createMockGuildSettings({ enabled: true, guildId }));
 
         await (service as any).scanGuild(mockGuild);
 
@@ -885,7 +814,7 @@ describe('VoiceMonitorService', () => {
           },
         };
 
-        vi.mocked(mockGuildConfig.getConfig).mockReturnValue(createEnabledConfig(guildId));
+        vi.mocked(mockGuildConfig.getConfig).mockReturnValue(createMockGuildSettings({ enabled: true, guildId }));
 
         await (service as any).scanGuild(mockGuild);
 
@@ -931,7 +860,7 @@ describe('VoiceMonitorService', () => {
           },
         };
 
-        vi.mocked(mockGuildConfig.getConfig).mockReturnValue(createEnabledConfig(guildId));
+        vi.mocked(mockGuildConfig.getConfig).mockReturnValue(createMockGuildSettings({ enabled: true, guildId }));
         vi.mocked(mockConnectionManager.hasConnection).mockReturnValue(false);
 
         // Should not throw when encountering null
@@ -981,7 +910,7 @@ describe('VoiceMonitorService', () => {
           },
         };
 
-        vi.mocked(mockGuildConfig.getConfig).mockReturnValue(createEnabledConfig(guildId));
+        vi.mocked(mockGuildConfig.getConfig).mockReturnValue(createMockGuildSettings({ enabled: true, guildId }));
         vi.mocked(mockConnectionManager.hasConnection).mockReturnValue(false);
 
         await (service as any).scanGuild(mockGuild);
@@ -1008,7 +937,7 @@ describe('VoiceMonitorService', () => {
           },
         };
 
-        vi.mocked(mockGuildConfig.getConfig).mockReturnValue(createEnabledConfig(guildId));
+        vi.mocked(mockGuildConfig.getConfig).mockReturnValue(createMockGuildSettings({ enabled: true, guildId }));
         vi.mocked(mockConnectionManager.hasConnection).mockReturnValue(false);
 
         await (service as any).scanGuild(mockGuild);
@@ -1055,7 +984,7 @@ describe('VoiceMonitorService', () => {
           },
         };
 
-        vi.mocked(mockGuildConfig.getConfig).mockReturnValue(createEnabledConfig(guildId));
+        vi.mocked(mockGuildConfig.getConfig).mockReturnValue(createMockGuildSettings({ enabled: true, guildId }));
         vi.mocked(mockConnectionManager.hasConnection).mockReturnValue(false);
 
         await (service as any).scanGuild(mockGuild);
@@ -1119,7 +1048,7 @@ describe('VoiceMonitorService', () => {
           },
         };
 
-        vi.mocked(mockGuildConfig.getConfig).mockReturnValue(createEnabledConfig(guildId));
+        vi.mocked(mockGuildConfig.getConfig).mockReturnValue(createMockGuildSettings({ enabled: true, guildId }));
         vi.mocked(mockConnectionManager.hasConnection).mockReturnValue(false);
 
         await (service as any).scanGuild(mockGuild);
@@ -1157,7 +1086,7 @@ describe('VoiceMonitorService', () => {
           },
         };
 
-        vi.mocked(mockGuildConfig.getConfig).mockReturnValue(createEnabledConfig(guildId));
+        vi.mocked(mockGuildConfig.getConfig).mockReturnValue(createMockGuildSettings({ enabled: true, guildId }));
         vi.mocked(mockConnectionManager.hasConnection).mockReturnValue(false);
 
         await (service as any).scanGuild(mockGuild);
@@ -1192,7 +1121,7 @@ describe('VoiceMonitorService', () => {
           },
         };
 
-        vi.mocked(mockGuildConfig.getConfig).mockReturnValue(createEnabledConfig(guildId));
+        vi.mocked(mockGuildConfig.getConfig).mockReturnValue(createMockGuildSettings({ enabled: true, guildId }));
         vi.mocked(mockConnectionManager.hasConnection).mockReturnValue(false);
 
         await (service as any).scanGuild(mockGuild);
@@ -1249,7 +1178,7 @@ describe('VoiceMonitorService', () => {
           },
         };
 
-        vi.mocked(mockGuildConfig.getConfig).mockReturnValue(createEnabledConfig(guildId));
+        vi.mocked(mockGuildConfig.getConfig).mockReturnValue(createMockGuildSettings({ enabled: true, guildId }));
         vi.mocked(mockConnectionManager.hasConnection).mockReturnValue(false);
 
         await (service as any).scanGuild(mockGuild);
@@ -1262,18 +1191,6 @@ describe('VoiceMonitorService', () => {
   });
 
   describe('initialize', () => {
-    const createEnabledConfig = (guildId: string): GuildSettings => ({
-      guildId,
-      enabled: true,
-      afkTimeoutSeconds: 300,
-      warningSecondsBefore: 60,
-      warningChannelId: null,
-      exemptRoleIds: [],
-      adminRoleIds: [],
-      createdAt: '2024-01-01T00:00:00.000Z',
-      updatedAt: '2024-01-01T00:00:00.000Z',
-    });
-
     describe('when client has multiple guilds', () => {
       it('should call scanGuild for each guild in client.guilds.cache', async () => {
         const mockGuild1: any = {
@@ -1308,7 +1225,7 @@ describe('VoiceMonitorService', () => {
           ]),
         } as any;
 
-        vi.mocked(mockGuildConfig.getConfig).mockReturnValue(createEnabledConfig('guild-1'));
+        vi.mocked(mockGuildConfig.getConfig).mockReturnValue(createMockGuildSettings({ enabled: true, guildId: 'guild-1' }));
 
         await service.initialize();
 
@@ -1355,7 +1272,7 @@ describe('VoiceMonitorService', () => {
           ]),
         } as any;
 
-        vi.mocked(mockGuildConfig.getConfig).mockReturnValue(createEnabledConfig('guild-1'));
+        vi.mocked(mockGuildConfig.getConfig).mockReturnValue(createMockGuildSettings({ enabled: true, guildId: 'guild-1' }));
         vi.mocked(mockConnectionManager.hasConnection).mockReturnValue(false);
 
         await service.initialize();
@@ -1410,7 +1327,7 @@ describe('VoiceMonitorService', () => {
           cache: new Collection([['guild-1', mockGuild]]),
         } as any;
 
-        vi.mocked(mockGuildConfig.getConfig).mockReturnValue(createEnabledConfig('guild-1'));
+        vi.mocked(mockGuildConfig.getConfig).mockReturnValue(createMockGuildSettings({ enabled: true, guildId: 'guild-1' }));
 
         await service.initialize();
 
@@ -1430,7 +1347,7 @@ describe('VoiceMonitorService', () => {
           cache: new Collection([['guild-1', mockGuild]]),
         } as any;
 
-        vi.mocked(mockGuildConfig.getConfig).mockReturnValue(createEnabledConfig('guild-1'));
+        vi.mocked(mockGuildConfig.getConfig).mockReturnValue(createMockGuildSettings({ enabled: true, guildId: 'guild-1' }));
 
         await service.initialize();
 
@@ -1467,7 +1384,7 @@ describe('VoiceMonitorService', () => {
           ]),
         } as any;
 
-        vi.mocked(mockGuildConfig.getConfig).mockReturnValue(createEnabledConfig('guild-1'));
+        vi.mocked(mockGuildConfig.getConfig).mockReturnValue(createMockGuildSettings({ enabled: true, guildId: 'guild-1' }));
 
         await service.initialize();
 
@@ -1491,7 +1408,7 @@ describe('VoiceMonitorService', () => {
           cache: new Collection([['error-guild', mockGuild1]]),
         } as any;
 
-        vi.mocked(mockGuildConfig.getConfig).mockReturnValue(createEnabledConfig('error-guild'));
+        vi.mocked(mockGuildConfig.getConfig).mockReturnValue(createMockGuildSettings({ enabled: true, guildId: 'error-guild' }));
 
         await service.initialize();
 
@@ -1531,7 +1448,7 @@ describe('VoiceMonitorService', () => {
           ]),
         } as any;
 
-        vi.mocked(mockGuildConfig.getConfig).mockReturnValue(createEnabledConfig('guild-1'));
+        vi.mocked(mockGuildConfig.getConfig).mockReturnValue(createMockGuildSettings({ enabled: true, guildId: 'guild-1' }));
 
         await expect(service.initialize()).resolves.not.toThrow();
         expect(mockLogger.info).toHaveBeenCalledWith('VoiceMonitorService initialization complete');
@@ -1565,7 +1482,7 @@ describe('VoiceMonitorService', () => {
           cache: new Collection([['guild-1', mockGuild]]),
         } as any;
 
-        vi.mocked(mockGuildConfig.getConfig).mockReturnValue(createEnabledConfig('guild-1'));
+        vi.mocked(mockGuildConfig.getConfig).mockReturnValue(createMockGuildSettings({ enabled: true, guildId: 'guild-1' }));
         vi.mocked(mockConnectionManager.hasConnection).mockReturnValue(false);
 
         await service.initialize();
@@ -1574,17 +1491,7 @@ describe('VoiceMonitorService', () => {
       });
 
       it('should respect disabled guild configs during initialization', async () => {
-        const disabledConfig: GuildSettings = {
-          guildId: 'disabled-guild',
-          enabled: false,
-          afkTimeoutSeconds: 300,
-          warningSecondsBefore: 60,
-          warningChannelId: null,
-          exemptRoleIds: [],
-          adminRoleIds: [],
-          createdAt: '2024-01-01T00:00:00.000Z',
-          updatedAt: '2024-01-01T00:00:00.000Z',
-        };
+        const disabledConfig = createMockGuildSettings({ enabled: false, guildId: 'disabled-guild' });
 
         const activeChannel: any = {
           id: 'channel-1',

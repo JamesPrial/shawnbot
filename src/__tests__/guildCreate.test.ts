@@ -1,8 +1,8 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { Guild } from 'discord.js';
 import type { VoiceMonitorService } from '../services/VoiceMonitorService';
-import type { Logger } from 'pino';
 import { createGuildCreateHandler } from '../handlers/events/guildCreate';
+import { createMockLogger } from './fixtures';
 
 /**
  * These tests verify the guildCreate event handler behavior for WU-1.
@@ -21,7 +21,7 @@ type GuildCreateHandler = (guild: Guild) => Promise<void>;
 
 describe('createGuildCreateHandler', () => {
   let mockVoiceMonitor: VoiceMonitorService;
-  let mockLogger: Logger;
+  let mockLogger: ReturnType<typeof createMockLogger>;
   let mockGuild: Partial<Guild>;
   let handler: GuildCreateHandler;
 
@@ -32,12 +32,7 @@ describe('createGuildCreateHandler', () => {
       scanGuild: vi.fn().mockResolvedValue(undefined),
     } as unknown as VoiceMonitorService;
 
-    mockLogger = {
-      info: vi.fn(),
-      error: vi.fn(),
-      debug: vi.fn(),
-      warn: vi.fn(),
-    } as unknown as Logger;
+    mockLogger = createMockLogger();
 
     mockGuild = {
       id: '123456789',

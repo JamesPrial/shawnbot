@@ -2,6 +2,7 @@ import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { Client, Events, ChatInputCommandInteraction, Collection } from 'discord.js';
 import type { Logger } from 'pino';
 import type { GuildConfigService } from '../services/GuildConfigService';
+import { createMockLogger } from './fixtures';
 
 /**
  * COMMAND ERROR HANDLING TEST SUITE (WU-6)
@@ -20,17 +21,12 @@ import type { GuildConfigService } from '../services/GuildConfigService';
  */
 
 describe('bot.ts - Command Error Handling', () => {
-  let mockLogger: Logger;
+  let mockLogger: ReturnType<typeof createMockLogger>;
   let mockConfigService: GuildConfigService;
   let mockClient: Client;
 
   beforeEach(() => {
-    mockLogger = {
-      info: vi.fn(),
-      error: vi.fn(),
-      warn: vi.fn(),
-      debug: vi.fn(),
-    } as unknown as Logger;
+    mockLogger = createMockLogger();
 
     mockConfigService = {
       getConfig: vi.fn(),

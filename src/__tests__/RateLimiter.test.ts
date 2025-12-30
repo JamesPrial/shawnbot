@@ -1,19 +1,14 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { RateLimiter } from '../utils/RateLimiter';
-import type { Logger } from 'pino';
+import { createMockLogger } from './fixtures';
 
 describe('RateLimiter', () => {
-  let mockLogger: Logger;
+  let mockLogger: ReturnType<typeof createMockLogger>;
   let mockProcessExit: ReturnType<typeof vi.spyOn>;
 
   beforeEach(() => {
     vi.useFakeTimers();
-    mockLogger = {
-      warn: vi.fn(),
-      error: vi.fn(),
-      debug: vi.fn(),
-      info: vi.fn(),
-    } as unknown as Logger;
+    mockLogger = createMockLogger();
     mockProcessExit = vi.spyOn(process, 'exit').mockImplementation(() => undefined as never);
   });
 
@@ -675,8 +670,8 @@ describe('RateLimiter', () => {
     });
 
     it('should trigger thresholds independently', () => {
-      const mockLogger1 = { warn: vi.fn(), error: vi.fn(), debug: vi.fn(), info: vi.fn() } as unknown as Logger;
-      const mockLogger2 = { warn: vi.fn(), error: vi.fn(), debug: vi.fn(), info: vi.fn() } as unknown as Logger;
+      const mockLogger1 = createMockLogger();
+      const mockLogger2 = createMockLogger();
 
       const limiter1 = new RateLimiter(mockLogger1, { warnThreshold: 10 });
       const limiter2 = new RateLimiter(mockLogger2, { warnThreshold: 15 });

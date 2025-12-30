@@ -8,6 +8,7 @@ import type { AFKDetectionService } from '../services/AFKDetectionService';
 import type { GuildConfigService } from '../services/GuildConfigService';
 import type { GuildSettings } from '../database/repositories/GuildSettingsRepository';
 import type { Logger } from 'pino';
+import { createMockLogger, createMockGuildSettings } from './fixtures';
 
 /**
  * WU-5: Event Handler Error Handling Tests
@@ -27,18 +28,13 @@ import type { Logger } from 'pino';
  */
 
 describe('SpeakingTracker - Event Emission Error Handling', () => {
-  let mockLogger: Logger;
+  let mockLogger: ReturnType<typeof createMockLogger>;
   let speakingTracker: SpeakingTracker;
 
   beforeEach(() => {
-    mockLogger = {
-      debug: vi.fn(),
-      info: vi.fn(),
-      warn: vi.fn(),
-      error: vi.fn(),
-    } as unknown as Logger;
+    mockLogger = createMockLogger();
 
-    speakingTracker = new SpeakingTracker(mockLogger);
+    speakingTracker = new SpeakingTracker(mockLogger as unknown as Logger);
   });
 
   describe('when an event listener throws', () => {
@@ -324,28 +320,13 @@ describe('voiceStateUpdate Handler - Error Handling', () => {
   let mockVoiceMonitor: VoiceMonitorService;
   let mockAfkDetection: AFKDetectionService;
   let mockGuildConfig: GuildConfigService;
-  let mockLogger: Logger;
+  let mockLogger: ReturnType<typeof createMockLogger>;
   let handler: ReturnType<typeof createVoiceStateUpdateHandler>;
-
-  const enabledConfig: GuildSettings = {
-    guildId: 'test-guild',
-    enabled: true,
-    afkTimeoutSeconds: 300,
-    warningSecondsBefore: 60,
-    warningChannelId: null,
-    exemptRoleIds: [],
-    adminRoleIds: [],
-    createdAt: '2024-01-01T00:00:00.000Z',
-    updatedAt: '2024-01-01T00:00:00.000Z',
-  };
+  let enabledConfig: GuildSettings;
 
   beforeEach(() => {
-    mockLogger = {
-      debug: vi.fn(),
-      info: vi.fn(),
-      warn: vi.fn(),
-      error: vi.fn(),
-    } as unknown as Logger;
+    mockLogger = createMockLogger();
+    enabledConfig = createMockGuildSettings({ enabled: true, guildId: 'test-guild' });
 
     mockVoiceMonitor = {
       handleUserJoin: vi.fn(),
@@ -368,7 +349,7 @@ describe('voiceStateUpdate Handler - Error Handling', () => {
       voiceMonitor: mockVoiceMonitor,
       afkDetection: mockAfkDetection,
       guildConfig: mockGuildConfig,
-      logger: mockLogger,
+      logger: mockLogger as unknown as Logger,
     };
 
     handler = createVoiceStateUpdateHandler(deps);

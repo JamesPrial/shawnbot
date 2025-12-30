@@ -5,6 +5,7 @@ import type { VoiceMonitorService } from '../services/VoiceMonitorService';
 import type { AFKDetectionService } from '../services/AFKDetectionService';
 import type { GuildConfigService } from '../services/GuildConfigService';
 import type { GuildSettings } from '../database/repositories/GuildSettingsRepository';
+import { createMockLogger, createMockGuildSettings } from './fixtures';
 
 /**
  * These tests verify the THRESHOLD COORDINATION behavior for WU-2.
@@ -22,28 +23,13 @@ describe('voiceStateUpdate - Threshold Coordination', () => {
   let mockVoiceMonitor: VoiceMonitorService;
   let mockAfkDetection: AFKDetectionService;
   let mockGuildConfig: GuildConfigService;
-  let mockLogger: any;
+  let mockLogger: ReturnType<typeof createMockLogger>;
   let handler: ReturnType<typeof createVoiceStateUpdateHandler>;
-
-  const enabledConfig: GuildSettings = {
-    guildId: 'test-guild',
-    enabled: true,
-    afkTimeoutSeconds: 300,
-    warningSecondsBefore: 60,
-    warningChannelId: null,
-    exemptRoleIds: [],
-    adminRoleIds: [],
-    createdAt: '2024-01-01T00:00:00.000Z',
-    updatedAt: '2024-01-01T00:00:00.000Z',
-  };
+  let enabledConfig: GuildSettings;
 
   beforeEach(() => {
-    mockLogger = {
-      debug: vi.fn(),
-      info: vi.fn(),
-      warn: vi.fn(),
-      error: vi.fn(),
-    };
+    mockLogger = createMockLogger();
+    enabledConfig = createMockGuildSettings({ enabled: true, guildId: 'test-guild' });
 
     mockVoiceMonitor = {
       handleUserJoin: vi.fn(),

@@ -3,6 +3,7 @@ import { Client, Guild, GuildMember, VoiceState, VoiceChannel, Collection } from
 import { SpeakingTracker } from '../voice/SpeakingTracker';
 import type { AFKDetectionService } from '../services/AFKDetectionService';
 import type { RateLimiter } from '../utils/RateLimiter';
+import { createMockLogger, createMockRateLimiter } from './fixtures';
 
 /**
  * These tests verify the CACHE BEHAVIOR for speaking event handlers in bot.ts (WU-1).
@@ -23,17 +24,12 @@ import type { RateLimiter } from '../utils/RateLimiter';
 describe('bot.ts - Speaking Event Cache Behavior (WU-1)', () => {
   let mockClient: Client;
   let mockAfkDetection: AFKDetectionService;
-  let mockRateLimiter: RateLimiter;
+  let mockRateLimiter: ReturnType<typeof createMockRateLimiter>;
   let speakingTracker: SpeakingTracker;
-  let mockLogger: any;
+  let mockLogger: ReturnType<typeof createMockLogger>;
 
   beforeEach(() => {
-    mockLogger = {
-      debug: vi.fn(),
-      info: vi.fn(),
-      warn: vi.fn(),
-      error: vi.fn(),
-    };
+    mockLogger = createMockLogger();
 
     // Mock client with cache.get() interface, not fetch()
     mockClient = {
@@ -51,10 +47,7 @@ describe('bot.ts - Speaking Event Cache Behavior (WU-1)', () => {
       isTracking: vi.fn().mockReturnValue(false),
     } as unknown as AFKDetectionService;
 
-    mockRateLimiter = {
-      recordAction: vi.fn(),
-      getActionCount: vi.fn().mockReturnValue(0),
-    } as unknown as RateLimiter;
+    mockRateLimiter = createMockRateLimiter();
 
     speakingTracker = new SpeakingTracker(mockLogger);
   });
@@ -875,15 +868,10 @@ describe('bot.ts - Speaking Event Threshold Coordination', () => {
   let mockClient: Client;
   let mockAfkDetection: AFKDetectionService;
   let speakingTracker: SpeakingTracker;
-  let mockLogger: any;
+  let mockLogger: ReturnType<typeof createMockLogger>;
 
   beforeEach(() => {
-    mockLogger = {
-      debug: vi.fn(),
-      info: vi.fn(),
-      warn: vi.fn(),
-      error: vi.fn(),
-    };
+    mockLogger = createMockLogger();
 
     mockClient = {
       guilds: {

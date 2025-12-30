@@ -1,10 +1,11 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { createReadyHandler } from '../handlers/events/ready';
 import type { Client } from 'discord.js';
+import { createMockLogger } from './fixtures';
 
 describe('createReadyHandler', () => {
   let mockVoiceMonitor: any;
-  let mockLogger: any;
+  let mockLogger: ReturnType<typeof createMockLogger>;
   let mockClient: Partial<Client>;
 
   beforeEach(() => {
@@ -15,13 +16,7 @@ describe('createReadyHandler', () => {
       initialize: vi.fn().mockResolvedValue(undefined),
     };
 
-    // Mock logger with all required methods
-    mockLogger = {
-      info: vi.fn(),
-      error: vi.fn(),
-      debug: vi.fn(),
-      warn: vi.fn(),
-    };
+    mockLogger = createMockLogger();
 
     // Mock Discord client with user
     mockClient = {

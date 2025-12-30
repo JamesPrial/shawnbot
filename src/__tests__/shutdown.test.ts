@@ -4,6 +4,7 @@ import type { Logger } from 'pino';
 import type Database from 'better-sqlite3';
 import type { SpeakingTracker } from '../voice/SpeakingTracker';
 import type { VoiceConnectionManager } from '../voice/VoiceConnectionManager';
+import { createMockLogger } from './fixtures';
 
 /**
  * SHUTDOWN CLEANUP TEST SUITE (WU-6)
@@ -25,7 +26,7 @@ import type { VoiceConnectionManager } from '../voice/VoiceConnectionManager';
  */
 
 describe('index.ts - Graceful Shutdown', () => {
-  let mockLogger: Logger;
+  let mockLogger: ReturnType<typeof createMockLogger>;
   let mockDatabase: Database.Database;
   let mockSpeakingTracker: SpeakingTracker;
   let mockVoiceConnectionManager: VoiceConnectionManager;
@@ -33,12 +34,7 @@ describe('index.ts - Graceful Shutdown', () => {
   let mockProcessExit: ReturnType<typeof vi.spyOn>;
 
   beforeEach(() => {
-    mockLogger = {
-      info: vi.fn(),
-      error: vi.fn(),
-      warn: vi.fn(),
-      debug: vi.fn(),
-    } as unknown as Logger;
+    mockLogger = createMockLogger();
 
     mockDatabase = {
       close: vi.fn(),

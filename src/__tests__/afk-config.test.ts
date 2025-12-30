@@ -13,6 +13,7 @@ import { execute } from '../handlers/commands/afk-config';
 import { GuildConfigService } from '../services/GuildConfigService';
 import type { GuildSettings } from '../database/repositories/GuildSettingsRepository';
 import { hasAFKAdminPermission } from '../utils/permissions';
+import { createMockLogger, createMockGuildSettings } from './fixtures';
 
 /**
  * AFK-CONFIG COMMAND TEST SUITE
@@ -34,7 +35,7 @@ vi.mock('../utils/permissions');
 
 describe('afk-config command', () => {
   let mockConfigService: GuildConfigService;
-  let mockLogger: any;
+  let mockLogger: ReturnType<typeof createMockLogger>;
 
   beforeEach(() => {
     mockConfigService = {
@@ -43,12 +44,7 @@ describe('afk-config command', () => {
       clearCache: vi.fn(),
     } as unknown as GuildConfigService;
 
-    mockLogger = {
-      error: vi.fn(),
-      warn: vi.fn(),
-      info: vi.fn(),
-      debug: vi.fn(),
-    };
+    mockLogger = createMockLogger();
 
     // Reset all mocks
     vi.clearAllMocks();
@@ -92,22 +88,6 @@ describe('afk-config command', () => {
     } as unknown as ChatInputCommandInteraction;
   }
 
-  /**
-   * Creates a minimal GuildSettings object.
-   */
-  function createMockConfig(guildId: string): GuildSettings {
-    return {
-      guildId,
-      enabled: true,
-      afkTimeoutSeconds: 300,
-      warningSecondsBefore: 60,
-      warningChannelId: null,
-      exemptRoleIds: [],
-      adminRoleIds: [],
-      createdAt: '2024-01-01T00:00:00.000Z',
-      updatedAt: '2024-01-01T00:00:00.000Z',
-    };
-  }
 
   /**
    * GUILDID NARROWING - THE CRITICAL BEHAVIOR
@@ -298,8 +278,11 @@ describe('afk-config command', () => {
         getInteger: vi.fn().mockReturnValue(timeoutSeconds),
       });
 
-      const config = createMockConfig(guildId);
-      config.warningSecondsBefore = 60;
+      const config = createMockGuildSettings({
+        guildId,
+        enabled: true,
+        warningSecondsBefore: 60,
+      });
 
       vi.mocked(hasAFKAdminPermission).mockReturnValue(true);
       vi.mocked(mockConfigService.getConfig).mockReturnValue(config);
@@ -323,8 +306,11 @@ describe('afk-config command', () => {
         getInteger: vi.fn().mockReturnValue(timeoutSeconds),
       });
 
-      const config = createMockConfig(guildId);
-      config.warningSecondsBefore = 60; // Equal to timeout
+      const config = createMockGuildSettings({
+        guildId,
+        enabled: true,
+        warningSecondsBefore: 60, // Equal to timeout
+      });
 
       vi.mocked(hasAFKAdminPermission).mockReturnValue(true);
       vi.mocked(mockConfigService.getConfig).mockReturnValue(config);
@@ -349,8 +335,11 @@ describe('afk-config command', () => {
         getInteger: vi.fn().mockReturnValue(timeoutSeconds),
       });
 
-      const config = createMockConfig(guildId);
-      config.warningSecondsBefore = 60;
+      const config = createMockGuildSettings({
+        guildId,
+        enabled: true,
+        warningSecondsBefore: 60,
+      });
 
       vi.mocked(hasAFKAdminPermission).mockReturnValue(true);
       vi.mocked(mockConfigService.getConfig).mockReturnValue(config);
@@ -380,8 +369,11 @@ describe('afk-config command', () => {
         getInteger: vi.fn().mockReturnValue(timeoutSeconds),
       });
 
-      const config = createMockConfig(guildId);
-      config.warningSecondsBefore = warningSeconds;
+      const config = createMockGuildSettings({
+        guildId,
+        enabled: true,
+        warningSecondsBefore: warningSeconds,
+      });
 
       vi.mocked(hasAFKAdminPermission).mockReturnValue(true);
       vi.mocked(mockConfigService.getConfig).mockReturnValue(config);
@@ -410,8 +402,11 @@ describe('afk-config command', () => {
         getInteger: vi.fn().mockReturnValue(warningSeconds),
       });
 
-      const config = createMockConfig(guildId);
-      config.afkTimeoutSeconds = 300;
+      const config = createMockGuildSettings({
+        guildId,
+        enabled: true,
+        afkTimeoutSeconds: 300,
+      });
 
       vi.mocked(hasAFKAdminPermission).mockReturnValue(true);
       vi.mocked(mockConfigService.getConfig).mockReturnValue(config);
@@ -435,8 +430,11 @@ describe('afk-config command', () => {
         getInteger: vi.fn().mockReturnValue(warningSeconds),
       });
 
-      const config = createMockConfig(guildId);
-      config.afkTimeoutSeconds = 300; // Equal to warning
+      const config = createMockGuildSettings({
+        guildId,
+        enabled: true,
+        afkTimeoutSeconds: 300, // Equal to warning
+      });
 
       vi.mocked(hasAFKAdminPermission).mockReturnValue(true);
       vi.mocked(mockConfigService.getConfig).mockReturnValue(config);
@@ -460,8 +458,11 @@ describe('afk-config command', () => {
         getInteger: vi.fn().mockReturnValue(warningSeconds),
       });
 
-      const config = createMockConfig(guildId);
-      config.afkTimeoutSeconds = 600;
+      const config = createMockGuildSettings({
+        guildId,
+        enabled: true,
+        afkTimeoutSeconds: 600,
+      });
 
       vi.mocked(hasAFKAdminPermission).mockReturnValue(true);
       vi.mocked(mockConfigService.getConfig).mockReturnValue(config);
@@ -490,8 +491,11 @@ describe('afk-config command', () => {
         getInteger: vi.fn().mockReturnValue(warningSeconds),
       });
 
-      const config = createMockConfig(guildId);
-      config.afkTimeoutSeconds = timeoutSeconds;
+      const config = createMockGuildSettings({
+        guildId,
+        enabled: true,
+        afkTimeoutSeconds: timeoutSeconds,
+      });
 
       vi.mocked(hasAFKAdminPermission).mockReturnValue(true);
       vi.mocked(mockConfigService.getConfig).mockReturnValue(config);
@@ -556,8 +560,11 @@ describe('afk-config command', () => {
           getRole: vi.fn().mockReturnValue(mockRole),
         });
 
-        const config = createMockConfig(guildId);
-        config.exemptRoleIds = [];
+        const config = createMockGuildSettings({
+          guildId,
+          enabled: true,
+          exemptRoleIds: [],
+        });
 
         vi.mocked(hasAFKAdminPermission).mockReturnValue(true);
         vi.mocked(mockConfigService.getConfig).mockReturnValue(config);
@@ -588,8 +595,11 @@ describe('afk-config command', () => {
           getRole: vi.fn().mockReturnValue(mockRole),
         });
 
-        const config = createMockConfig(guildId);
-        config.exemptRoleIds = [roleId]; // Already in list
+        const config = createMockGuildSettings({
+          guildId,
+          enabled: true,
+          exemptRoleIds: [roleId], // Already in list
+        });
 
         vi.mocked(hasAFKAdminPermission).mockReturnValue(true);
         vi.mocked(mockConfigService.getConfig).mockReturnValue(config);
@@ -616,8 +626,11 @@ describe('afk-config command', () => {
           getRole: vi.fn().mockReturnValue(mockRole),
         });
 
-        const config = createMockConfig(guildId);
-        config.exemptRoleIds = [existingRoleId];
+        const config = createMockGuildSettings({
+          guildId,
+          enabled: true,
+          exemptRoleIds: [existingRoleId],
+        });
 
         vi.mocked(hasAFKAdminPermission).mockReturnValue(true);
         vi.mocked(mockConfigService.getConfig).mockReturnValue(config);
@@ -643,8 +656,11 @@ describe('afk-config command', () => {
           getRole: vi.fn().mockReturnValue(mockRole),
         });
 
-        const config = createMockConfig(guildId);
-        config.exemptRoleIds = [roleId];
+        const config = createMockGuildSettings({
+          guildId,
+          enabled: true,
+          exemptRoleIds: [roleId],
+        });
 
         vi.mocked(hasAFKAdminPermission).mockReturnValue(true);
         vi.mocked(mockConfigService.getConfig).mockReturnValue(config);
@@ -674,8 +690,11 @@ describe('afk-config command', () => {
           getRole: vi.fn().mockReturnValue(mockRole),
         });
 
-        const config = createMockConfig(guildId);
-        config.exemptRoleIds = [];
+        const config = createMockGuildSettings({
+          guildId,
+          enabled: true,
+          exemptRoleIds: [],
+        });
 
         vi.mocked(hasAFKAdminPermission).mockReturnValue(true);
         vi.mocked(mockConfigService.getConfig).mockReturnValue(config);
@@ -702,8 +721,11 @@ describe('afk-config command', () => {
           getRole: vi.fn().mockReturnValue(mockRole),
         });
 
-        const config = createMockConfig(guildId);
-        config.exemptRoleIds = [roleToKeep, roleToRemove];
+        const config = createMockGuildSettings({
+          guildId,
+          enabled: true,
+          exemptRoleIds: [roleToKeep, roleToRemove],
+        });
 
         vi.mocked(hasAFKAdminPermission).mockReturnValue(true);
         vi.mocked(mockConfigService.getConfig).mockReturnValue(config);
@@ -735,8 +757,11 @@ describe('afk-config command', () => {
           getRole: vi.fn().mockReturnValue(mockRole),
         });
 
-        const config = createMockConfig(guildId);
-        config.adminRoleIds = [];
+        const config = createMockGuildSettings({
+          guildId,
+          enabled: true,
+          adminRoleIds: [],
+        });
 
         vi.mocked(hasAFKAdminPermission).mockReturnValue(true);
         vi.mocked(mockConfigService.getConfig).mockReturnValue(config);
@@ -766,8 +791,11 @@ describe('afk-config command', () => {
           getRole: vi.fn().mockReturnValue(mockRole),
         });
 
-        const config = createMockConfig(guildId);
-        config.adminRoleIds = [roleId];
+        const config = createMockGuildSettings({
+          guildId,
+          enabled: true,
+          adminRoleIds: [roleId],
+        });
 
         vi.mocked(hasAFKAdminPermission).mockReturnValue(true);
         vi.mocked(mockConfigService.getConfig).mockReturnValue(config);
@@ -794,8 +822,11 @@ describe('afk-config command', () => {
           getRole: vi.fn().mockReturnValue(mockRole),
         });
 
-        const config = createMockConfig(guildId);
-        config.adminRoleIds = [existingRoleId];
+        const config = createMockGuildSettings({
+          guildId,
+          enabled: true,
+          adminRoleIds: [existingRoleId],
+        });
 
         vi.mocked(hasAFKAdminPermission).mockReturnValue(true);
         vi.mocked(mockConfigService.getConfig).mockReturnValue(config);
@@ -821,8 +852,11 @@ describe('afk-config command', () => {
           getRole: vi.fn().mockReturnValue(mockRole),
         });
 
-        const config = createMockConfig(guildId);
-        config.adminRoleIds = [roleId];
+        const config = createMockGuildSettings({
+          guildId,
+          enabled: true,
+          adminRoleIds: [roleId],
+        });
 
         vi.mocked(hasAFKAdminPermission).mockReturnValue(true);
         vi.mocked(mockConfigService.getConfig).mockReturnValue(config);
@@ -852,8 +886,11 @@ describe('afk-config command', () => {
           getRole: vi.fn().mockReturnValue(mockRole),
         });
 
-        const config = createMockConfig(guildId);
-        config.adminRoleIds = [];
+        const config = createMockGuildSettings({
+          guildId,
+          enabled: true,
+          adminRoleIds: [],
+        });
 
         vi.mocked(hasAFKAdminPermission).mockReturnValue(true);
         vi.mocked(mockConfigService.getConfig).mockReturnValue(config);
@@ -880,8 +917,11 @@ describe('afk-config command', () => {
           getRole: vi.fn().mockReturnValue(mockRole),
         });
 
-        const config = createMockConfig(guildId);
-        config.adminRoleIds = [roleToKeep, roleToRemove];
+        const config = createMockGuildSettings({
+          guildId,
+          enabled: true,
+          adminRoleIds: [roleToKeep, roleToRemove],
+        });
 
         vi.mocked(hasAFKAdminPermission).mockReturnValue(true);
         vi.mocked(mockConfigService.getConfig).mockReturnValue(config);
@@ -1027,8 +1067,11 @@ describe('afk-config command', () => {
         getInteger: vi.fn().mockReturnValue(timeoutSeconds),
       });
 
-      const config = createMockConfig(guildId);
-      config.warningSecondsBefore = 60;
+      const config = createMockGuildSettings({
+        guildId,
+        enabled: true,
+        warningSecondsBefore: 60,
+      });
 
       vi.mocked(hasAFKAdminPermission).mockReturnValue(true);
       vi.mocked(mockConfigService.getConfig).mockReturnValue(config);
