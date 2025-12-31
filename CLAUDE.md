@@ -24,6 +24,10 @@ Copy `.env.example` to `.env` and configure:
 - `CLIENT_ID` - Application ID from Discord Developer Portal
 - `DATABASE_PATH` - SQLite database path (default: `./data/bot.db`)
 - `LOG_LEVEL` - Logging verbosity: debug, info, warn, error
+- `LOG_FILE_PATH` - Optional: path to log file (logs to both console and file when set)
+- `RATE_LIMIT_WARN_THRESHOLD` - Actions before warning (default: 20)
+- `RATE_LIMIT_CRASH_THRESHOLD` - Actions before crash protection (default: 50)
+- `RATE_LIMIT_WINDOW_MS` - Rate limit window in ms (default: 60000)
 
 ## Architecture
 
