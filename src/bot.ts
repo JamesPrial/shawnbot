@@ -2,7 +2,7 @@ import { Client, GatewayIntentBits, Events } from 'discord.js';
 import type { Logger } from 'pino';
 import type Database from 'better-sqlite3';
 import { loadConfig, type EnvConfig } from './config';
-import { logger as createLogger } from './utils/logger';
+import { createServiceLogger } from './utils/logger';
 import { initDatabase } from './database';
 import { createTables } from './database/schema';
 import { GuildSettingsRepository } from './database/repositories/GuildSettingsRepository';
@@ -17,6 +17,7 @@ import { createVoiceStateUpdateHandler } from './handlers/events/voiceStateUpdat
 import { createGuildCreateHandler } from './handlers/events/guildCreate';
 import { afkConfigCommand, afkStatusCommand } from './handlers/commands';
 import { RateLimiter } from './utils/RateLimiter';
+import { generateCorrelationId } from './utils/correlation';
 
 export interface BotDependencies {
   client: Client;
@@ -35,20 +36,26 @@ export interface BotDependencies {
 
 export async function createBot(): Promise<BotDependencies> {
   const config = loadConfig();
-  const logger = createLogger;
-  const rateLimiter = new RateLimiter(logger, {
+
+  // Create service-specific loggers
+  const rootLogger = createServiceLogger('bot');
+  const dbLogger = createServiceLogger('database');
+  const voiceLogger = createServiceLogger('voice');
+  const afkLogger = createServiceLogger('afk');
+
+  const rateLimiter = new RateLimiter(rootLogger, {
     warnThreshold: config.RATE_LIMIT_WARN_THRESHOLD,
     crashThreshold: config.RATE_LIMIT_CRASH_THRESHOLD,
     windowMs: config.RATE_LIMIT_WINDOW_MS,
   });
 
-  logger.info('Initializing Discord AFK kick bot');
+  rootLogger.info('Initializing Discord AFK kick bot');
 
   const database = initDatabase(config.DATABASE_PATH);
-  createTables(database, logger);
-  logger.info({ databasePath: config.DATABASE_PATH }, 'Database initialized');
+  createTables(database, dbLogger);
+  rootLogger.info({ databasePath: config.DATABASE_PATH }, 'Database initialized');
 
-  const repository = new GuildSettingsRepository(database, logger);
+  const repository = new GuildSettingsRepository(database, dbLogger);
 
   const client = new Client({
     intents: [
@@ -58,141 +65,147 @@ export async function createBot(): Promise<BotDependencies> {
     ],
   });
 
-  const guildConfigService = new GuildConfigService(repository, logger);
-  const speakingTracker = new SpeakingTracker(logger);
+  const guildConfigService = new GuildConfigService(repository, rootLogger);
+  const speakingTracker = new SpeakingTracker(voiceLogger);
   const voiceConnectionManager = new VoiceConnectionManager(
     speakingTracker,
     client,
-    logger,
+    voiceLogger,
     rateLimiter
   );
-  const warningService = new WarningService(client, guildConfigService, logger, rateLimiter);
+  const warningService = new WarningService(client, guildConfigService, afkLogger, rateLimiter);
   const afkDetectionService = new AFKDetectionService(
     warningService,
     guildConfigService,
     client,
-    logger,
+    afkLogger,
     rateLimiter
   );
   const voiceMonitorService = new VoiceMonitorService(
     voiceConnectionManager,
     guildConfigService,
     client,
-    logger,
+    voiceLogger,
     rateLimiter
   );
 
   speakingTracker.on('userStartedSpeaking', async (userId: string, guildId: string) => {
-    if (logger.isLevelEnabled('debug')) {
-      logger.debug({ userId, guildId, action: 'speaking_start' }, 'User started speaking, resetting AFK timer');
+    const correlationId = generateCorrelationId();
+    const eventLogger = afkLogger.child({ correlationId });
+
+    if (eventLogger.isLevelEnabled('debug')) {
+      eventLogger.debug({ userId, guildId, action: 'speaking_start' }, 'User started speaking, resetting AFK timer');
     }
 
     try {
       const guild = client.guilds.cache.get(guildId);
       if (!guild) {
-        if (logger.isLevelEnabled('debug')) {
-          logger.debug({ userId, guildId }, 'Guild not in cache, skipping reset');
+        if (eventLogger.isLevelEnabled('debug')) {
+          eventLogger.debug({ userId, guildId }, 'Guild not in cache, skipping reset');
         }
         return;
       }
 
       const member = guild.members.cache.get(userId);
       if (!member) {
-        if (logger.isLevelEnabled('debug')) {
-          logger.debug({ userId, guildId }, 'Member not in cache, skipping reset');
+        if (eventLogger.isLevelEnabled('debug')) {
+          eventLogger.debug({ userId, guildId }, 'Member not in cache, skipping reset');
         }
         return;
       }
 
       const voiceChannel = member.voice?.channel;
       if (!voiceChannel) {
-        if (logger.isLevelEnabled('debug')) {
-          logger.debug({ userId, guildId }, 'Member not in voice channel, skipping reset');
+        if (eventLogger.isLevelEnabled('debug')) {
+          eventLogger.debug({ userId, guildId }, 'Member not in voice channel, skipping reset');
         }
         return;
       }
 
       const nonBotCount = voiceChannel.members.filter((m) => !m.user.bot).size;
       if (nonBotCount < MIN_USERS_FOR_AFK_TRACKING) {
-        if (logger.isLevelEnabled('debug')) {
-          logger.debug({ userId, guildId, nonBotCount }, 'Below threshold, skipping reset');
+        if (eventLogger.isLevelEnabled('debug')) {
+          eventLogger.debug({ userId, guildId, nonBotCount }, 'Below threshold, skipping reset');
         }
         return;
       }
 
       await afkDetectionService.resetTimer(guildId, userId);
     } catch (error) {
-      logger.error({ error, userId, guildId }, 'Failed to reset timer after user started speaking');
+      eventLogger.error({ error, userId, guildId }, 'Failed to reset timer after user started speaking');
     }
   });
 
   speakingTracker.on('userStoppedSpeaking', async (userId: string, guildId: string) => {
-    if (logger.isLevelEnabled('debug')) {
-      logger.debug({ userId, guildId, action: 'speaking_stop' }, 'User stopped speaking, starting AFK tracking');
+    const correlationId = generateCorrelationId();
+    const eventLogger = afkLogger.child({ correlationId });
+
+    if (eventLogger.isLevelEnabled('debug')) {
+      eventLogger.debug({ userId, guildId, action: 'speaking_stop' }, 'User stopped speaking, starting AFK tracking');
     }
 
     try {
       const guild = client.guilds.cache.get(guildId);
       if (!guild) {
-        if (logger.isLevelEnabled('debug')) {
-          logger.debug({ userId, guildId }, 'Guild not in cache, skipping tracking');
+        if (eventLogger.isLevelEnabled('debug')) {
+          eventLogger.debug({ userId, guildId }, 'Guild not in cache, skipping tracking');
         }
         return;
       }
 
       const member = guild.members.cache.get(userId);
       if (!member) {
-        if (logger.isLevelEnabled('debug')) {
-          logger.debug({ userId, guildId }, 'Member not in cache, skipping tracking');
+        if (eventLogger.isLevelEnabled('debug')) {
+          eventLogger.debug({ userId, guildId }, 'Member not in cache, skipping tracking');
         }
         return;
       }
 
       const voiceChannel = member.voice?.channel;
       if (!voiceChannel) {
-        if (logger.isLevelEnabled('debug')) {
-          logger.debug({ userId, guildId }, 'Member not in voice channel, skipping tracking');
+        if (eventLogger.isLevelEnabled('debug')) {
+          eventLogger.debug({ userId, guildId }, 'Member not in voice channel, skipping tracking');
         }
         return;
       }
 
       const nonBotCount = voiceChannel.members.filter((m) => !m.user.bot).size;
       if (nonBotCount < MIN_USERS_FOR_AFK_TRACKING) {
-        if (logger.isLevelEnabled('debug')) {
-          logger.debug({ userId, guildId, nonBotCount }, 'Below threshold, skipping tracking');
+        if (eventLogger.isLevelEnabled('debug')) {
+          eventLogger.debug({ userId, guildId, nonBotCount }, 'Below threshold, skipping tracking');
         }
         return;
       }
 
       // Skip if already tracking - avoids duplicate starts after threshold events
       if (afkDetectionService.isTracking(guildId, userId)) {
-        if (logger.isLevelEnabled('debug')) {
-          logger.debug({ userId, guildId }, 'Already tracking user, skipping');
+        if (eventLogger.isLevelEnabled('debug')) {
+          eventLogger.debug({ userId, guildId }, 'Already tracking user, skipping');
         }
         return;
       }
 
       await afkDetectionService.startTracking(guildId, userId, voiceChannel.id);
     } catch (error) {
-      logger.error({ error, userId, guildId }, 'Failed to start tracking after user stopped speaking');
+      eventLogger.error({ error, userId, guildId }, 'Failed to start tracking after user stopped speaking');
     }
   });
 
   client.on(Events.ClientReady, createReadyHandler({
     voiceMonitor: voiceMonitorService,
-    logger,
+    logger: rootLogger,
   }));
 
   client.on(Events.VoiceStateUpdate, createVoiceStateUpdateHandler({
     voiceMonitor: voiceMonitorService,
     afkDetection: afkDetectionService,
     guildConfig: guildConfigService,
-    logger,
+    logger: rootLogger,
   }));
 
   client.on(Events.GuildCreate, createGuildCreateHandler({
     voiceMonitor: voiceMonitorService,
-    logger,
+    logger: rootLogger,
   }));
 
   client.on(Events.InteractionCreate, async (interaction) => {
@@ -200,16 +213,28 @@ export async function createBot(): Promise<BotDependencies> {
       return;
     }
 
+    const correlationId = generateCorrelationId();
+    const interactionLogger = rootLogger.child({ correlationId });
+
+    if (interactionLogger.isLevelEnabled('debug')) {
+      interactionLogger.debug({
+        commandName: interaction.commandName,
+        guildId: interaction.guildId,
+        userId: interaction.user.id,
+        action: 'interaction_received'
+      }, 'Slash command interaction received');
+    }
+
     try {
       if (interaction.commandName === afkConfigCommand.data.name) {
-        await afkConfigCommand.execute(interaction, guildConfigService, logger);
+        await afkConfigCommand.execute(interaction, guildConfigService, interactionLogger);
       } else if (interaction.commandName === afkStatusCommand.data.name) {
-        await afkStatusCommand.execute(interaction, guildConfigService, logger);
+        await afkStatusCommand.execute(interaction, guildConfigService, interactionLogger);
       } else {
-        logger.warn({ commandName: interaction.commandName }, 'Unknown command received');
+        interactionLogger.warn({ commandName: interaction.commandName }, 'Unknown command received');
       }
     } catch (error) {
-      logger.error({ error, commandName: interaction.commandName }, 'Error handling command');
+      interactionLogger.error({ error, commandName: interaction.commandName }, 'Error handling command');
 
       const errorMessage = 'An error occurred while executing this command.';
 
@@ -221,13 +246,13 @@ export async function createBot(): Promise<BotDependencies> {
     }
   });
 
-  logger.info('Bot dependencies created and event handlers registered');
+  rootLogger.info('Bot dependencies created and event handlers registered');
 
   return {
     client,
     database,
     config,
-    logger,
+    logger: rootLogger,
     rateLimiter,
     repository,
     guildConfigService,

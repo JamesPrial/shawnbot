@@ -119,6 +119,20 @@ export async function execute(
   configService: GuildConfigService,
   logger: Logger
 ): Promise<void> {
+  const subcommandGroup = interaction.options.getSubcommandGroup();
+  const subcommand = interaction.options.getSubcommand();
+
+  if (logger.isLevelEnabled('debug')) {
+    logger.debug({
+      guildId: interaction.guildId,
+      userId: interaction.user.id,
+      command: 'afk-config',
+      subcommandGroup,
+      subcommand,
+      action: 'command_invoke'
+    }, 'afk-config command invoked');
+  }
+
   if (!interaction.guildId) {
     await interaction.reply({
       content: 'This command can only be used in a server.',
@@ -136,9 +150,6 @@ export async function execute(
     });
     return;
   }
-
-  const subcommandGroup = interaction.options.getSubcommandGroup();
-  const subcommand = interaction.options.getSubcommand();
 
   try {
     if (subcommandGroup === 'exempt') {

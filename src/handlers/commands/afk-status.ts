@@ -17,6 +17,15 @@ export async function execute(
   configService: GuildConfigService,
   logger: Logger
 ): Promise<void> {
+  if (logger.isLevelEnabled('debug')) {
+    logger.debug({
+      guildId: interaction.guildId,
+      userId: interaction.user.id,
+      command: 'afk-status',
+      action: 'command_invoke'
+    }, 'afk-status command invoked');
+  }
+
   if (!interaction.guildId) {
     await interaction.reply({
       content: 'This command can only be used in a server.',
