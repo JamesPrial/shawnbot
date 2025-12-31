@@ -1,3 +1,4 @@
+import 'dotenv/config'; // MUST be first - loads .env before other imports
 import { REST, Routes } from 'discord.js';
 import { createBot } from './bot';
 import { loadConfig } from './config';
