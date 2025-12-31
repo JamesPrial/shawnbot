@@ -35,11 +35,25 @@ export class GuildSettingsRepository {
   }
 
   findByGuildId(guildId: string): GuildSettings | null {
+    if (this.logger.isLevelEnabled('debug')) {
+      this.logger.debug(
+        { guildId, action: 'db_query', operation: 'findByGuildId' },
+        'Querying guild settings from database'
+      );
+    }
+
     const statement = this.db.prepare(`
       SELECT * FROM guild_settings WHERE guild_id = ?
     `);
 
     const row = statement.get(guildId) as GuildSettingsRow | undefined;
+
+    if (this.logger.isLevelEnabled('debug')) {
+      this.logger.debug(
+        { guildId, action: 'db_result', operation: 'findByGuildId', found: !!row },
+        'Database query result'
+      );
+    }
 
     if (!row) {
       return null;
@@ -49,6 +63,14 @@ export class GuildSettingsRepository {
   }
 
   upsert(settings: Partial<GuildSettings> & { guildId: string }): void {
+    if (this.logger.isLevelEnabled('debug')) {
+      const fields = Object.keys(settings).filter(key => key !== 'guildId');
+      this.logger.debug(
+        { guildId: settings.guildId, action: 'db_write', operation: 'upsert', fields },
+        'Writing guild settings to database'
+      );
+    }
+
     const exemptRoleIdsJson = settings.exemptRoleIds
       ? JSON.stringify(settings.exemptRoleIds)
       : null;
@@ -87,9 +109,23 @@ export class GuildSettingsRepository {
       exemptRoleIdsJson,
       adminRoleIdsJson
     );
+
+    if (this.logger.isLevelEnabled('debug')) {
+      this.logger.debug(
+        { guildId: settings.guildId, action: 'db_write_success', operation: 'upsert' },
+        'Successfully wrote guild settings to database'
+      );
+    }
   }
 
   delete(guildId: string): void {
+    if (this.logger.isLevelEnabled('debug')) {
+      this.logger.debug(
+        { guildId, action: 'db_delete', operation: 'delete' },
+        'Deleting guild settings from database'
+      );
+    }
+
     const statement = this.db.prepare(`
       DELETE FROM guild_settings WHERE guild_id = ?
     `);

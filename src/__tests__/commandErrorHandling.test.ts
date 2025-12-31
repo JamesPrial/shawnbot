@@ -53,6 +53,7 @@ describe('bot.ts - Command Error Handling', () => {
     return {
       commandName,
       guildId,
+      user: { id: 'mock-user-id' },
       isChatInputCommand: () => true,
       reply: mockReply,
       followUp: mockFollowUp,

@@ -4,6 +4,7 @@ import type { VoiceMonitorService } from '../../services/VoiceMonitorService';
 import type { AFKDetectionService } from '../../services/AFKDetectionService';
 import { MIN_USERS_FOR_AFK_TRACKING } from '../../services/AFKDetectionService';
 import type { GuildConfigService } from '../../services/GuildConfigService';
+import { generateCorrelationId } from '../../utils/correlation';
 
 export interface VoiceStateHandlerDeps {
   voiceMonitor: VoiceMonitorService;
@@ -19,37 +20,40 @@ export function createVoiceStateUpdateHandler(deps: VoiceStateHandlerDeps) {
   const { voiceMonitor, afkDetection, guildConfig, logger } = deps;
 
   return async (oldState: VoiceState, newState: VoiceState): Promise<void> => {
+    const correlationId = generateCorrelationId();
+    const eventLogger = logger.child({ correlationId });
+
     try {
       const userId = newState.member?.user.id || oldState.member?.user.id;
       const guildId = newState.guild.id;
 
-      if (logger.isLevelEnabled('debug')) {
+      if (eventLogger.isLevelEnabled('debug')) {
         const eventType = !oldState.channel && newState.channel ? 'join'
           : oldState.channel && !newState.channel ? 'leave'
           : oldState.channelId !== newState.channelId ? 'switch'
           : 'other';
-        logger.debug({ guildId, userId, action: 'voice_state_change', eventType }, 'Processing voice state update');
+        eventLogger.debug({ guildId, userId, action: 'voice_state_change', eventType }, 'Processing voice state update');
       }
 
       if (!userId) {
-        if (logger.isLevelEnabled('debug')) {
-          logger.debug('No userId found in voice state update');
+        if (eventLogger.isLevelEnabled('debug')) {
+          eventLogger.debug('No userId found in voice state update');
         }
         return;
       }
 
       const isBot = newState.member?.user.bot || oldState.member?.user.bot;
       if (isBot) {
-        if (logger.isLevelEnabled('debug')) {
-          logger.debug({ userId, guildId }, 'Skipping bot user');
+        if (eventLogger.isLevelEnabled('debug')) {
+          eventLogger.debug({ userId, guildId }, 'Skipping bot user');
         }
         return;
       }
 
       const config = guildConfig.getConfig(guildId);
       if (!config.enabled) {
-        if (logger.isLevelEnabled('debug')) {
-          logger.debug({ guildId }, 'Guild monitoring not enabled');
+        if (eventLogger.isLevelEnabled('debug')) {
+          eventLogger.debug({ guildId }, 'Guild monitoring not enabled');
         }
         return;
       }
@@ -59,8 +63,8 @@ export function createVoiceStateUpdateHandler(deps: VoiceStateHandlerDeps) {
 
     // User joined a channel
     if (!oldChannel && newChannel) {
-      if (logger.isLevelEnabled('debug')) {
-        logger.debug({ userId, guildId, channelId: newChannel.id }, 'User joined voice channel');
+      if (eventLogger.isLevelEnabled('debug')) {
+        eventLogger.debug({ userId, guildId, channelId: newChannel.id }, 'User joined voice channel');
       }
 
       await voiceMonitor.handleUserJoin(newChannel);
@@ -81,8 +85,8 @@ export function createVoiceStateUpdateHandler(deps: VoiceStateHandlerDeps) {
 
     // User left a channel
     if (oldChannel && !newChannel) {
-      if (logger.isLevelEnabled('debug')) {
-        logger.debug({ userId, guildId, channelId: oldChannel.id }, 'User left voice channel');
+      if (eventLogger.isLevelEnabled('debug')) {
+        eventLogger.debug({ userId, guildId, channelId: oldChannel.id }, 'User left voice channel');
       }
 
       const remainingCount = countNonBotMembers(oldChannel);
@@ -100,8 +104,8 @@ export function createVoiceStateUpdateHandler(deps: VoiceStateHandlerDeps) {
 
     // User switched channels
     if (oldChannel && newChannel && oldChannel.id !== newChannel.id) {
-      if (logger.isLevelEnabled('debug')) {
-        logger.debug(
+      if (eventLogger.isLevelEnabled('debug')) {
+        eventLogger.debug(
           { userId, guildId, oldChannelId: oldChannel.id, newChannelId: newChannel.id },
           'User switched voice channels'
         );
@@ -134,8 +138,8 @@ export function createVoiceStateUpdateHandler(deps: VoiceStateHandlerDeps) {
     }
 
       // Other state changes (mute, deafen, etc.) - no action needed
-      if (logger.isLevelEnabled('debug')) {
-        logger.debug({ userId, guildId }, 'Voice state updated (no channel change)');
+      if (eventLogger.isLevelEnabled('debug')) {
+        eventLogger.debug({ userId, guildId }, 'Voice state updated (no channel change)');
       }
     } catch (error) {
       const userId = newState.member?.user.id || oldState.member?.user.id;
@@ -143,7 +147,7 @@ export function createVoiceStateUpdateHandler(deps: VoiceStateHandlerDeps) {
       const oldChannelId = oldState.channel?.id;
       const newChannelId = newState.channel?.id;
 
-      logger.error(
+      eventLogger.error(
         { error, userId, guildId, oldChannelId, newChannelId },
         'Error handling voice state update'
       );

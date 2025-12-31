@@ -1,12 +1,4 @@
-import pino from 'pino';
-
-// NOTE: Logger initializes as a module-level singleton before loadConfig() runs,
-// so we read directly from process.env. These values are also defined in
-// src/config/environment.ts for type inference, documentation, and validation
-// of the broader application config.
-const isDevelopment = process.env.NODE_ENV !== 'production';
-const logLevel = process.env.LOG_LEVEL || 'info';
-const logFilePath = process.env.LOG_FILE_PATH;
+import pino, { type Logger } from 'pino';
 
 interface PinoPrettyOptions {
   colorize: boolean;
@@ -23,7 +15,9 @@ type TransportTarget =
   | { target: 'pino-pretty'; options: PinoPrettyOptions }
   | { target: 'pino/file'; options: PinoFileOptions };
 
-function buildTransportTargets(): TransportTarget[] {
+export function buildTransportTargets(): TransportTarget[] {
+  const isDevelopment = process.env.NODE_ENV !== 'production';
+  const logFilePath = process.env.LOG_FILE_PATH;
   const targets: TransportTarget[] = [];
 
   // Console transport
@@ -59,13 +53,47 @@ function buildTransportTargets(): TransportTarget[] {
   return targets;
 }
 
-const targets = buildTransportTargets();
+/**
+ * Lazy-initialized root logger singleton.
+ * Defers reading environment variables until first access,
+ * ensuring .env is loaded by dotenv before configuration.
+ */
+let _logger: Logger | null = null;
 
-export const logger = pino({
-  level: logLevel,
-  transport: {
-    targets,
+function getRootLogger(): Logger {
+  if (!_logger) {
+    const logLevel = process.env.LOG_LEVEL || 'info';
+    _logger = pino({
+      level: logLevel,
+      transport: {
+        targets: buildTransportTargets(),
+      },
+    });
+  }
+  return _logger;
+}
+
+/**
+ * Backward-compatible proxy that delegates all property access
+ * to the lazily-initialized root logger.
+ */
+export const logger = new Proxy({} as Logger, {
+  get(_, prop) {
+    return (getRootLogger() as Record<string, unknown>)[prop as string];
+  },
+  set(_, prop, value) {
+    (getRootLogger() as Record<string, unknown>)[prop as string] = value;
+    return true;
   },
 });
 
-export { buildTransportTargets };
+/**
+ * Factory function for creating service-specific child loggers.
+ * Each child logger includes a 'service' field in all log entries.
+ *
+ * @param serviceName - The name of the service (e.g., 'bot', 'database', 'voice', 'afk')
+ * @returns A child logger instance with the service context
+ */
+export function createServiceLogger(serviceName: string): Logger {
+  return getRootLogger().child({ service: serviceName });
+}

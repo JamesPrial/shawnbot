@@ -238,7 +238,7 @@ describe('createGuildCreateHandler', () => {
       expect(mockLogger.info).toHaveBeenCalledTimes(1);
       expect(mockLogger.error).not.toHaveBeenCalled();
       expect(mockLogger.debug).toHaveBeenCalledWith(
-        { guildId: '123456789' },
+        { guildId: '123456789', action: 'guild_scan_complete' },
         'Completed guild scan'
       );
       expect(mockVoiceMonitor.scanGuild).toHaveBeenCalledWith(mockGuild);

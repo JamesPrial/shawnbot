@@ -76,15 +76,23 @@ describe('afk-config command', () => {
       permissions.add(PermissionsBitField.Flags.Administrator);
     }
 
+    // Add default mock methods for options if not provided
+    const defaultOptions = {
+      getSubcommandGroup: vi.fn().mockReturnValue(null),
+      getSubcommand: vi.fn().mockReturnValue('enable'),
+      ...options,
+    };
+
     return {
       guildId,
+      user: { id: 'mock-user-id' },
       member: mockMember as GuildMember,
       memberPermissions: permissions,
       reply: mockReply,
       followUp: mockFollowUp,
       replied: false,
       deferred: false,
-      options: options as CommandInteractionOptionResolver,
+      options: defaultOptions as CommandInteractionOptionResolver,
     } as unknown as ChatInputCommandInteraction;
   }
 

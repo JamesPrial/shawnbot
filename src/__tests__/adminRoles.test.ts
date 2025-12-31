@@ -74,6 +74,7 @@ describe('Admin Roles Feature', () => {
 
     return {
       guildId,
+      user: { id: 'mock-user-id' },
       member: mockMember as GuildMember,
       memberPermissions: permissions,
       reply: vi.fn(),

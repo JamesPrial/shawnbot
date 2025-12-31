@@ -597,4 +597,342 @@ describe('GuildSettingsRepository', () => {
       expect(result?.adminRoleIds).toEqual(['admin-1']);
     });
   });
+
+  describe('debug logging (WU-3)', () => {
+    /**
+     * WU-3: GuildSettingsRepository debug logging tests
+     *
+     * These tests verify that debug logging is properly guarded by isLevelEnabled('debug')
+     * and that the correct context is logged for database operations.
+     *
+     * WHY: Debug logging provides visibility into database operations without performance
+     * impact when debug is disabled. The isLevelEnabled check prevents expensive object
+     * construction when debug logging is off.
+     */
+
+    beforeEach(() => {
+      // Reset mock call counts before each test
+      vi.clearAllMocks();
+    });
+
+    describe('findByGuildId debug logging', () => {
+      it('should check if debug level is enabled before logging', () => {
+        // WHY: Prevents expensive log object construction when debug is disabled
+        mockLogger.isLevelEnabled.mockReturnValue(false);
+
+        repository.findByGuildId('test-guild');
+
+        expect(mockLogger.isLevelEnabled).toHaveBeenCalledWith('debug');
+        // When debug is disabled, debug() should not be called
+        expect(mockLogger.debug).not.toHaveBeenCalled();
+      });
+
+      it('should log db_query action before query when debug enabled', () => {
+        // WHY: Provides visibility into what queries are being executed
+        mockLogger.isLevelEnabled.mockReturnValue(true);
+        const guildId = 'test-guild-123';
+
+        repository.findByGuildId(guildId);
+
+        expect(mockLogger.debug).toHaveBeenCalledWith(
+          expect.objectContaining({
+            guildId,
+            action: 'db_query',
+            operation: 'findByGuildId'
+          }),
+          'Querying guild settings from database'
+        );
+      });
+
+      it('should log db_result action after query with found status when debug enabled', () => {
+        // WHY: Shows whether the query found results, critical for debugging missing configs
+        mockLogger.isLevelEnabled.mockReturnValue(true);
+        const guildId = 'existing-guild';
+
+        // Create a record to find
+        repository.upsert({ guildId, enabled: true });
+
+        // Clear mocks from upsert
+        vi.clearAllMocks();
+        mockLogger.isLevelEnabled.mockReturnValue(true);
+
+        repository.findByGuildId(guildId);
+
+        expect(mockLogger.debug).toHaveBeenCalledWith(
+          expect.objectContaining({
+            guildId,
+            action: 'db_result',
+            operation: 'findByGuildId',
+            found: true
+          }),
+          'Database query result'
+        );
+      });
+
+      it('should log db_result with found=false when guild not found', () => {
+        // WHY: Distinguishes between "query executed but found nothing" vs "query never ran"
+        mockLogger.isLevelEnabled.mockReturnValue(true);
+        const guildId = 'non-existent-guild';
+
+        repository.findByGuildId(guildId);
+
+        expect(mockLogger.debug).toHaveBeenCalledWith(
+          expect.objectContaining({
+            guildId,
+            action: 'db_result',
+            operation: 'findByGuildId',
+            found: false
+          }),
+          'Database query result'
+        );
+      });
+
+      it('should call debug logger twice when debug enabled (query + result)', () => {
+        // WHY: Both the query and result should be logged for complete visibility
+        mockLogger.isLevelEnabled.mockReturnValue(true);
+
+        repository.findByGuildId('test-guild');
+
+        // isLevelEnabled called twice (before query, before result)
+        expect(mockLogger.isLevelEnabled).toHaveBeenCalledTimes(2);
+        // debug called twice (query log, result log)
+        expect(mockLogger.debug).toHaveBeenCalledTimes(2);
+      });
+
+      it('should not call debug logger when debug disabled', () => {
+        // WHY: Performance optimization - avoid object construction overhead
+        mockLogger.isLevelEnabled.mockReturnValue(false);
+
+        repository.findByGuildId('test-guild');
+
+        // isLevelEnabled is checked
+        expect(mockLogger.isLevelEnabled).toHaveBeenCalled();
+        // But debug is never called
+        expect(mockLogger.debug).not.toHaveBeenCalled();
+      });
+    });
+
+    describe('upsert debug logging', () => {
+      it('should check if debug level is enabled before logging upsert', () => {
+        // WHY: Same performance optimization as findByGuildId
+        mockLogger.isLevelEnabled.mockReturnValue(false);
+
+        repository.upsert({ guildId: 'test-guild', enabled: true });
+
+        expect(mockLogger.isLevelEnabled).toHaveBeenCalledWith('debug');
+        expect(mockLogger.debug).not.toHaveBeenCalled();
+      });
+
+      it('should log db_write action before upsert when debug enabled', () => {
+        // WHY: Shows what data is being written to database
+        mockLogger.isLevelEnabled.mockReturnValue(true);
+        const guildId = 'test-guild';
+
+        repository.upsert({
+          guildId,
+          enabled: true,
+          afkTimeoutSeconds: 600
+        });
+
+        expect(mockLogger.debug).toHaveBeenCalledWith(
+          expect.objectContaining({
+            guildId,
+            action: 'db_write',
+            operation: 'upsert',
+            fields: expect.arrayContaining(['enabled', 'afkTimeoutSeconds'])
+          }),
+          'Writing guild settings to database'
+        );
+      });
+
+      it('should log db_write_success action after upsert when debug enabled', () => {
+        // WHY: Confirms write completed successfully, helps detect partial failures
+        mockLogger.isLevelEnabled.mockReturnValue(true);
+        const guildId = 'test-guild';
+
+        repository.upsert({ guildId, enabled: true });
+
+        expect(mockLogger.debug).toHaveBeenCalledWith(
+          expect.objectContaining({
+            guildId,
+            action: 'db_write_success',
+            operation: 'upsert'
+          }),
+          'Successfully wrote guild settings to database'
+        );
+      });
+
+      it('should include all modified fields in upsert log', () => {
+        // WHY: Knowing which fields were updated helps debug config issues
+        mockLogger.isLevelEnabled.mockReturnValue(true);
+        const guildId = 'test-guild';
+
+        repository.upsert({
+          guildId,
+          enabled: true,
+          afkTimeoutSeconds: 500,
+          warningSecondsBefore: 90,
+          warningChannelId: 'channel-123',
+          exemptRoleIds: ['role-1', 'role-2']
+        });
+
+        expect(mockLogger.debug).toHaveBeenCalledWith(
+          expect.objectContaining({
+            fields: expect.arrayContaining([
+              'enabled',
+              'afkTimeoutSeconds',
+              'warningSecondsBefore',
+              'warningChannelId',
+              'exemptRoleIds'
+            ])
+          }),
+          'Writing guild settings to database'
+        );
+      });
+
+      it('should not include guildId in fields array', () => {
+        // WHY: guildId is the key, not a modified field
+        mockLogger.isLevelEnabled.mockReturnValue(true);
+        const guildId = 'test-guild';
+
+        repository.upsert({ guildId, enabled: true });
+
+        const logCall = vi.mocked(mockLogger.debug).mock.calls[0];
+        expect(logCall[0].fields).not.toContain('guildId');
+      });
+
+      it('should call debug logger twice when debug enabled (write + success)', () => {
+        // WHY: Both the write attempt and success should be logged
+        mockLogger.isLevelEnabled.mockReturnValue(true);
+
+        repository.upsert({ guildId: 'test-guild', enabled: true });
+
+        // isLevelEnabled called twice
+        expect(mockLogger.isLevelEnabled).toHaveBeenCalledTimes(2);
+        // debug called twice (write log, success log)
+        expect(mockLogger.debug).toHaveBeenCalledTimes(2);
+      });
+
+      it('should not call debug logger when debug disabled', () => {
+        // WHY: Performance optimization
+        mockLogger.isLevelEnabled.mockReturnValue(false);
+
+        repository.upsert({ guildId: 'test-guild', enabled: true });
+
+        expect(mockLogger.isLevelEnabled).toHaveBeenCalled();
+        expect(mockLogger.debug).not.toHaveBeenCalled();
+      });
+    });
+
+    describe('delete debug logging', () => {
+      it('should check if debug level is enabled before logging delete', () => {
+        // WHY: Performance optimization
+        mockLogger.isLevelEnabled.mockReturnValue(false);
+
+        repository.delete('test-guild');
+
+        expect(mockLogger.isLevelEnabled).toHaveBeenCalledWith('debug');
+        expect(mockLogger.debug).not.toHaveBeenCalled();
+      });
+
+      it('should log db_delete action when debug enabled', () => {
+        // WHY: Shows which guilds are having their settings deleted
+        mockLogger.isLevelEnabled.mockReturnValue(true);
+        const guildId = 'test-guild-to-delete';
+
+        repository.delete(guildId);
+
+        expect(mockLogger.debug).toHaveBeenCalledWith(
+          expect.objectContaining({
+            guildId,
+            action: 'db_delete',
+            operation: 'delete'
+          }),
+          'Deleting guild settings from database'
+        );
+      });
+
+      it('should call debug logger once when debug enabled', () => {
+        // WHY: Delete only logs once (before the operation)
+        mockLogger.isLevelEnabled.mockReturnValue(true);
+
+        repository.delete('test-guild');
+
+        expect(mockLogger.isLevelEnabled).toHaveBeenCalledTimes(1);
+        expect(mockLogger.debug).toHaveBeenCalledTimes(1);
+      });
+
+      it('should not call debug logger when debug disabled', () => {
+        // WHY: Performance optimization
+        mockLogger.isLevelEnabled.mockReturnValue(false);
+
+        repository.delete('test-guild');
+
+        expect(mockLogger.isLevelEnabled).toHaveBeenCalled();
+        expect(mockLogger.debug).not.toHaveBeenCalled();
+      });
+
+      it('should log delete even for non-existent guild', () => {
+        // WHY: Attempting to delete a non-existent guild should still be logged
+        mockLogger.isLevelEnabled.mockReturnValue(true);
+        const guildId = 'non-existent-guild';
+
+        repository.delete(guildId);
+
+        expect(mockLogger.debug).toHaveBeenCalledWith(
+          expect.objectContaining({
+            guildId,
+            action: 'db_delete'
+          }),
+          'Deleting guild settings from database'
+        );
+      });
+    });
+
+    describe('debug logging edge cases', () => {
+      it('should handle empty guild ID in logs', () => {
+        // WHY: Edge case - empty string guild ID should still log
+        mockLogger.isLevelEnabled.mockReturnValue(true);
+
+        repository.findByGuildId('');
+
+        expect(mockLogger.debug).toHaveBeenCalledWith(
+          expect.objectContaining({
+            guildId: '',
+            action: 'db_query'
+          }),
+          expect.any(String)
+        );
+      });
+
+      it('should handle special characters in guild ID in logs', () => {
+        // WHY: Guild IDs with special chars should be logged correctly
+        mockLogger.isLevelEnabled.mockReturnValue(true);
+        const guildId = 'guild-!@#$%^&*()';
+
+        repository.findByGuildId(guildId);
+
+        expect(mockLogger.debug).toHaveBeenCalledWith(
+          expect.objectContaining({
+            guildId
+          }),
+          expect.any(String)
+        );
+      });
+
+      it('should handle minimal upsert (guildId only) in logs', () => {
+        // WHY: Upsert with only guildId should have empty fields array
+        mockLogger.isLevelEnabled.mockReturnValue(true);
+
+        repository.upsert({ guildId: 'minimal-guild' });
+
+        expect(mockLogger.debug).toHaveBeenCalledWith(
+          expect.objectContaining({
+            fields: []
+          }),
+          'Writing guild settings to database'
+        );
+      });
+    });
+  });
 });
