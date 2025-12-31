@@ -13,7 +13,11 @@
     "lint": "eslint src --ext .ts",
     "lint:fix": "eslint src --ext .ts --fix"
   },
-  "keywords": ["discord", "bot", "afk"],
+  "keywords": [
+    "discord",
+    "bot",
+    "afk"
+  ],
   "author": "",
   "license": "MIT",
   "dependencies": {
@@ -33,6 +37,6 @@
     "pino-pretty": "^11.0.0",
     "tsx": "^4.19.0",
     "typescript": "^5.5.0",
-    "vitest": "^2.0.0"
+    "vitest": "^4.0.16"
   }
 }
