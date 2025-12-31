@@ -12,10 +12,10 @@ interface PinoFileOptions {
 }
 
 type TransportTarget =
-  | { target: 'pino-pretty'; options: PinoPrettyOptions }
-  | { target: 'pino/file'; options: PinoFileOptions };
+  | { target: 'pino-pretty'; level?: string; options: PinoPrettyOptions }
+  | { target: 'pino/file'; level?: string; options: PinoFileOptions };
 
-export function buildTransportTargets(): TransportTarget[] {
+export function buildTransportTargets(level: string): TransportTarget[] {
   const isDevelopment = process.env.NODE_ENV !== 'production';
   const logFilePath = process.env.LOG_FILE_PATH;
   const targets: TransportTarget[] = [];
@@ -24,6 +24,7 @@ export function buildTransportTargets(): TransportTarget[] {
   if (isDevelopment) {
     targets.push({
       target: 'pino-pretty',
+      level,
       options: {
         colorize: true,
         translateTime: 'HH:MM:ss',
@@ -33,6 +34,7 @@ export function buildTransportTargets(): TransportTarget[] {
   } else {
     targets.push({
       target: 'pino/file',
+      level,
       options: {
         destination: 1, // stdout
       },
@@ -43,6 +45,7 @@ export function buildTransportTargets(): TransportTarget[] {
   if (logFilePath) {
     targets.push({
       target: 'pino/file',
+      level,
       options: {
         destination: logFilePath,
         mkdir: true,
@@ -66,7 +69,7 @@ function getRootLogger(): Logger {
     _logger = pino({
       level: logLevel,
       transport: {
-        targets: buildTransportTargets(),
+        targets: buildTransportTargets(logLevel),
       },
     });
   }

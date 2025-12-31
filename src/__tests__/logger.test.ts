@@ -425,12 +425,13 @@ describe('logger', () => {
 
         // Act: Import and call buildTransportTargets
         const { buildTransportTargets } = await import('../utils/logger');
-        const targets = buildTransportTargets();
+        const targets = buildTransportTargets('info');
 
         // Assert: Should have one target using pino-pretty
         expect(targets).toHaveLength(1);
         expect(targets[0]).toEqual({
           target: 'pino-pretty',
+          level: 'info',
           options: {
             colorize: true,
             translateTime: 'HH:MM:ss',
@@ -446,15 +447,17 @@ describe('logger', () => {
 
         // Act: Import and call buildTransportTargets
         const { buildTransportTargets } = await import('../utils/logger');
-        const targets = buildTransportTargets();
+        const targets = buildTransportTargets('info');
 
         // Assert: Should have two targets - console (pino-pretty) and file
         expect(targets).toHaveLength(2);
         expect(targets[0]).toMatchObject({
           target: 'pino-pretty',
+          level: 'info',
         });
         expect(targets[1]).toEqual({
           target: 'pino/file',
+          level: 'info',
           options: {
             destination: './logs/test.log',
             mkdir: true,
@@ -471,12 +474,13 @@ describe('logger', () => {
 
         // Act: Import and call buildTransportTargets
         const { buildTransportTargets } = await import('../utils/logger');
-        const targets = buildTransportTargets();
+        const targets = buildTransportTargets('info');
 
         // Assert: Should have one target using pino/file with stdout
         expect(targets).toHaveLength(1);
         expect(targets[0]).toEqual({
           target: 'pino/file',
+          level: 'info',
           options: {
             destination: 1, // stdout
           },
@@ -491,18 +495,20 @@ describe('logger', () => {
 
         // Act: Import and call buildTransportTargets
         const { buildTransportTargets } = await import('../utils/logger');
-        const targets = buildTransportTargets();
+        const targets = buildTransportTargets('info');
 
         // Assert: Should have two targets - console (stdout) and file
         expect(targets).toHaveLength(2);
         expect(targets[0]).toEqual({
           target: 'pino/file',
+          level: 'info',
           options: {
             destination: 1, // stdout
           },
         });
         expect(targets[1]).toEqual({
           target: 'pino/file',
+          level: 'info',
           options: {
             destination: './test-logs/app.log',
             mkdir: true,
@@ -517,7 +523,7 @@ describe('logger', () => {
 
         // Act: Import and call buildTransportTargets
         const { buildTransportTargets } = await import('../utils/logger');
-        const targets = buildTransportTargets();
+        const targets = buildTransportTargets('info');
 
         // Assert: File transport should have mkdir:true
         const fileTarget = targets.find(
@@ -536,7 +542,7 @@ describe('logger', () => {
 
         // Act: Import and call buildTransportTargets
         const { buildTransportTargets } = await import('../utils/logger');
-        const targets = buildTransportTargets();
+        const targets = buildTransportTargets('info');
 
         // Assert: Should only have console transport
         expect(targets).toHaveLength(1);
@@ -550,12 +556,13 @@ describe('logger', () => {
 
         // Act: Import and call buildTransportTargets
         const { buildTransportTargets } = await import('../utils/logger');
-        const targets = buildTransportTargets();
+        const targets = buildTransportTargets('info');
 
         // Assert: Should only have console transport (stdout)
         expect(targets).toHaveLength(1);
         expect(targets[0]).toEqual({
           target: 'pino/file',
+          level: 'info',
           options: {
             destination: 1, // stdout
           },
@@ -571,11 +578,15 @@ describe('logger', () => {
 
         // Act: Import and call buildTransportTargets
         const { buildTransportTargets } = await import('../utils/logger');
-        const targets = buildTransportTargets();
+        const targets = buildTransportTargets('info');
 
         // Assert: Should not include file transport (empty string is falsy)
         expect(targets).toHaveLength(1);
-        expect(targets[0].options).toEqual({ destination: 1 });
+        expect(targets[0]).toEqual({
+          target: 'pino/file',
+          level: 'info',
+          options: { destination: 1 },
+        });
       });
     });
   });
