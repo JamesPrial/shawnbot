@@ -12,6 +12,14 @@ const environmentSchema = z.object({
   RATE_LIMIT_WARN_THRESHOLD: z.coerce.number().default(20),
   RATE_LIMIT_CRASH_THRESHOLD: z.coerce.number().default(50),
   RATE_LIMIT_WINDOW_MS: z.coerce.number().default(60_000),
+  ADMIN_API_ENABLED: z.preprocess(
+    (val) => typeof val === 'string'
+      ? val.toLowerCase() === 'true' || val === '1'
+      : val === true,
+    z.boolean()
+  ).default(false),
+  ADMIN_API_PORT: z.coerce.number().default(3000),
+  ADMIN_API_TOKEN: z.string().optional(),
 });
 
 export type EnvConfig = z.infer<typeof environmentSchema>;

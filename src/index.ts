@@ -7,7 +7,7 @@ import { commands } from './handlers/commands';
 async function main(): Promise<void> {
   const config = loadConfig();
 
-  const { client, logger, voiceConnectionManager, speakingTracker, database } = await createBot();
+  const { client, logger, voiceConnectionManager, speakingTracker, database, adminApiService } = await createBot();
 
   logger.info('Registering slash commands with Discord API');
 
@@ -30,6 +30,11 @@ async function main(): Promise<void> {
   await client.login(config.DISCORD_TOKEN);
   logger.info('Bot started successfully');
 
+  // Start Admin API if enabled
+  if (adminApiService) {
+    await adminApiService.start();
+  }
+
   const gracefulShutdown = async (signal: string): Promise<void> => {
     logger.info({ signal }, 'Received shutdown signal, cleaning up');
 
@@ -37,6 +42,12 @@ async function main(): Promise<void> {
       speakingTracker.clear();
       voiceConnectionManager.disconnectAll();
       client.destroy();
+
+      // Stop Admin API before closing database
+      if (adminApiService) {
+        await adminApiService.stop();
+      }
+
       database.close();
       logger.info('Bot shutdown complete');
       process.exit(0);

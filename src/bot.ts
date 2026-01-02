@@ -18,6 +18,7 @@ import { createGuildCreateHandler } from './handlers/events/guildCreate';
 import { afkConfigCommand, afkStatusCommand } from './handlers/commands';
 import { RateLimiter } from './utils/RateLimiter';
 import { generateCorrelationId } from './utils/correlation';
+import { AdminApiService } from './api/AdminApiService';
 
 export interface BotDependencies {
   client: Client;
@@ -32,6 +33,7 @@ export interface BotDependencies {
   voiceMonitorService: VoiceMonitorService;
   speakingTracker: SpeakingTracker;
   voiceConnectionManager: VoiceConnectionManager;
+  adminApiService?: AdminApiService;
 }
 
 export async function createBot(): Promise<BotDependencies> {
@@ -248,6 +250,24 @@ export async function createBot(): Promise<BotDependencies> {
 
   rootLogger.info('Bot dependencies created and event handlers registered');
 
+  // Initialize Admin API if enabled
+  let adminApiService: AdminApiService | undefined;
+  if (config.ADMIN_API_ENABLED) {
+    if (config.ADMIN_API_TOKEN === undefined || config.ADMIN_API_TOKEN === '') {
+      throw new Error('ADMIN_API_TOKEN is required when ADMIN_API_ENABLED is true');
+    }
+    adminApiService = new AdminApiService({
+      client,
+      guildConfigService,
+      afkDetectionService,
+      voiceConnectionManager,
+      logger: createServiceLogger('admin-api'),
+      token: config.ADMIN_API_TOKEN,
+      port: config.ADMIN_API_PORT,
+    });
+    rootLogger.info({ port: config.ADMIN_API_PORT }, 'Admin API service initialized');
+  }
+
   return {
     client,
     database,
@@ -261,5 +281,6 @@ export async function createBot(): Promise<BotDependencies> {
     voiceMonitorService,
     speakingTracker,
     voiceConnectionManager,
+    adminApiService,
   };
 }
