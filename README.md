@@ -44,3 +44,47 @@ A Discord bot that detects AFK users in voice channels and kicks them after a co
 - Discord.js
 - SQLite (better-sqlite3)
 - Vitest for testing
+
+## Admin API
+
+Optional REST API for bot administration. Binds to localhost only (127.0.0.1) for security.
+
+### Configuration
+
+```bash
+ADMIN_API_ENABLED=true           # Enable the API (default: false)
+ADMIN_API_PORT=3000              # Port to listen on (default: 3000)
+ADMIN_API_TOKEN=your_secret      # Required when API is enabled
+```
+
+### Endpoints
+
+| Method | Path | Auth | Description |
+|--------|------|------|-------------|
+| GET | `/health` | No | Health check (uptime, ready, guilds) |
+| GET | `/api/status` | Yes | Bot metrics (guilds, voice connections, memory) |
+| GET | `/api/guilds/:id/status` | Yes | Guild config and connection status |
+| POST | `/api/guilds/:id/enable` | Yes | Enable AFK detection for guild |
+| POST | `/api/guilds/:id/disable` | Yes | Disable AFK detection for guild |
+
+### Authentication
+
+Protected endpoints require a Bearer token in the Authorization header:
+
+```bash
+curl -H "Authorization: Bearer YOUR_TOKEN" http://127.0.0.1:3000/api/status
+```
+
+### Examples
+
+```bash
+# Health check (no auth required)
+curl http://127.0.0.1:3000/health
+
+# Get bot status
+curl -H "Authorization: Bearer YOUR_TOKEN" http://127.0.0.1:3000/api/status
+
+# Enable AFK detection for a guild
+curl -X POST -H "Authorization: Bearer YOUR_TOKEN" \
+  http://127.0.0.1:3000/api/guilds/123456789012345678/enable
+```

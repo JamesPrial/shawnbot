@@ -28,6 +28,9 @@ Copy `.env.example` to `.env` and configure:
 - `RATE_LIMIT_WARN_THRESHOLD` - Actions before warning (default: 20)
 - `RATE_LIMIT_CRASH_THRESHOLD` - Actions before crash protection (default: 50)
 - `RATE_LIMIT_WINDOW_MS` - Rate limit window in ms (default: 60000)
+- `ADMIN_API_ENABLED` - Enable Admin REST API (default: false)
+- `ADMIN_API_PORT` - Admin API port (default: 3000)
+- `ADMIN_API_TOKEN` - Bearer token for API auth (required when API enabled)
 
 ## Architecture
 
@@ -84,3 +87,25 @@ Shared test fixtures are in `src/__tests__/fixtures.ts`:
 ### TypeScript Strictness
 
 The project uses strict TypeScript with `noUncheckedIndexedAccess: true`. Array/object indexing returns `T | undefined`, requiring explicit checks before use.
+
+### Admin API
+
+Optional REST API (`src/api/AdminApiService.ts`) for bot administration over HTTP.
+
+**Lifecycle:**
+- Instantiated in `bot.ts:createBot()` when `ADMIN_API_ENABLED=true`
+- Starts after Discord client login in `index.ts`
+- Stops during graceful shutdown before database close
+
+**Security:**
+- Binds to `127.0.0.1` only (localhost)
+- Bearer token auth with timing-safe HMAC comparison
+- Guild ID validation (Discord snowflake format)
+- Audit logging for auth failures and admin operations
+
+**Endpoints:**
+- `GET /health` - Public health check
+- `GET /api/status` - Bot metrics (auth required)
+- `GET /api/guilds/:id/status` - Guild config (auth required)
+- `POST /api/guilds/:id/enable` - Enable AFK detection (auth required)
+- `POST /api/guilds/:id/disable` - Disable AFK detection (auth required)
