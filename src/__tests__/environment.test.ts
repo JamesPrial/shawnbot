@@ -28,6 +28,9 @@ describe('environment configuration', () => {
     delete process.env.RATE_LIMIT_WARN_THRESHOLD;
     delete process.env.RATE_LIMIT_CRASH_THRESHOLD;
     delete process.env.RATE_LIMIT_WINDOW_MS;
+    delete process.env.ADMIN_API_ENABLED;
+    delete process.env.ADMIN_API_PORT;
+    delete process.env.ADMIN_API_TOKEN;
   });
 
   afterEach(() => {
@@ -67,6 +70,8 @@ describe('environment configuration', () => {
         expect(config.RATE_LIMIT_WARN_THRESHOLD).toBe(20);
         expect(config.RATE_LIMIT_CRASH_THRESHOLD).toBe(50);
         expect(config.RATE_LIMIT_WINDOW_MS).toBe(60_000);
+        expect(config.ADMIN_API_ENABLED).toBe(false);
+        expect(config.ADMIN_API_PORT).toBe(3000);
       });
 
       it('should override default values when environment variables are set', async () => {
@@ -531,6 +536,579 @@ describe('environment configuration', () => {
       expect(typeof warnThreshold).toBe('number');
       expect(typeof crashThreshold).toBe('number');
       expect(typeof windowMs).toBe('number');
+    });
+  });
+
+  describe('Admin API Configuration', () => {
+    describe('ADMIN_API_ENABLED', () => {
+      it('should default to false when not set', async () => {
+        // Arrange: Set only required fields
+        process.env.DISCORD_TOKEN = 'token';
+        process.env.CLIENT_ID = 'client';
+        // ADMIN_API_ENABLED is not set
+
+        // Act: Load configuration
+        const { loadConfig } = await import('../config/environment');
+        const config = loadConfig();
+
+        // Assert: Defaults to false
+        expect(config.ADMIN_API_ENABLED).toBe(false);
+        expect(typeof config.ADMIN_API_ENABLED).toBe('boolean');
+      });
+
+      it('should coerce string "true" to boolean true', async () => {
+        // Arrange: Set ADMIN_API_ENABLED to string 'true'
+        process.env.DISCORD_TOKEN = 'token';
+        process.env.CLIENT_ID = 'client';
+        process.env.ADMIN_API_ENABLED = 'true';
+
+        // Act: Load configuration
+        const { loadConfig } = await import('../config/environment');
+        const config = loadConfig();
+
+        // Assert: Coerced to boolean true
+        expect(config.ADMIN_API_ENABLED).toBe(true);
+        expect(typeof config.ADMIN_API_ENABLED).toBe('boolean');
+      });
+
+      it('should coerce string "false" to boolean false', async () => {
+        // Arrange: Set ADMIN_API_ENABLED to string 'false'
+        process.env.DISCORD_TOKEN = 'token';
+        process.env.CLIENT_ID = 'client';
+        process.env.ADMIN_API_ENABLED = 'false';
+
+        // Act: Load configuration
+        const { loadConfig } = await import('../config/environment');
+        const config = loadConfig();
+
+        // Assert: Coerced to boolean false
+        expect(config.ADMIN_API_ENABLED).toBe(false);
+        expect(typeof config.ADMIN_API_ENABLED).toBe('boolean');
+      });
+
+      it('should coerce string "1" to boolean true', async () => {
+        // Edge case: Truthy string coercion
+        process.env.DISCORD_TOKEN = 'token';
+        process.env.CLIENT_ID = 'client';
+        process.env.ADMIN_API_ENABLED = '1';
+
+        const { loadConfig } = await import('../config/environment');
+        const config = loadConfig();
+
+        expect(config.ADMIN_API_ENABLED).toBe(true);
+        expect(typeof config.ADMIN_API_ENABLED).toBe('boolean');
+      });
+
+      it('should coerce string "0" to boolean false', async () => {
+        // Edge case: Falsy string coercion
+        process.env.DISCORD_TOKEN = 'token';
+        process.env.CLIENT_ID = 'client';
+        process.env.ADMIN_API_ENABLED = '0';
+
+        const { loadConfig } = await import('../config/environment');
+        const config = loadConfig();
+
+        expect(config.ADMIN_API_ENABLED).toBe(false);
+        expect(typeof config.ADMIN_API_ENABLED).toBe('boolean');
+      });
+
+      it('should coerce empty string to boolean false', async () => {
+        // Edge case: Empty string should coerce to false
+        process.env.DISCORD_TOKEN = 'token';
+        process.env.CLIENT_ID = 'client';
+        process.env.ADMIN_API_ENABLED = '';
+
+        const { loadConfig } = await import('../config/environment');
+        const config = loadConfig();
+
+        expect(config.ADMIN_API_ENABLED).toBe(false);
+        expect(typeof config.ADMIN_API_ENABLED).toBe('boolean');
+      });
+
+      it('should coerce case-insensitive "TRUE" string to boolean true', async () => {
+        // Edge case: Uppercase TRUE
+        process.env.DISCORD_TOKEN = 'token';
+        process.env.CLIENT_ID = 'client';
+        process.env.ADMIN_API_ENABLED = 'TRUE';
+
+        const { loadConfig } = await import('../config/environment');
+        const config = loadConfig();
+
+        expect(config.ADMIN_API_ENABLED).toBe(true);
+        expect(typeof config.ADMIN_API_ENABLED).toBe('boolean');
+      });
+
+      it('should coerce case-insensitive "FALSE" string to boolean false', async () => {
+        // Edge case: Uppercase FALSE
+        process.env.DISCORD_TOKEN = 'token';
+        process.env.CLIENT_ID = 'client';
+        process.env.ADMIN_API_ENABLED = 'FALSE';
+
+        const { loadConfig } = await import('../config/environment');
+        const config = loadConfig();
+
+        expect(config.ADMIN_API_ENABLED).toBe(false);
+        expect(typeof config.ADMIN_API_ENABLED).toBe('boolean');
+      });
+
+      it('should not coerce non-boolean strings like \'yes\' to true', async () => {
+        // Security: Only explicit 'true' or '1' should enable, not arbitrary strings
+        process.env.DISCORD_TOKEN = 'token';
+        process.env.CLIENT_ID = 'client';
+        process.env.ADMIN_API_ENABLED = 'yes';
+
+        const { loadConfig } = await import('../config/environment');
+        const config = loadConfig();
+
+        expect(config.ADMIN_API_ENABLED).toBe(false);
+        expect(typeof config.ADMIN_API_ENABLED).toBe('boolean');
+      });
+    });
+
+    describe('ADMIN_API_PORT', () => {
+      it('should default to 3000 when not set', async () => {
+        // Arrange: Set only required fields
+        process.env.DISCORD_TOKEN = 'token';
+        process.env.CLIENT_ID = 'client';
+        // ADMIN_API_PORT is not set
+
+        // Act: Load configuration
+        const { loadConfig } = await import('../config/environment');
+        const config = loadConfig();
+
+        // Assert: Defaults to 3000
+        expect(config.ADMIN_API_PORT).toBe(3000);
+        expect(typeof config.ADMIN_API_PORT).toBe('number');
+      });
+
+      it('should accept numeric value', async () => {
+        // Arrange: Set ADMIN_API_PORT to a number via string
+        process.env.DISCORD_TOKEN = 'token';
+        process.env.CLIENT_ID = 'client';
+        process.env.ADMIN_API_PORT = '8080';
+
+        // Act: Load configuration
+        const { loadConfig } = await import('../config/environment');
+        const config = loadConfig();
+
+        // Assert: Coerced to number
+        expect(config.ADMIN_API_PORT).toBe(8080);
+        expect(typeof config.ADMIN_API_PORT).toBe('number');
+      });
+
+      it('should coerce string to number', async () => {
+        // Arrange: Various numeric strings
+        process.env.DISCORD_TOKEN = 'token';
+        process.env.CLIENT_ID = 'client';
+        process.env.ADMIN_API_PORT = '4000';
+
+        // Act: Load configuration
+        const { loadConfig } = await import('../config/environment');
+        const config = loadConfig();
+
+        // Assert: String coerced to number
+        expect(config.ADMIN_API_PORT).toBe(4000);
+        expect(typeof config.ADMIN_API_PORT).toBe('number');
+      });
+
+      it('should handle port 80 (well-known port)', async () => {
+        // Edge case: Low port number
+        process.env.DISCORD_TOKEN = 'token';
+        process.env.CLIENT_ID = 'client';
+        process.env.ADMIN_API_PORT = '80';
+
+        const { loadConfig } = await import('../config/environment');
+        const config = loadConfig();
+
+        expect(config.ADMIN_API_PORT).toBe(80);
+      });
+
+      it('should handle port 65535 (maximum valid port)', async () => {
+        // Edge case: Maximum port number
+        process.env.DISCORD_TOKEN = 'token';
+        process.env.CLIENT_ID = 'client';
+        process.env.ADMIN_API_PORT = '65535';
+
+        const { loadConfig } = await import('../config/environment');
+        const config = loadConfig();
+
+        expect(config.ADMIN_API_PORT).toBe(65535);
+      });
+
+      it('should handle port 0 (system-assigned port)', async () => {
+        // Edge case: Port 0 tells OS to assign a port
+        process.env.DISCORD_TOKEN = 'token';
+        process.env.CLIENT_ID = 'client';
+        process.env.ADMIN_API_PORT = '0';
+
+        const { loadConfig } = await import('../config/environment');
+        const config = loadConfig();
+
+        expect(config.ADMIN_API_PORT).toBe(0);
+      });
+
+      it('should handle negative port numbers if coercion allows', async () => {
+        // Edge case: Negative numbers (likely invalid but tests coercion behavior)
+        process.env.DISCORD_TOKEN = 'token';
+        process.env.CLIENT_ID = 'client';
+        process.env.ADMIN_API_PORT = '-1';
+
+        const { loadConfig } = await import('../config/environment');
+        const config = loadConfig();
+
+        expect(config.ADMIN_API_PORT).toBe(-1);
+        expect(typeof config.ADMIN_API_PORT).toBe('number');
+      });
+
+      it('should handle port numbers greater than 65535 if coercion allows', async () => {
+        // Edge case: Out of valid range (tests coercion behavior)
+        process.env.DISCORD_TOKEN = 'token';
+        process.env.CLIENT_ID = 'client';
+        process.env.ADMIN_API_PORT = '99999';
+
+        const { loadConfig } = await import('../config/environment');
+        const config = loadConfig();
+
+        expect(config.ADMIN_API_PORT).toBe(99999);
+        expect(typeof config.ADMIN_API_PORT).toBe('number');
+      });
+
+      it('should throw error for non-numeric strings', async () => {
+        // Arrange: Invalid port value
+        process.env.DISCORD_TOKEN = 'token';
+        process.env.CLIENT_ID = 'client';
+        process.env.ADMIN_API_PORT = 'not-a-port';
+
+        // Act & Assert: Should throw validation error
+        const { loadConfig } = await import('../config/environment');
+        expect(() => loadConfig()).toThrow(/Environment validation failed/);
+        expect(() => loadConfig()).toThrow(/ADMIN_API_PORT/);
+      });
+
+      it('should handle floating point numbers', async () => {
+        // Edge case: Float coercion
+        process.env.DISCORD_TOKEN = 'token';
+        process.env.CLIENT_ID = 'client';
+        process.env.ADMIN_API_PORT = '3000.5';
+
+        const { loadConfig } = await import('../config/environment');
+        const config = loadConfig();
+
+        expect(config.ADMIN_API_PORT).toBe(3000.5);
+        expect(typeof config.ADMIN_API_PORT).toBe('number');
+      });
+
+      it('should handle scientific notation', async () => {
+        // Edge case: Scientific notation
+        process.env.DISCORD_TOKEN = 'token';
+        process.env.CLIENT_ID = 'client';
+        process.env.ADMIN_API_PORT = '3e3'; // 3000
+
+        const { loadConfig } = await import('../config/environment');
+        const config = loadConfig();
+
+        expect(config.ADMIN_API_PORT).toBe(3000);
+        expect(typeof config.ADMIN_API_PORT).toBe('number');
+      });
+    });
+
+    describe('ADMIN_API_TOKEN', () => {
+      it('should be optional and undefined when not set', async () => {
+        // Arrange: Set only required fields
+        process.env.DISCORD_TOKEN = 'token';
+        process.env.CLIENT_ID = 'client';
+        // ADMIN_API_TOKEN is not set
+
+        // Act: Load configuration
+        const { loadConfig } = await import('../config/environment');
+        const config = loadConfig();
+
+        // Assert: Optional field is undefined
+        expect(config.ADMIN_API_TOKEN).toBeUndefined();
+      });
+
+      it('should accept valid token string', async () => {
+        // Arrange: Set ADMIN_API_TOKEN to a secure token
+        process.env.DISCORD_TOKEN = 'token';
+        process.env.CLIENT_ID = 'client';
+        process.env.ADMIN_API_TOKEN = 'super-secret-token-12345';
+
+        // Act: Load configuration
+        const { loadConfig } = await import('../config/environment');
+        const config = loadConfig();
+
+        // Assert: Token is correctly set
+        expect(config.ADMIN_API_TOKEN).toBe('super-secret-token-12345');
+        expect(typeof config.ADMIN_API_TOKEN).toBe('string');
+      });
+
+      it('should accept empty string as a valid value', async () => {
+        // Edge case: Empty string (might be used to explicitly disable token auth)
+        process.env.DISCORD_TOKEN = 'token';
+        process.env.CLIENT_ID = 'client';
+        process.env.ADMIN_API_TOKEN = '';
+
+        const { loadConfig } = await import('../config/environment');
+        const config = loadConfig();
+
+        expect(config.ADMIN_API_TOKEN).toBe('');
+      });
+
+      it('should accept tokens with special characters', async () => {
+        // Edge case: Complex token with special characters
+        process.env.DISCORD_TOKEN = 'token';
+        process.env.CLIENT_ID = 'client';
+        process.env.ADMIN_API_TOKEN = 'token!@#$%^&*()_+-=[]{}|;:,.<>?/~`';
+
+        const { loadConfig } = await import('../config/environment');
+        const config = loadConfig();
+
+        expect(config.ADMIN_API_TOKEN).toBe('token!@#$%^&*()_+-=[]{}|;:,.<>?/~`');
+      });
+
+      it('should preserve whitespace in token', async () => {
+        // Edge case: Token with leading/trailing spaces (should not trim)
+        process.env.DISCORD_TOKEN = 'token';
+        process.env.CLIENT_ID = 'client';
+        process.env.ADMIN_API_TOKEN = '  token-with-spaces  ';
+
+        const { loadConfig } = await import('../config/environment');
+        const config = loadConfig();
+
+        expect(config.ADMIN_API_TOKEN).toBe('  token-with-spaces  ');
+      });
+
+      it('should accept very long token strings', async () => {
+        // Edge case: Long token (e.g., JWT or secure random string)
+        process.env.DISCORD_TOKEN = 'token';
+        process.env.CLIENT_ID = 'client';
+        const longToken = 'a'.repeat(1000);
+        process.env.ADMIN_API_TOKEN = longToken;
+
+        const { loadConfig } = await import('../config/environment');
+        const config = loadConfig();
+
+        expect(config.ADMIN_API_TOKEN).toBe(longToken);
+        expect(config.ADMIN_API_TOKEN?.length).toBe(1000);
+      });
+
+      it('should accept tokens with newlines', async () => {
+        // Edge case: Multiline token (might happen with certain token formats)
+        process.env.DISCORD_TOKEN = 'token';
+        process.env.CLIENT_ID = 'client';
+        process.env.ADMIN_API_TOKEN = 'line1\nline2\nline3';
+
+        const { loadConfig } = await import('../config/environment');
+        const config = loadConfig();
+
+        expect(config.ADMIN_API_TOKEN).toBe('line1\nline2\nline3');
+      });
+
+      it('should accept numeric-only tokens', async () => {
+        // Edge case: Token that looks like a number but should remain string
+        process.env.DISCORD_TOKEN = 'token';
+        process.env.CLIENT_ID = 'client';
+        process.env.ADMIN_API_TOKEN = '123456789';
+
+        const { loadConfig } = await import('../config/environment');
+        const config = loadConfig();
+
+        expect(config.ADMIN_API_TOKEN).toBe('123456789');
+        expect(typeof config.ADMIN_API_TOKEN).toBe('string');
+      });
+
+      it('should accept UUID format tokens', async () => {
+        // Realistic case: UUID as token
+        process.env.DISCORD_TOKEN = 'token';
+        process.env.CLIENT_ID = 'client';
+        process.env.ADMIN_API_TOKEN = '550e8400-e29b-41d4-a716-446655440000';
+
+        const { loadConfig } = await import('../config/environment');
+        const config = loadConfig();
+
+        expect(config.ADMIN_API_TOKEN).toBe('550e8400-e29b-41d4-a716-446655440000');
+      });
+
+      it('should accept base64 encoded tokens', async () => {
+        // Realistic case: Base64 encoded token
+        process.env.DISCORD_TOKEN = 'token';
+        process.env.CLIENT_ID = 'client';
+        process.env.ADMIN_API_TOKEN = 'dGhpcyBpcyBhIHRlc3QgdG9rZW4K';
+
+        const { loadConfig } = await import('../config/environment');
+        const config = loadConfig();
+
+        expect(config.ADMIN_API_TOKEN).toBe('dGhpcyBpcyBhIHRlc3QgdG9rZW4K');
+      });
+    });
+
+    describe('Admin API Configuration - Type Inference', () => {
+      it('should include all Admin API fields in EnvConfig type', async () => {
+        // This test verifies TypeScript type inference via runtime behavior
+        process.env.DISCORD_TOKEN = 'token';
+        process.env.CLIENT_ID = 'client';
+        process.env.ADMIN_API_ENABLED = 'true';
+        process.env.ADMIN_API_PORT = '8080';
+        process.env.ADMIN_API_TOKEN = 'test-token';
+
+        const { loadConfig } = await import('../config/environment');
+        const config = loadConfig();
+
+        // Type assertions verify the type includes all Admin API fields with correct types
+        const enabled: boolean = config.ADMIN_API_ENABLED;
+        const port: number = config.ADMIN_API_PORT;
+        const token: string | undefined = config.ADMIN_API_TOKEN;
+
+        expect(enabled).toBe(true);
+        expect(port).toBe(8080);
+        expect(token).toBe('test-token');
+      });
+
+      it('should type ADMIN_API_ENABLED as boolean not string', async () => {
+        process.env.DISCORD_TOKEN = 'token';
+        process.env.CLIENT_ID = 'client';
+        process.env.ADMIN_API_ENABLED = 'true';
+
+        const { loadConfig } = await import('../config/environment');
+        const config = loadConfig();
+
+        // TypeScript should enforce boolean type
+        const enabled: boolean = config.ADMIN_API_ENABLED;
+        expect(typeof enabled).toBe('boolean');
+        expect(enabled).toBe(true);
+      });
+
+      it('should type ADMIN_API_PORT as number not string', async () => {
+        process.env.DISCORD_TOKEN = 'token';
+        process.env.CLIENT_ID = 'client';
+        process.env.ADMIN_API_PORT = '8080';
+
+        const { loadConfig } = await import('../config/environment');
+        const config = loadConfig();
+
+        // TypeScript should enforce number type
+        const port: number = config.ADMIN_API_PORT;
+        expect(typeof port).toBe('number');
+        expect(port).toBe(8080);
+      });
+
+      it('should type ADMIN_API_TOKEN as optional string', async () => {
+        process.env.DISCORD_TOKEN = 'token';
+        process.env.CLIENT_ID = 'client';
+        // ADMIN_API_TOKEN not set
+
+        const { loadConfig } = await import('../config/environment');
+        const config = loadConfig();
+
+        // TypeScript should allow string | undefined
+        const token: string | undefined = config.ADMIN_API_TOKEN;
+        expect(token).toBeUndefined();
+      });
+
+      it('should allow creating EnvConfig without optional ADMIN_API_TOKEN', async () => {
+        process.env.DISCORD_TOKEN = 'token';
+        process.env.CLIENT_ID = 'client';
+
+        const { loadConfig } = await import('../config/environment');
+        const config = loadConfig();
+
+        // Type should allow config without ADMIN_API_TOKEN property
+        type ConfigType = typeof config;
+        const testConfig: ConfigType = {
+          ...config,
+          ADMIN_API_TOKEN: undefined,
+        };
+        expect(testConfig.ADMIN_API_TOKEN).toBeUndefined();
+      });
+    });
+
+    describe('Admin API Configuration - Combined scenarios', () => {
+      it('should load all Admin API config when all fields are set', async () => {
+        // Arrange: Set all Admin API fields
+        process.env.DISCORD_TOKEN = 'token';
+        process.env.CLIENT_ID = 'client';
+        process.env.ADMIN_API_ENABLED = 'true';
+        process.env.ADMIN_API_PORT = '8080';
+        process.env.ADMIN_API_TOKEN = 'secure-token-123';
+
+        // Act: Load configuration
+        const { loadConfig } = await import('../config/environment');
+        const config = loadConfig();
+
+        // Assert: All fields correctly loaded
+        expect(config.ADMIN_API_ENABLED).toBe(true);
+        expect(config.ADMIN_API_PORT).toBe(8080);
+        expect(config.ADMIN_API_TOKEN).toBe('secure-token-123');
+      });
+
+      it('should use defaults when no Admin API config is set', async () => {
+        // Arrange: Only required fields
+        process.env.DISCORD_TOKEN = 'token';
+        process.env.CLIENT_ID = 'client';
+
+        // Act: Load configuration
+        const { loadConfig } = await import('../config/environment');
+        const config = loadConfig();
+
+        // Assert: Defaults applied
+        expect(config.ADMIN_API_ENABLED).toBe(false);
+        expect(config.ADMIN_API_PORT).toBe(3000);
+        expect(config.ADMIN_API_TOKEN).toBeUndefined();
+      });
+
+      it('should handle partial Admin API config', async () => {
+        // Arrange: Only some Admin API fields set
+        process.env.DISCORD_TOKEN = 'token';
+        process.env.CLIENT_ID = 'client';
+        process.env.ADMIN_API_ENABLED = 'true';
+        // PORT and TOKEN not set
+
+        // Act: Load configuration
+        const { loadConfig } = await import('../config/environment');
+        const config = loadConfig();
+
+        // Assert: Explicit value used, defaults for others
+        expect(config.ADMIN_API_ENABLED).toBe(true);
+        expect(config.ADMIN_API_PORT).toBe(3000); // default
+        expect(config.ADMIN_API_TOKEN).toBeUndefined(); // optional
+      });
+
+      it('should work with disabled API but custom port and token', async () => {
+        // Edge case: API disabled but port and token still configured
+        process.env.DISCORD_TOKEN = 'token';
+        process.env.CLIENT_ID = 'client';
+        process.env.ADMIN_API_ENABLED = 'false';
+        process.env.ADMIN_API_PORT = '9000';
+        process.env.ADMIN_API_TOKEN = 'token-exists-but-api-disabled';
+
+        const { loadConfig } = await import('../config/environment');
+        const config = loadConfig();
+
+        expect(config.ADMIN_API_ENABLED).toBe(false);
+        expect(config.ADMIN_API_PORT).toBe(9000);
+        expect(config.ADMIN_API_TOKEN).toBe('token-exists-but-api-disabled');
+      });
+
+      it('should not interfere with existing configuration fields', async () => {
+        // Verify Admin API config doesn't break existing config
+        process.env.DISCORD_TOKEN = 'token';
+        process.env.CLIENT_ID = 'client';
+        process.env.DATABASE_PATH = './custom/db.sqlite';
+        process.env.LOG_LEVEL = 'debug';
+        process.env.ADMIN_API_ENABLED = 'true';
+        process.env.ADMIN_API_PORT = '4000';
+
+        const { loadConfig } = await import('../config/environment');
+        const config = loadConfig();
+
+        // Assert: Both old and new config work together
+        expect(config.DISCORD_TOKEN).toBe('token');
+        expect(config.CLIENT_ID).toBe('client');
+        expect(config.DATABASE_PATH).toBe('./custom/db.sqlite');
+        expect(config.LOG_LEVEL).toBe('debug');
+        expect(config.ADMIN_API_ENABLED).toBe(true);
+        expect(config.ADMIN_API_PORT).toBe(4000);
+      });
     });
   });
 });
