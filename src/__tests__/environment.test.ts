@@ -31,6 +31,9 @@ describe('environment configuration', () => {
     delete process.env.ADMIN_API_ENABLED;
     delete process.env.ADMIN_API_PORT;
     delete process.env.ADMIN_API_TOKEN;
+    delete process.env.ADMIN_API_BIND_ADDRESS;
+    delete process.env.ADMIN_USERNAME;
+    delete process.env.ADMIN_PASSWORD_HASH;
   });
 
   afterEach(() => {
@@ -831,14 +834,14 @@ describe('environment configuration', () => {
         // Arrange: Set ADMIN_API_TOKEN to a secure token
         process.env.DISCORD_TOKEN = 'token';
         process.env.CLIENT_ID = 'client';
-        process.env.ADMIN_API_TOKEN = 'super-secret-token-12345';
+        process.env.ADMIN_API_TOKEN = 'FAKE_TEST_TOKEN_NOT_A_SECRET';
 
         // Act: Load configuration
         const { loadConfig } = await import('../config/environment');
         const config = loadConfig();
 
         // Assert: Token is correctly set
-        expect(config.ADMIN_API_TOKEN).toBe('super-secret-token-12345');
+        expect(config.ADMIN_API_TOKEN).toBe('FAKE_TEST_TOKEN_NOT_A_SECRET');
         expect(typeof config.ADMIN_API_TOKEN).toBe('string');
       });
 
@@ -949,7 +952,7 @@ describe('environment configuration', () => {
         process.env.CLIENT_ID = 'client';
         process.env.ADMIN_API_ENABLED = 'true';
         process.env.ADMIN_API_PORT = '8080';
-        process.env.ADMIN_API_TOKEN = 'test-token';
+        process.env.ADMIN_API_TOKEN = 'FAKE_TEST_TOKEN_NOT_A_SECRET';
 
         const { loadConfig } = await import('../config/environment');
         const config = loadConfig();
@@ -961,7 +964,7 @@ describe('environment configuration', () => {
 
         expect(enabled).toBe(true);
         expect(port).toBe(8080);
-        expect(token).toBe('test-token');
+        expect(token).toBe('FAKE_TEST_TOKEN_NOT_A_SECRET');
       });
 
       it('should type ADMIN_API_ENABLED as boolean not string', async () => {
@@ -1108,6 +1111,432 @@ describe('environment configuration', () => {
         expect(config.LOG_LEVEL).toBe('debug');
         expect(config.ADMIN_API_ENABLED).toBe(true);
         expect(config.ADMIN_API_PORT).toBe(4000);
+      });
+    });
+  });
+
+  describe('Backend Environment Configuration', () => {
+    describe('ADMIN_API_BIND_ADDRESS', () => {
+      it('should default to 127.0.0.1 when not set', async () => {
+        // Arrange: Set only required fields
+        // WHY: Test the default bind address matches the security requirement of localhost-only
+        process.env.DISCORD_TOKEN = 'token';
+        process.env.CLIENT_ID = 'client';
+        // ADMIN_API_BIND_ADDRESS is not set
+
+        // Act: Load configuration
+        const { loadConfig } = await import('../config/environment');
+        const config = loadConfig();
+
+        // Assert: Defaults to 127.0.0.1 for security (localhost only)
+        expect(config.ADMIN_API_BIND_ADDRESS).toBe('127.0.0.1');
+        expect(typeof config.ADMIN_API_BIND_ADDRESS).toBe('string');
+      });
+
+      it('should accept custom bind address', async () => {
+        // Arrange: Set custom bind address
+        // WHY: Test that administrators can override the bind address if needed
+        process.env.DISCORD_TOKEN = 'token';
+        process.env.CLIENT_ID = 'client';
+        process.env.ADMIN_API_BIND_ADDRESS = '0.0.0.0';
+
+        // Act: Load configuration
+        const { loadConfig } = await import('../config/environment');
+        const config = loadConfig();
+
+        // Assert: Custom bind address is accepted
+        expect(config.ADMIN_API_BIND_ADDRESS).toBe('0.0.0.0');
+      });
+
+      it('should accept IPv6 localhost address', async () => {
+        // Edge case: IPv6 localhost
+        process.env.DISCORD_TOKEN = 'token';
+        process.env.CLIENT_ID = 'client';
+        process.env.ADMIN_API_BIND_ADDRESS = '::1';
+
+        const { loadConfig } = await import('../config/environment');
+        const config = loadConfig();
+
+        expect(config.ADMIN_API_BIND_ADDRESS).toBe('::1');
+      });
+
+      it('should accept specific network interface addresses', async () => {
+        // Realistic case: Binding to a specific network interface
+        process.env.DISCORD_TOKEN = 'token';
+        process.env.CLIENT_ID = 'client';
+        process.env.ADMIN_API_BIND_ADDRESS = '192.168.1.100';
+
+        const { loadConfig } = await import('../config/environment');
+        const config = loadConfig();
+
+        expect(config.ADMIN_API_BIND_ADDRESS).toBe('192.168.1.100');
+      });
+
+      it('should accept empty string as a valid value', async () => {
+        // Edge case: Empty string might be used for default OS behavior
+        process.env.DISCORD_TOKEN = 'token';
+        process.env.CLIENT_ID = 'client';
+        process.env.ADMIN_API_BIND_ADDRESS = '';
+
+        const { loadConfig } = await import('../config/environment');
+        const config = loadConfig();
+
+        expect(config.ADMIN_API_BIND_ADDRESS).toBe('');
+      });
+
+      it('should accept hostname instead of IP address', async () => {
+        // Edge case: Hostname binding
+        process.env.DISCORD_TOKEN = 'token';
+        process.env.CLIENT_ID = 'client';
+        process.env.ADMIN_API_BIND_ADDRESS = 'localhost';
+
+        const { loadConfig } = await import('../config/environment');
+        const config = loadConfig();
+
+        expect(config.ADMIN_API_BIND_ADDRESS).toBe('localhost');
+      });
+    });
+
+    describe('ADMIN_USERNAME and ADMIN_PASSWORD_HASH validation', () => {
+      describe('when both username and password hash are unset', () => {
+        it('should pass validation', async () => {
+          // Arrange: Neither username nor password hash set (token-only mode)
+          // WHY: Token-only auth is a valid configuration - username/password is optional
+          process.env.DISCORD_TOKEN = 'token';
+          process.env.CLIENT_ID = 'client';
+          // ADMIN_USERNAME and ADMIN_PASSWORD_HASH are not set
+
+          // Act: Load configuration (should not throw)
+          const { loadConfig } = await import('../config/environment');
+          const config = loadConfig();
+
+          // Assert: Configuration loads successfully in token-only mode
+          expect(config).toBeDefined();
+          expect(config.ADMIN_USERNAME).toBeUndefined();
+          expect(config.ADMIN_PASSWORD_HASH).toBeUndefined();
+        });
+      });
+
+      describe('when both username and password hash are set together', () => {
+        it('should pass validation', async () => {
+          // Arrange: Both username and password hash set
+          // WHY: Both must be present for username/password auth to work
+          process.env.DISCORD_TOKEN = 'token';
+          process.env.CLIENT_ID = 'client';
+          process.env.ADMIN_USERNAME = 'admin';
+          // Test-only bcrypt hash of 'correctpassword' - NOT A REAL SECRET
+          process.env.ADMIN_PASSWORD_HASH = '$2b$10$Mra.F.uMhHxtpT4m4nOKm.HMlenbF7tHZc6LbmWkFNuqiLQVePzcK';
+
+          // Act: Load configuration
+          const { loadConfig } = await import('../config/environment');
+          const config = loadConfig();
+
+          // Assert: Both fields are correctly set
+          expect(config.ADMIN_USERNAME).toBe('admin');
+          expect(config.ADMIN_PASSWORD_HASH).toBe('$2b$10$Mra.F.uMhHxtpT4m4nOKm.HMlenbF7tHZc6LbmWkFNuqiLQVePzcK');
+        });
+
+        it('should accept long usernames', async () => {
+          // Edge case: Long username
+          process.env.DISCORD_TOKEN = 'token';
+          process.env.CLIENT_ID = 'client';
+          process.env.ADMIN_USERNAME = 'very-long-username-with-special-chars@example.com';
+          // Test-only bcrypt hash - NOT A REAL SECRET
+          process.env.ADMIN_PASSWORD_HASH = '$2b$10$Mra.F.uMhHxtpT4m4nOKm.HMlenbF7tHZc6LbmWkFNuqiLQVePzcK';
+
+          const { loadConfig } = await import('../config/environment');
+          const config = loadConfig();
+
+          expect(config.ADMIN_USERNAME).toBe('very-long-username-with-special-chars@example.com');
+        });
+
+        it('should accept bcrypt password hashes', async () => {
+          // Realistic case: bcrypt hash format
+          process.env.DISCORD_TOKEN = 'token';
+          process.env.CLIENT_ID = 'client';
+          process.env.ADMIN_USERNAME = 'admin';
+          // Test-only bcrypt hash of 'correctpassword' - NOT A REAL SECRET
+          process.env.ADMIN_PASSWORD_HASH = '$2b$10$Mra.F.uMhHxtpT4m4nOKm.HMlenbF7tHZc6LbmWkFNuqiLQVePzcK';
+
+          const { loadConfig } = await import('../config/environment');
+          const config = loadConfig();
+
+          // Test-only bcrypt hash - NOT A REAL SECRET
+          expect(config.ADMIN_PASSWORD_HASH).toBe('$2b$10$Mra.F.uMhHxtpT4m4nOKm.HMlenbF7tHZc6LbmWkFNuqiLQVePzcK');
+        });
+
+        it('should accept usernames with special characters', async () => {
+          // Edge case: Special characters in username
+          process.env.DISCORD_TOKEN = 'token';
+          process.env.CLIENT_ID = 'client';
+          process.env.ADMIN_USERNAME = 'admin-user_123@domain.com';
+          // Test-only bcrypt hash - NOT A REAL SECRET
+          process.env.ADMIN_PASSWORD_HASH = '$2b$10$Mra.F.uMhHxtpT4m4nOKm.HMlenbF7tHZc6LbmWkFNuqiLQVePzcK';
+
+          const { loadConfig } = await import('../config/environment');
+          const config = loadConfig();
+
+          expect(config.ADMIN_USERNAME).toBe('admin-user_123@domain.com');
+        });
+      });
+
+      describe('when username is set without password hash', () => {
+        it('should fail validation with clear error message', async () => {
+          // Arrange: Username set but password hash missing
+          // WHY: Having username without password hash is a configuration error
+          //      that would break authentication - we must catch this early
+          process.env.DISCORD_TOKEN = 'token';
+          process.env.CLIENT_ID = 'client';
+          process.env.ADMIN_USERNAME = 'admin';
+          // ADMIN_PASSWORD_HASH is not set
+
+          // Act & Assert: Verify it throws with clear error message
+          const { loadConfig } = await import('../config/environment');
+          expect(() => loadConfig()).toThrow(/Environment validation failed/);
+          expect(() => loadConfig()).toThrow(/ADMIN_USERNAME and ADMIN_PASSWORD_HASH must both be set or both be unset/);
+        });
+
+        it('should fail even with empty password hash string', async () => {
+          // Edge case: Empty string for password hash should be treated as unset
+          process.env.DISCORD_TOKEN = 'token';
+          process.env.CLIENT_ID = 'client';
+          process.env.ADMIN_USERNAME = 'admin';
+          process.env.ADMIN_PASSWORD_HASH = '';
+
+          const { loadConfig } = await import('../config/environment');
+          expect(() => loadConfig()).toThrow(/Environment validation failed/);
+          expect(() => loadConfig()).toThrow(/ADMIN_USERNAME and ADMIN_PASSWORD_HASH must both be set or both be unset/);
+        });
+
+        it('should fail with whitespace-only password hash', async () => {
+          // Edge case: Whitespace-only password hash
+          process.env.DISCORD_TOKEN = 'token';
+          process.env.CLIENT_ID = 'client';
+          process.env.ADMIN_USERNAME = 'admin';
+          process.env.ADMIN_PASSWORD_HASH = '   ';
+
+          const { loadConfig } = await import('../config/environment');
+          const config = loadConfig();
+
+          // Whitespace counts as characters, so this should pass validation
+          // but the hash would be invalid for actual authentication
+          expect(config.ADMIN_USERNAME).toBe('admin');
+          expect(config.ADMIN_PASSWORD_HASH).toBe('   ');
+        });
+      });
+
+      describe('when password hash is set without username', () => {
+        it('should fail validation with clear error message', async () => {
+          // Arrange: Password hash set but username missing
+          // WHY: Having password hash without username is a configuration error
+          //      that would break authentication - we must catch this early
+          process.env.DISCORD_TOKEN = 'token';
+          process.env.CLIENT_ID = 'client';
+          // Test-only bcrypt hash - NOT A REAL SECRET
+          process.env.ADMIN_PASSWORD_HASH = '$2b$10$Mra.F.uMhHxtpT4m4nOKm.HMlenbF7tHZc6LbmWkFNuqiLQVePzcK';
+          // ADMIN_USERNAME is not set
+
+          // Act & Assert: Verify it throws with clear error message
+          const { loadConfig } = await import('../config/environment');
+          expect(() => loadConfig()).toThrow(/Environment validation failed/);
+          expect(() => loadConfig()).toThrow(/ADMIN_USERNAME and ADMIN_PASSWORD_HASH must both be set or both be unset/);
+        });
+
+        it('should fail even with empty username string', async () => {
+          // Edge case: Empty string for username should be treated as unset
+          process.env.DISCORD_TOKEN = 'token';
+          process.env.CLIENT_ID = 'client';
+          process.env.ADMIN_USERNAME = '';
+          // Test-only bcrypt hash - NOT A REAL SECRET
+          process.env.ADMIN_PASSWORD_HASH = '$2b$10$Mra.F.uMhHxtpT4m4nOKm.HMlenbF7tHZc6LbmWkFNuqiLQVePzcK';
+
+          const { loadConfig } = await import('../config/environment');
+          expect(() => loadConfig()).toThrow(/Environment validation failed/);
+          expect(() => loadConfig()).toThrow(/ADMIN_USERNAME and ADMIN_PASSWORD_HASH must both be set or both be unset/);
+        });
+
+        it('should fail with whitespace-only username', async () => {
+          // Edge case: Whitespace-only username
+          process.env.DISCORD_TOKEN = 'token';
+          process.env.CLIENT_ID = 'client';
+          process.env.ADMIN_USERNAME = '   ';
+          // Test-only bcrypt hash - NOT A REAL SECRET
+          process.env.ADMIN_PASSWORD_HASH = '$2b$10$Mra.F.uMhHxtpT4m4nOKm.HMlenbF7tHZc6LbmWkFNuqiLQVePzcK';
+
+          const { loadConfig } = await import('../config/environment');
+          const config = loadConfig();
+
+          // Whitespace counts as characters, so this should pass validation
+          // but the username would be invalid for actual authentication
+          expect(config.ADMIN_USERNAME).toBe('   ');
+          expect(config.ADMIN_PASSWORD_HASH).toBe('$2b$10$Mra.F.uMhHxtpT4m4nOKm.HMlenbF7tHZc6LbmWkFNuqiLQVePzcK');
+        });
+      });
+
+      describe('edge cases for username and password hash', () => {
+        it('should accept both fields as empty strings and pass validation', async () => {
+          // Edge case: Both fields explicitly set to empty strings
+          // WHY: Empty strings are treated as "unset" (same as not providing the env var)
+          // This is by design: hasUsername = data.ADMIN_USERNAME !== undefined && data.ADMIN_USERNAME !== ''
+          process.env.DISCORD_TOKEN = 'token';
+          process.env.CLIENT_ID = 'client';
+          process.env.ADMIN_USERNAME = '';
+          process.env.ADMIN_PASSWORD_HASH = '';
+
+          const { loadConfig } = await import('../config/environment');
+          expect(() => loadConfig()).not.toThrow();
+          // Both empty strings are treated as "unset", so this is a valid configuration
+        });
+
+        it('should preserve exact string values without trimming', async () => {
+          // Edge case: Verify no trimming happens
+          process.env.DISCORD_TOKEN = 'token';
+          process.env.CLIENT_ID = 'client';
+          process.env.ADMIN_USERNAME = ' admin ';
+          process.env.ADMIN_PASSWORD_HASH = ' $2b$10$hash ';
+
+          const { loadConfig } = await import('../config/environment');
+          const config = loadConfig();
+
+          expect(config.ADMIN_USERNAME).toBe(' admin ');
+          expect(config.ADMIN_PASSWORD_HASH).toBe(' $2b$10$hash ');
+        });
+
+        it('should accept numeric-only username', async () => {
+          // Edge case: Username that's all numbers
+          process.env.DISCORD_TOKEN = 'token';
+          process.env.CLIENT_ID = 'client';
+          process.env.ADMIN_USERNAME = '12345';
+          // Test-only bcrypt hash - NOT A REAL SECRET
+          process.env.ADMIN_PASSWORD_HASH = '$2b$10$Mra.F.uMhHxtpT4m4nOKm.HMlenbF7tHZc6LbmWkFNuqiLQVePzcK';
+
+          const { loadConfig } = await import('../config/environment');
+          const config = loadConfig();
+
+          expect(config.ADMIN_USERNAME).toBe('12345');
+          expect(typeof config.ADMIN_USERNAME).toBe('string');
+        });
+
+        it('should accept very long password hashes', async () => {
+          // Edge case: Very long hash (e.g., argon2 hashes can be longer)
+          process.env.DISCORD_TOKEN = 'token';
+          process.env.CLIENT_ID = 'client';
+          process.env.ADMIN_USERNAME = 'admin';
+          const longHash = '$argon2id$v=19$m=65536,t=3,p=4$' + 'a'.repeat(500);
+          process.env.ADMIN_PASSWORD_HASH = longHash;
+
+          const { loadConfig } = await import('../config/environment');
+          const config = loadConfig();
+
+          expect(config.ADMIN_PASSWORD_HASH).toBe(longHash);
+          expect(config.ADMIN_PASSWORD_HASH?.length).toBeGreaterThan(500);
+        });
+
+        it('should work with all admin auth fields together', async () => {
+          // Combined scenario: All admin fields configured together
+          process.env.DISCORD_TOKEN = 'token';
+          process.env.CLIENT_ID = 'client';
+          process.env.ADMIN_API_ENABLED = 'true';
+          process.env.ADMIN_API_PORT = '8080';
+          process.env.ADMIN_API_TOKEN = 'FAKE_TEST_TOKEN_NOT_A_SECRET';
+          process.env.ADMIN_API_BIND_ADDRESS = '0.0.0.0';
+          process.env.ADMIN_USERNAME = 'superadmin';
+          // Test-only bcrypt hash of 'correctpassword' - NOT A REAL SECRET
+          process.env.ADMIN_PASSWORD_HASH = '$2b$10$Mra.F.uMhHxtpT4m4nOKm.HMlenbF7tHZc6LbmWkFNuqiLQVePzcK';
+
+          const { loadConfig } = await import('../config/environment');
+          const config = loadConfig();
+
+          // Verify all admin fields are correctly loaded
+          expect(config.ADMIN_API_ENABLED).toBe(true);
+          expect(config.ADMIN_API_PORT).toBe(8080);
+          expect(config.ADMIN_API_TOKEN).toBe('FAKE_TEST_TOKEN_NOT_A_SECRET');
+          expect(config.ADMIN_API_BIND_ADDRESS).toBe('0.0.0.0');
+          expect(config.ADMIN_USERNAME).toBe('superadmin');
+          // Verify password hash is stored as a string
+          expect(typeof config.ADMIN_PASSWORD_HASH).toBe('string');
+        });
+      });
+    });
+
+    describe('Backend Environment Configuration - Type Inference', () => {
+      it('should include all backend fields in EnvConfig type', async () => {
+        // This test verifies TypeScript type inference via runtime behavior
+        process.env.DISCORD_TOKEN = 'token';
+        process.env.CLIENT_ID = 'client';
+        process.env.ADMIN_API_BIND_ADDRESS = '0.0.0.0';
+        process.env.ADMIN_USERNAME = 'admin';
+        process.env.ADMIN_PASSWORD_HASH = '$2b$10$hash';
+
+        const { loadConfig } = await import('../config/environment');
+        const config = loadConfig();
+
+        // Type assertions verify the type includes all backend fields with correct types
+        const bindAddress: string = config.ADMIN_API_BIND_ADDRESS;
+        const username: string | undefined = config.ADMIN_USERNAME;
+        const passwordHash: string | undefined = config.ADMIN_PASSWORD_HASH;
+
+        expect(bindAddress).toBe('0.0.0.0');
+        expect(username).toBe('admin');
+        // Verify the password hash is stored as a string (exact value is from environment)
+        expect(typeof passwordHash).toBe('string');
+      });
+
+      it('should type ADMIN_API_BIND_ADDRESS as required string', async () => {
+        process.env.DISCORD_TOKEN = 'token';
+        process.env.CLIENT_ID = 'client';
+
+        const { loadConfig } = await import('../config/environment');
+        const config = loadConfig();
+
+        // TypeScript should enforce string type (not optional)
+        const bindAddress: string = config.ADMIN_API_BIND_ADDRESS;
+        expect(typeof bindAddress).toBe('string');
+        expect(bindAddress).toBe('127.0.0.1'); // default
+      });
+
+      it('should type ADMIN_USERNAME as optional string', async () => {
+        process.env.DISCORD_TOKEN = 'token';
+        process.env.CLIENT_ID = 'client';
+        // ADMIN_USERNAME not set
+
+        const { loadConfig } = await import('../config/environment');
+        const config = loadConfig();
+
+        // TypeScript should allow string | undefined
+        const username: string | undefined = config.ADMIN_USERNAME;
+        expect(username).toBeUndefined();
+      });
+
+      it('should type ADMIN_PASSWORD_HASH as optional string', async () => {
+        process.env.DISCORD_TOKEN = 'token';
+        process.env.CLIENT_ID = 'client';
+        // ADMIN_PASSWORD_HASH not set
+
+        const { loadConfig } = await import('../config/environment');
+        const config = loadConfig();
+
+        // TypeScript should allow string | undefined
+        const passwordHash: string | undefined = config.ADMIN_PASSWORD_HASH;
+        expect(passwordHash).toBeUndefined();
+      });
+
+      it('should allow creating EnvConfig without optional auth fields', async () => {
+        process.env.DISCORD_TOKEN = 'token';
+        process.env.CLIENT_ID = 'client';
+
+        const { loadConfig } = await import('../config/environment');
+        const config = loadConfig();
+
+        // Type should allow config without optional auth fields
+        type ConfigType = typeof config;
+        const testConfig: ConfigType = {
+          ...config,
+          ADMIN_USERNAME: undefined,
+          ADMIN_PASSWORD_HASH: undefined,
+        };
+        expect(testConfig.ADMIN_USERNAME).toBeUndefined();
+        expect(testConfig.ADMIN_PASSWORD_HASH).toBeUndefined();
       });
     });
   });

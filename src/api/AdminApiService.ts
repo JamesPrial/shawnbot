@@ -1,6 +1,7 @@
 import express, { Express, Request, Response, NextFunction } from 'express';
 import { createServer, Server } from 'http';
 import crypto from 'crypto';
+import bcrypt from 'bcrypt';
 import type { Logger } from 'pino';
 import type { Client } from 'discord.js';
 import { GuildConfigService } from '../services/GuildConfigService';
@@ -20,6 +21,9 @@ export interface AdminApiDependencies {
   logger: Logger;
   token: string;
   port: number;
+  bindAddress: string;
+  username?: string;
+  passwordHash?: string;
 }
 
 /**
@@ -144,10 +148,37 @@ interface ConfigResetResponse {
 }
 
 /**
+ * Login request structure.
+ */
+interface LoginRequest {
+  username: string;
+  password: string;
+}
+
+/**
+ * Login response structure.
+ */
+interface LoginResponse {
+  token: string;
+  expiresAt: number;
+}
+
+/**
+ * Session data stored in memory.
+ */
+interface SessionData {
+  sessionId: string;
+  ipAddress: string;
+  createdAt: number;
+  expiresAt: number;
+}
+
+/**
  * AdminApiService provides a REST API for bot administration.
  * Implements security best practices including:
- * - Localhost-only binding (127.0.0.1)
+ * - Configurable bind address (defaults to localhost)
  * - Bearer token authentication with timing-safe comparison
+ * - Optional username/password login with bcrypt and session management
  * - Request correlation IDs for tracing
  * - Audit logging for all operations
  */
@@ -159,8 +190,13 @@ export class AdminApiService {
   private readonly logger: Logger;
   private readonly token: string;
   private readonly port: number;
+  private readonly bindAddress: string;
+  private readonly username?: string;
+  private readonly passwordHash?: string;
   private readonly app: Express;
   private readonly startTime: number;
+  private readonly sessions: Map<string, SessionData>;
+  private static readonly SESSION_DURATION_MS = 8 * 60 * 60 * 1000; // 8 hours
   private server: Server | null = null;
 
   constructor(deps: AdminApiDependencies) {
@@ -171,11 +207,23 @@ export class AdminApiService {
     this.logger = deps.logger;
     this.token = deps.token;
     this.port = deps.port;
+    this.bindAddress = deps.bindAddress;
+    this.username = deps.username;
+    this.passwordHash = deps.passwordHash;
     this.startTime = Date.now();
+    this.sessions = new Map();
 
     this.app = express();
     this.setupMiddleware();
     this.setupRoutes();
+
+    // Warn if bind address is not localhost
+    if (this.bindAddress !== '127.0.0.1' && this.bindAddress !== '::1') {
+      this.logger.warn(
+        { bindAddress: this.bindAddress },
+        'Admin API is not bound to localhost - this may expose the API to external networks'
+      );
+    }
   }
 
   /**
@@ -212,6 +260,10 @@ export class AdminApiService {
   private setupRoutes(): void {
     // Public health check (no auth required)
     this.app.get('/health', this.handleHealth.bind(this));
+
+    // Auth endpoints
+    this.app.post('/api/auth/login', this.handleLogin.bind(this));
+    this.app.post('/api/auth/logout', this.authMiddleware.bind(this), this.handleLogout.bind(this));
 
     // Protected endpoints (auth required)
     this.app.get('/api/status', this.authMiddleware.bind(this), this.handleStatus.bind(this));
@@ -251,8 +303,9 @@ export class AdminApiService {
   }
 
   /**
-   * Authentication middleware using Bearer token.
+   * Authentication middleware using Bearer token or session token.
    * Uses crypto.timingSafeEqual to prevent timing attacks.
+   * Supports both static API token and session-based authentication.
    */
   private authMiddleware(req: RequestWithCorrelation, res: Response, next: NextFunction): void {
     const authHeader = req.headers.authorization;
@@ -293,6 +346,43 @@ export class AdminApiService {
       return;
     }
 
+    // Try session token first
+    const session = this.sessions.get(token);
+    if (session) {
+      // Check if session is expired
+      if (Date.now() > session.expiresAt) {
+        this.sessions.delete(token);
+        this.logger.warn(
+          {
+            correlationId: req.correlationId,
+            ip: req.ip,
+            path: req.path,
+          },
+          'API auth failure: session expired'
+        );
+
+        res.status(401).json({
+          error: 'Unauthorized',
+          message: 'Session expired',
+        } satisfies ErrorResponse);
+        return;
+      }
+
+      // Session is valid
+      this.logger.debug(
+        {
+          correlationId: req.correlationId,
+          ip: req.ip,
+          path: req.path,
+          authType: 'session',
+        },
+        'API auth success (session)'
+      );
+      next();
+      return;
+    }
+
+    // Try static API token
     // Timing-safe token comparison using HMAC to normalize length
     const hmac = (data: string): Buffer => {
       return crypto.createHmac('sha256', 'token-comparison').update(data).digest();
@@ -332,8 +422,9 @@ export class AdminApiService {
         correlationId: req.correlationId,
         ip: req.ip,
         path: req.path,
+        authType: 'bearer',
       },
-      'API auth success'
+      'API auth success (bearer token)'
     );
 
     next();
@@ -859,7 +950,156 @@ export class AdminApiService {
   }
 
   /**
-   * Starts the Express server on localhost (127.0.0.1).
+   * POST /api/auth/login - Authenticate with username and password.
+   * Returns a session token on successful authentication.
+   */
+  private async handleLogin(req: RequestWithCorrelation, res: Response): Promise<void> {
+    // Check if credentials authentication is configured
+    if (!this.username || !this.passwordHash) {
+      this.logger.warn(
+        {
+          correlationId: req.correlationId,
+          ip: req.ip,
+        },
+        'Login attempted but credentials authentication is not configured'
+      );
+
+      res.status(401).json({
+        error: 'Unauthorized',
+        message: 'Invalid credentials',
+      } satisfies ErrorResponse);
+      return;
+    }
+
+    // Validate request body
+    const body = req.body as LoginRequest;
+
+    if (
+      !body ||
+      typeof body.username !== 'string' ||
+      typeof body.password !== 'string' ||
+      body.username === '' ||
+      body.password === ''
+    ) {
+      res.status(400).json({
+        error: 'Bad Request',
+        message: 'Username and password are required',
+      } satisfies ErrorResponse);
+      return;
+    }
+
+    try {
+      // Check username (timing-safe comparison)
+      const usernameMatch = body.username === this.username;
+
+      // Verify password using bcrypt (timing-safe)
+      const passwordMatch = await bcrypt.compare(body.password, this.passwordHash);
+
+      // Use generic error message to prevent user enumeration
+      if (!usernameMatch || !passwordMatch) {
+        this.logger.warn(
+          {
+            correlationId: req.correlationId,
+            ip: req.ip,
+            username: body.username,
+          },
+          'Login failed: invalid credentials'
+        );
+
+        res.status(401).json({
+          error: 'Unauthorized',
+          message: 'Invalid credentials',
+        } satisfies ErrorResponse);
+        return;
+      }
+
+      // Generate session token (64 hex chars from 32 random bytes)
+      const sessionId = crypto.randomBytes(32).toString('hex');
+      const now = Date.now();
+      const expiresAt = now + AdminApiService.SESSION_DURATION_MS;
+
+      // Store session
+      const sessionData: SessionData = {
+        sessionId,
+        ipAddress: req.ip ?? 'unknown',
+        createdAt: now,
+        expiresAt,
+      };
+      this.sessions.set(sessionId, sessionData);
+
+      this.logger.info(
+        {
+          correlationId: req.correlationId,
+          ip: req.ip,
+          username: body.username,
+          expiresAt,
+        },
+        'User logged in successfully'
+      );
+
+      res.json({
+        token: sessionId,
+        expiresAt,
+      } satisfies LoginResponse);
+    } catch (error) {
+      this.logger.error(
+        {
+          correlationId: req.correlationId,
+          error,
+        },
+        'Error during login'
+      );
+
+      res.status(500).json({
+        error: 'Internal Server Error',
+        message: 'An error occurred during authentication',
+      } satisfies ErrorResponse);
+    }
+  }
+
+  /**
+   * POST /api/auth/logout - Invalidate the current session token.
+   */
+  private handleLogout(req: RequestWithCorrelation, res: Response): void {
+    const authHeader = req.headers.authorization;
+
+    if (authHeader === undefined || authHeader === '') {
+      res.status(401).json({
+        error: 'Unauthorized',
+        message: 'Missing Authorization header',
+      } satisfies ErrorResponse);
+      return;
+    }
+
+    const [, token] = authHeader.split(' ');
+
+    if (token === undefined || token === '') {
+      res.status(401).json({
+        error: 'Unauthorized',
+        message: 'Invalid Authorization header format',
+      } satisfies ErrorResponse);
+      return;
+    }
+
+    // Remove session if it exists
+    const wasDeleted = this.sessions.delete(token);
+
+    if (wasDeleted) {
+      this.logger.info(
+        {
+          correlationId: req.correlationId,
+          ip: req.ip,
+        },
+        'User logged out successfully'
+      );
+    }
+
+    // Always return success even if session didn't exist (idempotent operation)
+    res.status(204).send();
+  }
+
+  /**
+   * Starts the Express server on the configured bind address.
    */
   public async start(): Promise<void> {
     if (this.server) {
@@ -874,7 +1114,7 @@ export class AdminApiService {
         this.server.on('error', (error: NodeJS.ErrnoException) => {
           if (error.code === 'EADDRINUSE') {
             this.logger.error(
-              { port: this.port },
+              { port: this.port, bindAddress: this.bindAddress },
               'Admin API port is already in use'
             );
             reject(new Error(`Port ${this.port} is already in use`));
@@ -884,10 +1124,10 @@ export class AdminApiService {
           }
         });
 
-        // Bind to localhost only (127.0.0.1) for security
-        this.server.listen(this.port, '127.0.0.1', () => {
+        // Bind to configured address
+        this.server.listen(this.port, this.bindAddress, () => {
           this.logger.info(
-            { port: this.port, host: '127.0.0.1' },
+            { port: this.port, host: this.bindAddress },
             'Admin API server started'
           );
           resolve();

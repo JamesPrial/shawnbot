@@ -51,7 +51,7 @@ describe('DashboardPage', () => {
   };
 
   // Test data
-  const mockToken = 'test-token-123';
+  const mockToken = 'FAKE_TEST_TOKEN_NOT_A_SECRET';
 
   const mockStatus: StatusResponse = {
     guilds: 5,

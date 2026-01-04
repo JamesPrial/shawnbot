@@ -15,6 +15,7 @@ npm run test:run -- src/__tests__/AFKDetectionService.test.ts  # Run single test
 npm run typecheck # Type check without emitting
 npm run lint     # Check for lint errors
 npm run lint:fix # Auto-fix lint errors
+npm run dev:all  # Run bot + webui together
 ```
 
 ## Environment Setup
@@ -30,7 +31,10 @@ Copy `.env.example` to `.env` and configure:
 - `RATE_LIMIT_WINDOW_MS` - Rate limit window in ms (default: 60000)
 - `ADMIN_API_ENABLED` - Enable Admin REST API (default: false)
 - `ADMIN_API_PORT` - Admin API port (default: 3000)
+- `ADMIN_API_BIND_ADDRESS` - IP address to bind Admin API (default: 127.0.0.1)
 - `ADMIN_API_TOKEN` - Bearer token for API auth (required when API enabled)
+- `ADMIN_USERNAME` - Admin username for credentials auth (optional, must set with password hash)
+- `ADMIN_PASSWORD_HASH` - Bcrypt hash of admin password (generate with: `node -e "require('bcrypt').hash('password', 10).then(console.log)"`)
 
 ## Architecture
 
@@ -98,13 +102,19 @@ Optional REST API (`src/api/AdminApiService.ts`) for bot administration over HTT
 - Stops during graceful shutdown before database close
 
 **Security:**
-- Binds to `127.0.0.1` only (localhost)
-- Bearer token auth with timing-safe HMAC comparison
+- Binds to address configured by `ADMIN_API_BIND_ADDRESS` (default: `127.0.0.1`)
+- Dual auth mode: Bearer token with timing-safe HMAC comparison OR session tokens from login
 - Guild ID validation (Discord snowflake format)
 - Audit logging for auth failures and admin operations
 
+**Authentication:**
+- Bearer token mode (default): Set `ADMIN_API_TOKEN` and pass in `Authorization: Bearer <token>` header
+- Session token mode: Login with credentials to `/api/auth/login` endpoint, receive session token for subsequent requests
+
 **Endpoints:**
 - `GET /health` - Public health check
+- `POST /api/auth/login` - Login with username/password → returns session token (no auth required)
+- `POST /api/auth/logout` - Invalidate session (auth required)
 - `GET /api/status` - Bot metrics (auth required)
 - `GET /api/guilds` - List all guilds (auth required)
 - `GET /api/guilds/:id/status` - Guild status (auth required)

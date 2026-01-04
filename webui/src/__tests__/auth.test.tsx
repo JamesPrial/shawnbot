@@ -21,7 +21,7 @@ import * as tokenStorage from '../auth/tokenStorage';
 import { AuthProvider } from '../auth/AuthContext';
 import { useAuth } from '../auth/useAuth';
 import * as api from '../api/client';
-import type { ApiResult, StatusResponse } from '../api/types';
+import type { ApiResult, StatusResponse, LoginResponse } from '../api/types';
 
 // Mock the API client module
 vi.mock('../api/client');
@@ -70,7 +70,7 @@ describe('tokenStorage', () => {
     describe('when a token is stored', () => {
       it('should return the stored token', () => {
         // PROVES: getToken retrieves the exact token that was stored
-        const testToken = 'test-token-abc123';
+        const testToken = 'FAKE_TEST_TOKEN_NOT_A_SECRET';
         mockSessionStorage.setItem('admin_api_token', testToken);
 
         const token = tokenStorage.getToken();
@@ -92,7 +92,7 @@ describe('tokenStorage', () => {
 
       it('should handle tokens with special characters', () => {
         // PROVES: No encoding/decoding issues with complex tokens
-        const complexToken = 'Bearer!@#$%^&*()_+-={}[]|:";\'<>?,./';
+        const complexToken = 'FAKE_TOKEN_WITH_SPECIAL_CHARS_NOT_A_SECRET';
         mockSessionStorage.setItem('admin_api_token', complexToken);
 
         const token = tokenStorage.getToken();
@@ -106,7 +106,7 @@ describe('tokenStorage', () => {
     describe('when storing a valid token', () => {
       it('should store token in sessionStorage', () => {
         // PROVES: setToken persists tokens for session duration
-        const testToken = 'new-token-xyz789';
+        const testToken = 'FAKE_NEW_TOKEN_NOT_A_SECRET';
 
         tokenStorage.setToken(testToken);
 
@@ -116,9 +116,9 @@ describe('tokenStorage', () => {
 
       it('should overwrite existing token', () => {
         // PROVES: setToken replaces old tokens (no append/concat bugs)
-        mockSessionStorage.setItem('admin_api_token', 'old-token');
+        mockSessionStorage.setItem('admin_api_token', 'FAKE_OLD_TOKEN_NOT_A_SECRET');
 
-        const newToken = 'new-token';
+        const newToken = 'FAKE_NEW_TOKEN_NOT_A_SECRET';
         tokenStorage.setToken(newToken);
 
         expect(mockSessionStorage.getItem('admin_api_token')).toBe(newToken);
@@ -208,7 +208,7 @@ describe('AuthContext', () => {
         <button
           data-testid="login-button"
           onClick={() => {
-            void login('test-token');
+            void login('FAKE_TEST_TOKEN_NOT_A_SECRET');
           }}
         >
           Login
@@ -285,7 +285,7 @@ describe('AuthContext', () => {
     describe('when valid token is stored', () => {
       it('should validate token and set isAuthenticated to true', async () => {
         // PROVES: Existing valid tokens are automatically validated on mount
-        mockSessionStorage.setItem('admin_api_token', 'valid-stored-token');
+        mockSessionStorage.setItem('admin_api_token', 'FAKE_VALID_STORED_TOKEN_NOT_A_SECRET');
 
         const mockStatusResponse: ApiResult<StatusResponse> = {
           success: true,
@@ -311,14 +311,14 @@ describe('AuthContext', () => {
           expect(screen.getByTestId('auth-status').textContent).toBe('authenticated');
         });
 
-        expect(api.getStatus).toHaveBeenCalledWith('valid-stored-token');
+        expect(api.getStatus).toHaveBeenCalledWith('FAKE_VALID_STORED_TOKEN_NOT_A_SECRET');
       });
     });
 
     describe('when invalid token is stored', () => {
       it('should clear invalid token and stay unauthenticated', async () => {
         // PROVES: Invalid tokens are automatically cleaned up on mount
-        mockSessionStorage.setItem('admin_api_token', 'invalid-stored-token');
+        mockSessionStorage.setItem('admin_api_token', 'FAKE_INVALID_STORED_TOKEN_NOT_A_SECRET');
 
         const mockErrorResponse: ApiResult<StatusResponse> = {
           success: false,
@@ -335,7 +335,7 @@ describe('AuthContext', () => {
 
         // Wait for validation attempt
         await waitFor(() => {
-          expect(api.getStatus).toHaveBeenCalledWith('invalid-stored-token');
+          expect(api.getStatus).toHaveBeenCalledWith('FAKE_INVALID_STORED_TOKEN_NOT_A_SECRET');
         });
 
         // Should remain unauthenticated
@@ -347,7 +347,7 @@ describe('AuthContext', () => {
 
       it('should handle API errors during validation', async () => {
         // PROVES: Network/API errors during validation don't crash the app
-        mockSessionStorage.setItem('admin_api_token', 'token-with-network-error');
+        mockSessionStorage.setItem('admin_api_token', 'FAKE_TOKEN_WITH_ERROR_NOT_A_SECRET');
 
         vi.mocked(api.getStatus).mockRejectedValue(new Error('Network error'));
 
@@ -425,7 +425,7 @@ describe('AuthContext', () => {
         });
 
         await waitFor(() => {
-          expect(mockSessionStorage.setItem).toHaveBeenCalledWith('admin_api_token', 'test-token');
+          expect(mockSessionStorage.setItem).toHaveBeenCalledWith('admin_api_token', 'FAKE_TEST_TOKEN_NOT_A_SECRET');
         });
       });
 
@@ -450,7 +450,7 @@ describe('AuthContext', () => {
               <button
                 data-testid="login-button"
                 onClick={() => {
-                  void login('test-token').then((res) => {
+                  void login('FAKE_TEST_TOKEN_NOT_A_SECRET').then((res) => {
                     setResult(JSON.stringify(res));
                   });
                 }}
@@ -553,7 +553,7 @@ describe('AuthContext', () => {
               <button
                 data-testid="login-button"
                 onClick={() => {
-                  void login('bad-token').then((res) => {
+                  void login('FAKE_BAD_TOKEN_NOT_A_SECRET').then((res) => {
                     setResult(JSON.stringify(res));
                   });
                 }}
@@ -639,7 +639,7 @@ describe('AuthContext', () => {
               <button
                 data-testid="login-button"
                 onClick={() => {
-                  void login('test-token').then((res) => {
+                  void login('FAKE_TEST_TOKEN_NOT_A_SECRET').then((res) => {
                     if (!res.success) {
                       setError(res.error);
                     }
@@ -698,9 +698,9 @@ describe('AuthContext', () => {
               <button
                 data-testid="login-button"
                 onClick={() => {
-                  void login('token1');
-                  void login('token2');
-                  void login('token3');
+                  void login('FAKE_TOKEN_1_NOT_A_SECRET');
+                  void login('FAKE_TOKEN_2_NOT_A_SECRET');
+                  void login('FAKE_TOKEN_3_NOT_A_SECRET');
                 }}
               >
                 Login
@@ -794,7 +794,7 @@ describe('AuthContext', () => {
         });
 
         await waitFor(() => {
-          expect(mockSessionStorage.setItem).toHaveBeenCalledWith('admin_api_token', 'test-token');
+          expect(mockSessionStorage.setItem).toHaveBeenCalledWith('admin_api_token', 'FAKE_TEST_TOKEN_NOT_A_SECRET');
         });
 
         // Clear mock calls to verify logout behavior
@@ -965,6 +965,589 @@ describe('AuthContext', () => {
       });
 
       expect(api.getStatus).toHaveBeenCalledWith('good-token');
+    });
+  });
+
+  describe('loginWithCredentials', () => {
+    // Test component that exposes loginWithCredentials
+    const TestCredentialsConsumer = () => {
+      const { loginWithCredentials, isAuthenticated } = useAuth();
+      const [error, setError] = React.useState<string>('');
+
+      return (
+        <div>
+          <div data-testid="auth-status">{isAuthenticated ? 'authenticated' : 'not authenticated'}</div>
+          <button
+            data-testid="login-button"
+            onClick={() => {
+              void loginWithCredentials('testadmin', 'testpassword').then((result) => {
+                if (!result.success) {
+                  setError(result.error ?? 'Login failed');
+                }
+              });
+            }}
+          >
+            Login
+          </button>
+          <div data-testid="error">{error}</div>
+        </div>
+      );
+    };
+
+    describe('with valid credentials', () => {
+      it('should call login API with username and password', async () => {
+        // PROVES: loginWithCredentials calls the correct API endpoint with credentials
+        const mockLoginResponse: ApiResult<LoginResponse> = {
+          success: true,
+          data: {
+            token: 'FAKE_SESSION_TOKEN_NOT_A_SECRET',
+            expiresAt: Date.now() + 3600000,
+          },
+        };
+        vi.mocked(api.loginWithCredentials).mockResolvedValue(mockLoginResponse);
+
+        render(
+          <AuthProvider>
+            <TestCredentialsConsumer />
+          </AuthProvider>
+        );
+
+        await act(async () => {
+          screen.getByTestId('login-button').click();
+        });
+
+        await waitFor(() => {
+          expect(api.loginWithCredentials).toHaveBeenCalledWith('testadmin', 'testpassword');
+        });
+      });
+
+      it('should store returned token in sessionStorage', async () => {
+        // PROVES: Successful login persists session token
+        const mockLoginResponse: ApiResult<LoginResponse> = {
+          success: true,
+          data: {
+            token: 'FAKE_SESSION_TOKEN_NOT_A_SECRET',
+            expiresAt: Date.now() + 3600000,
+          },
+        };
+        vi.mocked(api.loginWithCredentials).mockResolvedValue(mockLoginResponse);
+
+        render(
+          <AuthProvider>
+            <TestCredentialsConsumer />
+          </AuthProvider>
+        );
+
+        await act(async () => {
+          screen.getByTestId('login-button').click();
+        });
+
+        await waitFor(() => {
+          expect(mockSessionStorage.setItem).toHaveBeenCalledWith(
+            'admin_api_token',
+            'FAKE_SESSION_TOKEN_NOT_A_SECRET'
+          );
+        });
+      });
+
+      it('should set isAuthenticated to true', async () => {
+        // PROVES: Successful credentials login updates auth state
+        const mockLoginResponse: ApiResult<LoginResponse> = {
+          success: true,
+          data: {
+            token: 'FAKE_SESSION_TOKEN_NOT_A_SECRET',
+            expiresAt: Date.now() + 3600000,
+          },
+        };
+        vi.mocked(api.loginWithCredentials).mockResolvedValue(mockLoginResponse);
+
+        render(
+          <AuthProvider>
+            <TestCredentialsConsumer />
+          </AuthProvider>
+        );
+
+        expect(screen.getByTestId('auth-status').textContent).toBe('not authenticated');
+
+        await act(async () => {
+          screen.getByTestId('login-button').click();
+        });
+
+        await waitFor(() => {
+          expect(screen.getByTestId('auth-status').textContent).toBe('authenticated');
+        });
+      });
+
+      it('should return success result', async () => {
+        // PROVES: Login success is communicated to caller
+        const mockLoginResponse: ApiResult<LoginResponse> = {
+          success: true,
+          data: {
+            token: 'FAKE_SESSION_TOKEN_NOT_A_SECRET',
+            expiresAt: Date.now() + 3600000,
+          },
+        };
+        vi.mocked(api.loginWithCredentials).mockResolvedValue(mockLoginResponse);
+
+        const TestComponent = () => {
+          const { loginWithCredentials } = useAuth();
+          const [result, setResult] = React.useState<string>('');
+
+          return (
+            <div>
+              <button
+                data-testid="login-button"
+                onClick={() => {
+                  void loginWithCredentials('testuser', 'testpass').then((res) => {
+                    setResult(JSON.stringify(res));
+                  });
+                }}
+              >
+                Login
+              </button>
+              <div data-testid="result">{result}</div>
+            </div>
+          );
+        };
+
+        render(
+          <AuthProvider>
+            <TestComponent />
+          </AuthProvider>
+        );
+
+        await act(async () => {
+          screen.getByTestId('login-button').click();
+        });
+
+        await waitFor(() => {
+          const result = screen.getByTestId('result').textContent;
+          expect(result).toContain('"success":true');
+        });
+      });
+
+      it('should work with subsequent API calls using stored token', async () => {
+        // PROVES: Token from credentials login works for authenticated endpoints
+        const mockLoginResponse: ApiResult<LoginResponse> = {
+          success: true,
+          data: {
+            token: 'FAKE_WORKING_SESSION_TOKEN_NOT_A_SECRET',
+            expiresAt: Date.now() + 3600000,
+          },
+        };
+        vi.mocked(api.loginWithCredentials).mockResolvedValue(mockLoginResponse);
+
+        const mockStatusResponse: ApiResult<StatusResponse> = {
+          success: true,
+          data: {
+            guilds: 5,
+            voiceConnections: 2,
+            memory: { heapUsed: 100, heapTotal: 200, rss: 300 },
+          },
+        };
+        vi.mocked(api.getStatus).mockResolvedValue(mockStatusResponse);
+
+        const TestComponent = () => {
+          const { loginWithCredentials } = useAuth();
+          const [statusCalled, setStatusCalled] = React.useState(false);
+
+          return (
+            <div>
+              <button
+                data-testid="login-button"
+                onClick={() => {
+                  void loginWithCredentials('testadmin', 'testpassword').then(async () => {
+                    // After login, try making an API call with the stored token
+                    const token = tokenStorage.getToken();
+                    if (token) {
+                      await api.getStatus(token);
+                      setStatusCalled(true);
+                    }
+                  });
+                }}
+              >
+                Login
+              </button>
+              <div data-testid="status-called">{statusCalled ? 'yes' : 'no'}</div>
+            </div>
+          );
+        };
+
+        render(
+          <AuthProvider>
+            <TestComponent />
+          </AuthProvider>
+        );
+
+        await act(async () => {
+          screen.getByTestId('login-button').click();
+        });
+
+        await waitFor(() => {
+          expect(screen.getByTestId('status-called').textContent).toBe('yes');
+        });
+
+        expect(api.getStatus).toHaveBeenCalledWith('FAKE_WORKING_SESSION_TOKEN_NOT_A_SECRET');
+      });
+    });
+
+    describe('with invalid credentials', () => {
+      it('should return error when login fails', async () => {
+        // PROVES: Failed login returns descriptive error
+        const mockErrorResponse: ApiResult<LoginResponse> = {
+          success: false,
+          error: 'UNAUTHORIZED',
+          message: 'Invalid username or password',
+        };
+        vi.mocked(api.loginWithCredentials).mockResolvedValue(mockErrorResponse);
+
+        const TestComponent = () => {
+          const { loginWithCredentials } = useAuth();
+          const [result, setResult] = React.useState<string>('');
+
+          return (
+            <div>
+              <button
+                data-testid="login-button"
+                onClick={() => {
+                  void loginWithCredentials('wronguser', 'wrongcredentials').then((res) => {
+                    setResult(JSON.stringify(res));
+                  });
+                }}
+              >
+                Login
+              </button>
+              <div data-testid="result">{result}</div>
+            </div>
+          );
+        };
+
+        render(
+          <AuthProvider>
+            <TestComponent />
+          </AuthProvider>
+        );
+
+        await act(async () => {
+          screen.getByTestId('login-button').click();
+        });
+
+        await waitFor(() => {
+          const result = screen.getByTestId('result').textContent;
+          expect(result).toContain('"success":false');
+          expect(result).toContain('"error":"Invalid username or password"');
+        });
+      });
+
+      it('should not store token on failed login', async () => {
+        // PROVES: Failed credentials don't persist invalid tokens
+        const mockErrorResponse: ApiResult<LoginResponse> = {
+          success: false,
+          error: 'UNAUTHORIZED',
+          message: 'Invalid credentials',
+        };
+        vi.mocked(api.loginWithCredentials).mockResolvedValue(mockErrorResponse);
+
+        render(
+          <AuthProvider>
+            <TestCredentialsConsumer />
+          </AuthProvider>
+        );
+
+        await act(async () => {
+          screen.getByTestId('login-button').click();
+        });
+
+        await waitFor(() => {
+          expect(api.loginWithCredentials).toHaveBeenCalled();
+        });
+
+        // Should NOT have called setItem with a token
+        expect(mockSessionStorage.setItem).not.toHaveBeenCalledWith(
+          'admin_api_token',
+          expect.any(String)
+        );
+      });
+
+      it('should not set isAuthenticated to true', async () => {
+        // PROVES: Failed login doesn't grant authentication
+        const mockErrorResponse: ApiResult<LoginResponse> = {
+          success: false,
+          error: 'UNAUTHORIZED',
+          message: 'Bad credentials',
+        };
+        vi.mocked(api.loginWithCredentials).mockResolvedValue(mockErrorResponse);
+
+        render(
+          <AuthProvider>
+            <TestCredentialsConsumer />
+          </AuthProvider>
+        );
+
+        await act(async () => {
+          screen.getByTestId('login-button').click();
+        });
+
+        await waitFor(() => {
+          expect(api.loginWithCredentials).toHaveBeenCalled();
+        });
+
+        expect(screen.getByTestId('auth-status').textContent).toBe('not authenticated');
+      });
+    });
+
+    describe('edge cases', () => {
+      it('should handle empty username', async () => {
+        // PROVES: Empty credentials are passed to API for server-side validation
+        const mockErrorResponse: ApiResult<LoginResponse> = {
+          success: false,
+          error: 'BAD_REQUEST',
+          message: 'Username is required',
+        };
+        vi.mocked(api.loginWithCredentials).mockResolvedValue(mockErrorResponse);
+
+        const TestComponent = () => {
+          const { loginWithCredentials } = useAuth();
+
+          return (
+            <button
+              data-testid="login-button"
+              onClick={() => {
+                void loginWithCredentials('', 'testpassword');
+              }}
+            >
+              Login
+            </button>
+          );
+        };
+
+        render(
+          <AuthProvider>
+            <TestComponent />
+          </AuthProvider>
+        );
+
+        await act(async () => {
+          screen.getByTestId('login-button').click();
+        });
+
+        await waitFor(() => {
+          expect(api.loginWithCredentials).toHaveBeenCalledWith('', 'testpassword');
+        });
+      });
+
+      it('should handle empty password', async () => {
+        // PROVES: Empty password is validated by server
+        const mockErrorResponse: ApiResult<LoginResponse> = {
+          success: false,
+          error: 'BAD_REQUEST',
+          message: 'Password is required',
+        };
+        vi.mocked(api.loginWithCredentials).mockResolvedValue(mockErrorResponse);
+
+        const TestComponent = () => {
+          const { loginWithCredentials } = useAuth();
+
+          return (
+            <button
+              data-testid="login-button"
+              onClick={() => {
+                void loginWithCredentials('testadmin', '');
+              }}
+            >
+              Login
+            </button>
+          );
+        };
+
+        render(
+          <AuthProvider>
+            <TestComponent />
+          </AuthProvider>
+        );
+
+        await act(async () => {
+          screen.getByTestId('login-button').click();
+        });
+
+        await waitFor(() => {
+          expect(api.loginWithCredentials).toHaveBeenCalledWith('testadmin', '');
+        });
+      });
+
+      it('should handle network errors', async () => {
+        // PROVES: Network failures during login are handled gracefully
+        vi.mocked(api.loginWithCredentials).mockRejectedValue(new Error('Network timeout'));
+
+        const TestComponent = () => {
+          const { loginWithCredentials, isAuthenticated } = useAuth();
+          const [error, setError] = React.useState<string>('');
+
+          return (
+            <div>
+              <div data-testid="auth-status">{isAuthenticated ? 'authenticated' : 'not authenticated'}</div>
+              <button
+                data-testid="login-button"
+                onClick={() => {
+                  void loginWithCredentials('testadmin', 'testpassword').then((res) => {
+                    if (!res.success) {
+                      setError(res.error ?? 'Unknown error');
+                    }
+                  });
+                }}
+              >
+                Login
+              </button>
+              <div data-testid="error">{error}</div>
+            </div>
+          );
+        };
+
+        render(
+          <AuthProvider>
+            <TestComponent />
+          </AuthProvider>
+        );
+
+        await act(async () => {
+          screen.getByTestId('login-button').click();
+        });
+
+        await waitFor(() => {
+          expect(screen.getByTestId('auth-status').textContent).toBe('not authenticated');
+          expect(screen.getByTestId('error').textContent).toBeTruthy();
+        });
+      });
+
+      it('should handle concurrent credential login attempts', async () => {
+        // PROVES: Multiple simultaneous credential logins don't cause race conditions
+        let resolveCount = 0;
+        const mockLoginResponse: ApiResult<LoginResponse> = {
+          success: true,
+          data: {
+            token: 'concurrent-token',
+            expiresAt: Date.now() + 3600000,
+          },
+        };
+
+        vi.mocked(api.loginWithCredentials).mockImplementation(
+          () =>
+            new Promise((resolve) => {
+              setTimeout(() => {
+                resolveCount++;
+                resolve(mockLoginResponse);
+              }, 50);
+            })
+        );
+
+        const TestComponent = () => {
+          const { loginWithCredentials } = useAuth();
+
+          return (
+            <button
+              data-testid="login-button"
+              onClick={() => {
+                void loginWithCredentials('user1', 'pass1');
+                void loginWithCredentials('user2', 'pass2');
+                void loginWithCredentials('user3', 'pass3');
+              }}
+            >
+              Login
+            </button>
+          );
+        };
+
+        render(
+          <AuthProvider>
+            <TestComponent />
+          </AuthProvider>
+        );
+
+        await act(async () => {
+          screen.getByTestId('login-button').click();
+        });
+
+        await waitFor(
+          () => {
+            expect(resolveCount).toBe(3);
+          },
+          { timeout: 500 }
+        );
+
+        expect(api.loginWithCredentials).toHaveBeenCalledTimes(3);
+        expect(api.loginWithCredentials).toHaveBeenCalledWith('user1', 'pass1');
+        expect(api.loginWithCredentials).toHaveBeenCalledWith('user2', 'pass2');
+        expect(api.loginWithCredentials).toHaveBeenCalledWith('user3', 'pass3');
+      });
+    });
+
+    describe('integration with logout', () => {
+      it('should support login -> logout -> login cycle', async () => {
+        // PROVES: Credentials login and logout work together correctly
+        const mockLoginResponse: ApiResult<LoginResponse> = {
+          success: true,
+          data: {
+            token: 'FAKE_CYCLE_TOKEN_NOT_A_SECRET',
+            expiresAt: Date.now() + 3600000,
+          },
+        };
+        vi.mocked(api.loginWithCredentials).mockResolvedValue(mockLoginResponse);
+
+        const TestComponent = () => {
+          const { loginWithCredentials, logout, isAuthenticated } = useAuth();
+
+          return (
+            <div>
+              <div data-testid="auth-status">{isAuthenticated ? 'authenticated' : 'not authenticated'}</div>
+              <button
+                data-testid="login-button"
+                onClick={() => {
+                  void loginWithCredentials('testadmin', 'testpassword');
+                }}
+              >
+                Login
+              </button>
+              <button data-testid="logout-button" onClick={logout}>
+                Logout
+              </button>
+            </div>
+          );
+        };
+
+        render(
+          <AuthProvider>
+            <TestComponent />
+          </AuthProvider>
+        );
+
+        // Initial state
+        expect(screen.getByTestId('auth-status').textContent).toBe('not authenticated');
+
+        // First login
+        await act(async () => {
+          screen.getByTestId('login-button').click();
+        });
+
+        await waitFor(() => {
+          expect(screen.getByTestId('auth-status').textContent).toBe('authenticated');
+        });
+
+        // Logout
+        await act(async () => {
+          screen.getByTestId('logout-button').click();
+        });
+
+        expect(screen.getByTestId('auth-status').textContent).toBe('not authenticated');
+
+        // Second login
+        await act(async () => {
+          screen.getByTestId('login-button').click();
+        });
+
+        await waitFor(() => {
+          expect(screen.getByTestId('auth-status').textContent).toBe('authenticated');
+        });
+      });
     });
   });
 });

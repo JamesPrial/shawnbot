@@ -15,7 +15,7 @@ import {
   useCallback,
   type ReactNode,
 } from 'react';
-import { getStatus } from '../api/client';
+import { getStatus, loginWithCredentials as apiLoginWithCredentials } from '../api/client';
 import { getToken, setToken as storeToken, clearToken } from './tokenStorage';
 
 /**
@@ -49,6 +49,16 @@ export interface AuthContextValue {
    * @returns Promise resolving to success status and optional error message
    */
   login: (token: string) => Promise<LoginResult>;
+
+  /**
+   * Attempt to log in with username and password
+   * Calls the login API endpoint, stores the returned token on success
+   *
+   * @param username - Username for authentication
+   * @param password - Password for authentication
+   * @returns Promise resolving to success status and optional error message
+   */
+  loginWithCredentials: (username: string, password: string) => Promise<LoginResult>;
 
   /**
    * Log out and clear stored token
@@ -129,6 +139,34 @@ export function AuthProvider({ children }: { children: ReactNode }): JSX.Element
     }
   }, []);
 
+  const loginWithCredentials = useCallback(
+    async (username: string, password: string): Promise<LoginResult> => {
+      try {
+        // Call the login API endpoint
+        const result = await apiLoginWithCredentials(username, password);
+
+        if (!result.success) {
+          return {
+            success: false,
+            error: result.message,
+          };
+        }
+
+        // Store the returned token and mark user as authenticated
+        storeToken(result.data.token);
+        setIsAuthenticated(true);
+
+        return { success: true };
+      } catch (error) {
+        return {
+          success: false,
+          error: error instanceof Error ? error.message : 'Login failed',
+        };
+      }
+    },
+    []
+  );
+
   const logout = useCallback((): void => {
     clearToken();
     setIsAuthenticated(false);
@@ -138,6 +176,7 @@ export function AuthProvider({ children }: { children: ReactNode }): JSX.Element
     isAuthenticated,
     isLoading,
     login,
+    loginWithCredentials,
     logout,
   };
 
