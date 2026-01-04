@@ -1,7 +1,7 @@
 import { Client, GatewayIntentBits, Events } from 'discord.js';
 import type { Logger } from 'pino';
 import type Database from 'better-sqlite3';
-import { loadConfig, type EnvConfig } from './config';
+import { loadConfig, type EnvConfig } from './config/environment';
 import { createServiceLogger } from './utils/logger';
 import { initDatabase } from './database';
 import { createTables } from './database/schema';
@@ -264,6 +264,9 @@ export async function createBot(): Promise<BotDependencies> {
       logger: createServiceLogger('admin-api'),
       token: config.ADMIN_API_TOKEN,
       port: config.ADMIN_API_PORT,
+      bindAddress: config.ADMIN_API_BIND_ADDRESS,
+      username: config.ADMIN_USERNAME,
+      passwordHash: config.ADMIN_PASSWORD_HASH,
     });
     rootLogger.info({ port: config.ADMIN_API_PORT }, 'Admin API service initialized');
   }

@@ -1,7 +1,11 @@
 /**
  * Login Page Component
  *
- * Displays login form with token input and bot health status.
+ * Displays login form with configurable authentication mode.
+ * Supports two modes via VITE_AUTH_MODE environment variable:
+ * - 'token': Single token input field (default)
+ * - 'credentials': Username and password input fields
+ *
  * Features:
  * - Pre-flight health check to show bot online/offline status
  * - Password input for token (hidden characters)
@@ -20,11 +24,36 @@ import { getHealth } from '../api/client';
 type BotStatus = 'loading' | 'online' | 'offline';
 
 /**
+ * Authentication mode type
+ */
+type AuthMode = 'token' | 'credentials';
+
+/**
+ * Get authentication mode from environment
+ */
+function getAuthMode(): AuthMode {
+  const mode = import.meta.env.VITE_AUTH_MODE as string | undefined;
+  if (mode === 'credentials') {
+    return 'credentials';
+  }
+  return 'token';
+}
+
+/**
  * Login page component
  */
 export function LoginPage(): JSX.Element {
-  const { login } = useAuth();
+  const { login, loginWithCredentials } = useAuth();
+  const authMode = getAuthMode();
+
+  // Token mode state
   const [token, setToken] = useState('');
+
+  // Credentials mode state
+  const [username, setUsername] = useState('');
+  const [password, setPassword] = useState('');
+
+  // Shared state
   const [error, setError] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [botStatus, setBotStatus] = useState<BotStatus>('loading');
@@ -50,15 +79,25 @@ export function LoginPage(): JSX.Element {
     setIsSubmitting(true);
 
     try {
-      const result = await login(token);
+      if (authMode === 'token') {
+        // Token authentication mode
+        const result = await login(token);
 
-      if (!result.success) {
-        setError(result.error ?? 'Invalid token. Please check your credentials and try again.');
+        if (!result.success) {
+          setError(result.error ?? 'Invalid token. Please check your credentials and try again.');
+        }
+        // If successful, AuthContext will update and App will redirect
+      } else {
+        // Credentials authentication mode
+        const result = await loginWithCredentials(username, password);
+
+        if (!result.success) {
+          setError(result.error ?? 'Invalid credentials. Please check your username and password.');
+        }
+        // If successful, AuthContext will update and App will redirect
       }
-      // If successful, AuthContext will update and App will redirect
     } catch (err) {
       setError('An unexpected error occurred. Please try again.');
-      console.error('Login error:', err);
     } finally {
       setIsSubmitting(false);
     }
@@ -70,7 +109,11 @@ export function LoginPage(): JSX.Element {
         {/* Header */}
         <div className="text-center mb-8">
           <h1 className="text-3xl font-bold text-gray-900 mb-2">ShawnBot Admin</h1>
-          <p className="text-gray-600">Enter your token to continue</p>
+          <p className="text-gray-600">
+            {authMode === 'token'
+              ? 'Enter your token to continue'
+              : 'Enter your credentials to continue'}
+          </p>
         </div>
 
         {/* Bot Status Indicator */}
@@ -97,25 +140,71 @@ export function LoginPage(): JSX.Element {
 
         {/* Login Form */}
         <form onSubmit={handleSubmit} className="space-y-4">
-          <div>
-            <label htmlFor="token" className="block text-sm font-medium text-gray-700 mb-2">
-              Access Token
-            </label>
-            <input
-              id="token"
-              type="password"
-              autoComplete="off"
-              value={token}
-              onChange={(e) => {
-                setToken(e.target.value);
-                setError('');
-              }}
-              disabled={isSubmitting}
-              className="w-full px-4 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-transparent disabled:bg-gray-100 disabled:cursor-not-allowed"
-              placeholder="Enter your admin token"
-              required
-            />
-          </div>
+          {authMode === 'token' ? (
+            // Token Mode: Single token input
+            <div>
+              <label htmlFor="token" className="block text-sm font-medium text-gray-700 mb-2">
+                Access Token
+              </label>
+              <input
+                id="token"
+                type="password"
+                autoComplete="off"
+                value={token}
+                onChange={(e) => {
+                  setToken(e.target.value);
+                  setError('');
+                }}
+                disabled={isSubmitting}
+                className="w-full px-4 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-transparent disabled:bg-gray-100 disabled:cursor-not-allowed"
+                placeholder="Enter your admin token"
+                required
+              />
+            </div>
+          ) : (
+            // Credentials Mode: Username and password inputs
+            <>
+              <div>
+                <label htmlFor="username" className="block text-sm font-medium text-gray-700 mb-2">
+                  Username
+                </label>
+                <input
+                  id="username"
+                  type="text"
+                  autoComplete="username"
+                  value={username}
+                  onChange={(e) => {
+                    setUsername(e.target.value);
+                    setError('');
+                  }}
+                  disabled={isSubmitting}
+                  className="w-full px-4 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-transparent disabled:bg-gray-100 disabled:cursor-not-allowed"
+                  placeholder="Enter your username"
+                  required
+                />
+              </div>
+
+              <div>
+                <label htmlFor="password" className="block text-sm font-medium text-gray-700 mb-2">
+                  Password
+                </label>
+                <input
+                  id="password"
+                  type="password"
+                  autoComplete="current-password"
+                  value={password}
+                  onChange={(e) => {
+                    setPassword(e.target.value);
+                    setError('');
+                  }}
+                  disabled={isSubmitting}
+                  className="w-full px-4 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-transparent disabled:bg-gray-100 disabled:cursor-not-allowed"
+                  placeholder="Enter your password"
+                  required
+                />
+              </div>
+            </>
+          )}
 
           {/* Error Message */}
           {error && (
@@ -127,7 +216,10 @@ export function LoginPage(): JSX.Element {
           {/* Submit Button */}
           <button
             type="submit"
-            disabled={isSubmitting || !token.trim()}
+            disabled={
+              isSubmitting ||
+              (authMode === 'token' ? !token.trim() : !username.trim() || !password.trim())
+            }
             className="w-full bg-blue-600 text-white py-2 px-4 rounded-md font-medium hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 disabled:bg-gray-400 disabled:cursor-not-allowed transition-colors"
           >
             {isSubmitting ? (

@@ -17,6 +17,7 @@ import type {
   GuildConfigUpdate,
   ConfigResetResponse,
   GuildListItem,
+  LoginResponse,
 } from './types';
 
 /**
@@ -969,6 +970,93 @@ export async function disableGuild(
       return {
         success: true,
         data: data as OperationResponse,
+      };
+    }
+
+    return {
+      success: false,
+      error: 'INVALID_RESPONSE',
+      message: 'API returned unexpected response format',
+    };
+  } catch (error) {
+    // Network error or fetch exception
+    const message = error instanceof Error ? error.message : 'Network request failed';
+    return {
+      success: false,
+      error: 'NETWORK_ERROR',
+      message,
+    };
+  }
+}
+
+/**
+ * Authenticate with username and password
+ * Public endpoint - no authentication required (this is the login endpoint)
+ *
+ * @param username - Username for authentication
+ * @param password - Password for authentication
+ * @returns Bearer token and expiration or error
+ *
+ * @example
+ * ```typescript
+ * const result = await loginWithCredentials('admin', 'password123');
+ * if (result.success) {
+ *   console.log(`Token expires at: ${new Date(result.data.expiresAt)}`);
+ *   // Store result.data.token for future API calls
+ * } else if (result.error === 'UNAUTHORIZED') {
+ *   console.error('Invalid credentials');
+ * } else {
+ *   console.error(result.message);
+ * }
+ * ```
+ */
+export async function loginWithCredentials(
+  username: string,
+  password: string
+): Promise<ApiResult<LoginResponse>> {
+  try {
+    const response = await fetch(`${API_BASE_URL}/api/auth/login`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ username, password }),
+    });
+
+    if (!response.ok) {
+      const errorData = await parseErrorResponse(response);
+
+      // For 401 on login, return UNAUTHORIZED only if we got a valid JSON response
+      // (parseErrorResponse returns API_ERROR when JSON parsing fails)
+      if (response.status === 401 && errorData.error !== 'API_ERROR') {
+        return {
+          success: false,
+          error: 'UNAUTHORIZED',
+          message: errorData.message,
+        };
+      }
+
+      return {
+        success: false,
+        error: errorData.error,
+        message: errorData.message,
+      };
+    }
+
+    const data: unknown = await response.json();
+
+    // Type guard for LoginResponse
+    if (
+      data !== null &&
+      typeof data === 'object' &&
+      'token' in data &&
+      'expiresAt' in data &&
+      typeof data.token === 'string' &&
+      typeof data.expiresAt === 'number'
+    ) {
+      return {
+        success: true,
+        data: data as LoginResponse,
       };
     }
 

@@ -20,7 +20,25 @@ const environmentSchema = z.object({
   ).default(false),
   ADMIN_API_PORT: z.coerce.number().default(3000),
   ADMIN_API_TOKEN: z.string().optional(),
-});
+  ADMIN_API_BIND_ADDRESS: z.string().default('127.0.0.1'),
+  ADMIN_USERNAME: z.string().optional(),
+  ADMIN_PASSWORD_HASH: z.string().optional(),
+}).refine(
+  (data) => {
+    // If either ADMIN_USERNAME or ADMIN_PASSWORD_HASH is set, both must be set
+    const hasUsername = data.ADMIN_USERNAME !== undefined && data.ADMIN_USERNAME !== '';
+    const hasPasswordHash = data.ADMIN_PASSWORD_HASH !== undefined && data.ADMIN_PASSWORD_HASH !== '';
+
+    if (hasUsername !== hasPasswordHash) {
+      return false;
+    }
+
+    return true;
+  },
+  {
+    message: 'ADMIN_USERNAME and ADMIN_PASSWORD_HASH must both be set or both be unset',
+  }
+);
 
 export type EnvConfig = z.infer<typeof environmentSchema>;
 

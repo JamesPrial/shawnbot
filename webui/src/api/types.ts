@@ -144,3 +144,12 @@ export interface ConfigResetResponse {
   guildId: string;
   message: string;
 }
+
+/**
+ * Response from POST /api/auth/login
+ * Returns a bearer token and its expiration timestamp
+ */
+export interface LoginResponse {
+  token: string;
+  expiresAt: number;
+}

@@ -14,8 +14,9 @@ import {
   enableGuild,
   disableGuild,
   validateToken,
+  loginWithCredentials,
 } from '../api/client';
-import type { HealthResponse, StatusResponse } from '../api/types';
+import type { HealthResponse, StatusResponse, LoginResponse } from '../api/types';
 
 describe('API Client', () => {
   // Save original fetch
@@ -222,7 +223,7 @@ describe('API Client', () => {
         json: async () => mockResponse,
       });
 
-      const result = await getStatus('test-token-123');
+      const result = await getStatus('FAKE_TEST_TOKEN_NOT_A_SECRET');
 
       expect(result.success).toBe(true);
       if (result.success) {
@@ -238,7 +239,7 @@ describe('API Client', () => {
         method: 'GET',
         headers: {
           'Content-Type': 'application/json',
-          'Authorization': 'Bearer test-token-123',
+          'Authorization': 'Bearer FAKE_TEST_TOKEN_NOT_A_SECRET',
         },
       });
     });
@@ -266,7 +267,7 @@ describe('API Client', () => {
     it('should handle network errors', async () => {
       global.fetch = vi.fn().mockRejectedValue(new Error('Connection timeout'));
 
-      const result = await getStatus('test-token');
+      const result = await getStatus('FAKE_TEST_TOKEN_NOT_A_SECRET');
 
       expect(result.success).toBe(false);
       if (!result.success) {
@@ -286,7 +287,7 @@ describe('API Client', () => {
         }),
       });
 
-      const result = await getStatus('test-token');
+      const result = await getStatus('FAKE_TEST_TOKEN_NOT_A_SECRET');
 
       expect(result.success).toBe(false);
       if (!result.success) {
@@ -302,7 +303,7 @@ describe('API Client', () => {
         json: async () => ({ unexpected: 'shape' }),
       });
 
-      const result = await getStatus('test-token');
+      const result = await getStatus('FAKE_TEST_TOKEN_NOT_A_SECRET');
 
       expect(result.success).toBe(false);
       if (!result.success) {
@@ -325,7 +326,7 @@ describe('API Client', () => {
         }),
       });
 
-      const result = await getStatus('test-token');
+      const result = await getStatus('FAKE_TEST_TOKEN_NOT_A_SECRET');
 
       expect(result.success).toBe(false);
       if (!result.success) {
@@ -344,7 +345,7 @@ describe('API Client', () => {
         }),
       });
 
-      const result = await getStatus('test-token');
+      const result = await getStatus('FAKE_TEST_TOKEN_NOT_A_SECRET');
 
       expect(result.success).toBe(false);
       if (!result.success) {
@@ -413,7 +414,7 @@ describe('API Client', () => {
         json: async () => mockResponse,
       });
 
-      const result = await getGuilds('test-token-123');
+      const result = await getGuilds('FAKE_TEST_TOKEN_NOT_A_SECRET');
 
       expect(result.success).toBe(true);
       if (result.success) {
@@ -435,7 +436,7 @@ describe('API Client', () => {
         method: 'GET',
         headers: {
           'Content-Type': 'application/json',
-          'Authorization': 'Bearer test-token-123',
+          'Authorization': 'Bearer FAKE_TEST_TOKEN_NOT_A_SECRET',
         },
       });
     });
@@ -453,7 +454,7 @@ describe('API Client', () => {
         json: async () => mockResponse,
       });
 
-      const result = await getGuilds('test-token');
+      const result = await getGuilds('FAKE_TEST_TOKEN_NOT_A_SECRET');
 
       expect(result.success).toBe(true);
       if (result.success) {
@@ -487,7 +488,7 @@ describe('API Client', () => {
       // Test that network-level failures (not HTTP errors) are handled as NETWORK_ERROR
       global.fetch = vi.fn().mockRejectedValue(new Error('Network connection lost'));
 
-      const result = await getGuilds('test-token');
+      const result = await getGuilds('FAKE_TEST_TOKEN_NOT_A_SECRET');
 
       expect(result.success).toBe(false);
       if (!result.success) {
@@ -507,7 +508,7 @@ describe('API Client', () => {
         }),
       });
 
-      const result = await getGuilds('test-token');
+      const result = await getGuilds('FAKE_TEST_TOKEN_NOT_A_SECRET');
 
       expect(result.success).toBe(false);
       if (!result.success) {
@@ -526,7 +527,7 @@ describe('API Client', () => {
         }),
       });
 
-      const result = await getGuilds('test-token');
+      const result = await getGuilds('FAKE_TEST_TOKEN_NOT_A_SECRET');
 
       expect(result.success).toBe(false);
       if (!result.success) {
@@ -551,7 +552,7 @@ describe('API Client', () => {
         }),
       });
 
-      const result = await getGuilds('test-token');
+      const result = await getGuilds('FAKE_TEST_TOKEN_NOT_A_SECRET');
 
       expect(result.success).toBe(false);
       if (!result.success) {
@@ -578,7 +579,7 @@ describe('API Client', () => {
         }),
       });
 
-      const result = await getGuilds('test-token');
+      const result = await getGuilds('FAKE_TEST_TOKEN_NOT_A_SECRET');
 
       expect(result.success).toBe(false);
       if (!result.success) {
@@ -604,7 +605,7 @@ describe('API Client', () => {
         json: async () => mockResponse,
       });
 
-      const result = await getGuildStatus('test-token', '123456789012345678');
+      const result = await getGuildStatus('FAKE_TEST_TOKEN_NOT_A_SECRET', '123456789012345678');
 
       expect(result.success).toBe(true);
       if (result.success) {
@@ -619,14 +620,14 @@ describe('API Client', () => {
         method: 'GET',
         headers: {
           'Content-Type': 'application/json',
-          'Authorization': 'Bearer test-token',
+          'Authorization': 'Bearer FAKE_TEST_TOKEN_NOT_A_SECRET',
         },
       });
     });
 
     it('should return error for invalid guild ID format - too short', async () => {
       // Test that guild IDs shorter than 17 digits are rejected client-side
-      const result = await getGuildStatus('test-token', '1234567890123456'); // 16 digits
+      const result = await getGuildStatus('FAKE_TEST_TOKEN_NOT_A_SECRET', '1234567890123456'); // 16 digits
 
       expect(result.success).toBe(false);
       if (!result.success) {
@@ -640,7 +641,7 @@ describe('API Client', () => {
 
     it('should return error for invalid guild ID format - too long', async () => {
       // Test that guild IDs longer than 19 digits are rejected client-side
-      const result = await getGuildStatus('test-token', '12345678901234567890'); // 20 digits
+      const result = await getGuildStatus('FAKE_TEST_TOKEN_NOT_A_SECRET', '12345678901234567890'); // 20 digits
 
       expect(result.success).toBe(false);
       if (!result.success) {
@@ -653,7 +654,7 @@ describe('API Client', () => {
 
     it('should return error for invalid guild ID format - contains letters', async () => {
       // Test that guild IDs with non-numeric characters are rejected
-      const result = await getGuildStatus('test-token', '12345678901234567a');
+      const result = await getGuildStatus('FAKE_TEST_TOKEN_NOT_A_SECRET', '12345678901234567a');
 
       expect(result.success).toBe(false);
       if (!result.success) {
@@ -666,7 +667,7 @@ describe('API Client', () => {
 
     it('should return error for invalid guild ID format - empty string', async () => {
       // Test that empty strings are rejected
-      const result = await getGuildStatus('test-token', '');
+      const result = await getGuildStatus('FAKE_TEST_TOKEN_NOT_A_SECRET', '');
 
       expect(result.success).toBe(false);
       if (!result.success) {
@@ -692,7 +693,7 @@ describe('API Client', () => {
         json: async () => mockResponse,
       });
 
-      const result = await getGuildStatus('test-token', '12345678901234567');
+      const result = await getGuildStatus('FAKE_TEST_TOKEN_NOT_A_SECRET', '12345678901234567');
 
       expect(result.success).toBe(true);
       expect(global.fetch).toHaveBeenCalled();
@@ -714,7 +715,7 @@ describe('API Client', () => {
         json: async () => mockResponse,
       });
 
-      const result = await getGuildStatus('test-token', '1234567890123456789');
+      const result = await getGuildStatus('FAKE_TEST_TOKEN_NOT_A_SECRET', '1234567890123456789');
 
       expect(result.success).toBe(true);
       expect(global.fetch).toHaveBeenCalled();
@@ -732,7 +733,7 @@ describe('API Client', () => {
         }),
       });
 
-      const result = await getGuildStatus('invalid-token', '123456789012345678');
+      const result = await getGuildStatus('FAKE_INVALID_TOKEN', '123456789012345678');
 
       expect(result.success).toBe(false);
       if (!result.success) {
@@ -753,7 +754,7 @@ describe('API Client', () => {
         }),
       });
 
-      const result = await getGuildStatus('test-token', '999999999999999999');
+      const result = await getGuildStatus('FAKE_TEST_TOKEN_NOT_A_SECRET', '999999999999999999');
 
       expect(result.success).toBe(false);
       if (!result.success) {
@@ -773,7 +774,7 @@ describe('API Client', () => {
         }),
       });
 
-      const result = await getGuildStatus('test-token', '123456789012345678');
+      const result = await getGuildStatus('FAKE_TEST_TOKEN_NOT_A_SECRET', '123456789012345678');
 
       expect(result.success).toBe(false);
       if (!result.success) {
@@ -786,7 +787,7 @@ describe('API Client', () => {
       // Test network-level failures
       global.fetch = vi.fn().mockRejectedValue(new Error('Connection refused'));
 
-      const result = await getGuildStatus('test-token', '123456789012345678');
+      const result = await getGuildStatus('FAKE_TEST_TOKEN_NOT_A_SECRET', '123456789012345678');
 
       expect(result.success).toBe(false);
       if (!result.success) {
@@ -811,7 +812,7 @@ describe('API Client', () => {
         json: async () => mockResponse,
       });
 
-      const result = await enableGuild('test-token', '123456789012345678');
+      const result = await enableGuild('FAKE_TEST_TOKEN_NOT_A_SECRET', '123456789012345678');
 
       expect(result.success).toBe(true);
       if (result.success) {
@@ -824,7 +825,7 @@ describe('API Client', () => {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          'Authorization': 'Bearer test-token',
+          'Authorization': 'Bearer FAKE_TEST_TOKEN_NOT_A_SECRET',
         },
       });
     });
@@ -854,7 +855,7 @@ describe('API Client', () => {
         }),
       });
 
-      const result = await enableGuild('invalid-token', '123456789012345678');
+      const result = await enableGuild('FAKE_INVALID_TOKEN', '123456789012345678');
 
       expect(result.success).toBe(false);
       if (!result.success) {
@@ -875,7 +876,7 @@ describe('API Client', () => {
         }),
       });
 
-      const result = await enableGuild('test-token', '123456789012345678');
+      const result = await enableGuild('FAKE_TEST_TOKEN_NOT_A_SECRET', '123456789012345678');
 
       expect(result.success).toBe(false);
       if (!result.success) {
@@ -896,7 +897,7 @@ describe('API Client', () => {
         }),
       });
 
-      const result = await enableGuild('test-token', '999999999999999999');
+      const result = await enableGuild('FAKE_TEST_TOKEN_NOT_A_SECRET', '999999999999999999');
 
       expect(result.success).toBe(false);
       if (!result.success) {
@@ -909,7 +910,7 @@ describe('API Client', () => {
       // Test network-level failures
       global.fetch = vi.fn().mockRejectedValue(new Error('Request timeout'));
 
-      const result = await enableGuild('test-token', '123456789012345678');
+      const result = await enableGuild('FAKE_TEST_TOKEN_NOT_A_SECRET', '123456789012345678');
 
       expect(result.success).toBe(false);
       if (!result.success) {
@@ -929,7 +930,7 @@ describe('API Client', () => {
         }),
       });
 
-      const result = await enableGuild('test-token', '123456789012345678');
+      const result = await enableGuild('FAKE_TEST_TOKEN_NOT_A_SECRET', '123456789012345678');
 
       expect(result.success).toBe(false);
       if (!result.success) {
@@ -954,7 +955,7 @@ describe('API Client', () => {
         json: async () => mockResponse,
       });
 
-      const result = await disableGuild('test-token', '123456789012345678');
+      const result = await disableGuild('FAKE_TEST_TOKEN_NOT_A_SECRET', '123456789012345678');
 
       expect(result.success).toBe(true);
       if (result.success) {
@@ -967,7 +968,7 @@ describe('API Client', () => {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          'Authorization': 'Bearer test-token',
+          'Authorization': 'Bearer FAKE_TEST_TOKEN_NOT_A_SECRET',
         },
       });
     });
@@ -997,7 +998,7 @@ describe('API Client', () => {
         }),
       });
 
-      const result = await disableGuild('invalid-token', '123456789012345678');
+      const result = await disableGuild('FAKE_INVALID_TOKEN', '123456789012345678');
 
       expect(result.success).toBe(false);
       if (!result.success) {
@@ -1018,7 +1019,7 @@ describe('API Client', () => {
         }),
       });
 
-      const result = await disableGuild('test-token', '123456789012345678');
+      const result = await disableGuild('FAKE_TEST_TOKEN_NOT_A_SECRET', '123456789012345678');
 
       expect(result.success).toBe(false);
       if (!result.success) {
@@ -1039,7 +1040,7 @@ describe('API Client', () => {
         }),
       });
 
-      const result = await disableGuild('test-token', '999999999999999999');
+      const result = await disableGuild('FAKE_TEST_TOKEN_NOT_A_SECRET', '999999999999999999');
 
       expect(result.success).toBe(false);
       if (!result.success) {
@@ -1052,7 +1053,7 @@ describe('API Client', () => {
       // Test network-level failures
       global.fetch = vi.fn().mockRejectedValue(new Error('Connection reset'));
 
-      const result = await disableGuild('test-token', '123456789012345678');
+      const result = await disableGuild('FAKE_TEST_TOKEN_NOT_A_SECRET', '123456789012345678');
 
       expect(result.success).toBe(false);
       if (!result.success) {
@@ -1073,7 +1074,7 @@ describe('API Client', () => {
         }),
       });
 
-      const result = await disableGuild('test-token', '123456789012345678');
+      const result = await disableGuild('FAKE_TEST_TOKEN_NOT_A_SECRET', '123456789012345678');
 
       expect(result.success).toBe(false);
       if (!result.success) {
@@ -1102,14 +1103,14 @@ describe('API Client', () => {
         json: async () => mockResponse,
       });
 
-      const result = await validateToken('valid-token');
+      const result = await validateToken('FAKE_VALID_TOKEN');
 
       expect(result).toBe(true);
       expect(global.fetch).toHaveBeenCalledWith('/api/status', {
         method: 'GET',
         headers: {
           'Content-Type': 'application/json',
-          'Authorization': 'Bearer valid-token',
+          'Authorization': 'Bearer FAKE_VALID_TOKEN',
         },
       });
     });
@@ -1126,7 +1127,7 @@ describe('API Client', () => {
         }),
       });
 
-      const result = await validateToken('invalid-token');
+      const result = await validateToken('FAKE_INVALID_TOKEN');
 
       expect(result).toBe(false);
     });
@@ -1135,9 +1136,467 @@ describe('API Client', () => {
       // Test that network-level failures result in false
       global.fetch = vi.fn().mockRejectedValue(new Error('Network connection failed'));
 
-      const result = await validateToken('test-token');
+      const result = await validateToken('FAKE_TEST_TOKEN_NOT_A_SECRET');
 
       expect(result).toBe(false);
+    });
+  });
+
+  describe('loginWithCredentials()', () => {
+    describe('with valid credentials', () => {
+      it('should return success with token and expiresAt', async () => {
+        // PROVES: Successful login returns session token with expiration
+        const mockResponse: LoginResponse = {
+          token: 'FAKE_SESSION_TOKEN_NOT_A_SECRET',
+          expiresAt: Date.now() + 3600000, // 1 hour from now
+        };
+
+        global.fetch = vi.fn().mockResolvedValue({
+          ok: true,
+          status: 200,
+          json: async () => mockResponse,
+        });
+
+        const result = await loginWithCredentials('testadmin', 'testpassword');
+
+        expect(result.success).toBe(true);
+        if (result.success) {
+          expect(result.data.token).toBe('FAKE_SESSION_TOKEN_NOT_A_SECRET');
+          expect(result.data.expiresAt).toBe(mockResponse.expiresAt);
+          expect(typeof result.data.token).toBe('string');
+          expect(typeof result.data.expiresAt).toBe('number');
+        }
+
+        expect(global.fetch).toHaveBeenCalledWith('/api/auth/login', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            username: 'testadmin',
+            password: 'testpassword',
+          }),
+        });
+      });
+
+      it('should handle username with special characters', async () => {
+        // PROVES: Username validation doesn't reject valid special characters
+        const mockResponse: LoginResponse = {
+          token: 'FAKE_TOKEN_XYZ_NOT_A_SECRET',
+          expiresAt: Date.now() + 3600000,
+        };
+
+        global.fetch = vi.fn().mockResolvedValue({
+          ok: true,
+          status: 200,
+          json: async () => mockResponse,
+        });
+
+        const result = await loginWithCredentials('testuser@example.com', 'testpass');
+
+        expect(result.success).toBe(true);
+        expect(global.fetch).toHaveBeenCalledWith('/api/auth/login', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            username: 'testuser@example.com',
+            password: 'testpass',
+          }),
+        });
+      });
+
+      it('should handle password with special characters', async () => {
+        // PROVES: Passwords are properly encoded in JSON body
+        const mockResponse: LoginResponse = {
+          token: 'FAKE_TOKEN_XYZ_NOT_A_SECRET',
+          expiresAt: Date.now() + 3600000,
+        };
+
+        global.fetch = vi.fn().mockResolvedValue({
+          ok: true,
+          status: 200,
+          json: async () => mockResponse,
+        });
+
+        const result = await loginWithCredentials('testadmin', 'Testpass123!');
+
+        expect(result.success).toBe(true);
+        expect(global.fetch).toHaveBeenCalledWith('/api/auth/login', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            username: 'testadmin',
+            password: 'Testpass123!',
+          }),
+        });
+      });
+    });
+
+    describe('with invalid credentials', () => {
+      it('should return UNAUTHORIZED error for wrong password', async () => {
+        // PROVES: Failed authentication returns specific error
+        global.fetch = vi.fn().mockResolvedValue({
+          ok: false,
+          status: 401,
+          statusText: 'Unauthorized',
+          json: async () => ({
+            error: 'UNAUTHORIZED',
+            message: 'Invalid username or password',
+          }),
+        });
+
+        const result = await loginWithCredentials('testadmin', 'wrongpassword');
+
+        expect(result.success).toBe(false);
+        if (!result.success) {
+          expect(result.error).toBe('UNAUTHORIZED');
+          expect(result.message).toBe('Invalid username or password');
+        }
+      });
+
+      it('should return UNAUTHORIZED error for non-existent user', async () => {
+        // PROVES: Missing users return same error as wrong password (security best practice)
+        global.fetch = vi.fn().mockResolvedValue({
+          ok: false,
+          status: 401,
+          statusText: 'Unauthorized',
+          json: async () => ({
+            error: 'UNAUTHORIZED',
+            message: 'Invalid username or password',
+          }),
+        });
+
+        const result = await loginWithCredentials('nonexistentuser', 'testpassword');
+
+        expect(result.success).toBe(false);
+        if (!result.success) {
+          expect(result.error).toBe('UNAUTHORIZED');
+          expect(result.message).toBe('Invalid username or password');
+        }
+      });
+    });
+
+    describe('edge cases', () => {
+      it('should handle empty username', async () => {
+        // PROVES: Empty username is sent to server for validation
+        const mockResponse: LoginResponse = {
+          token: 'FAKE_TOKEN_NOT_A_SECRET',
+          expiresAt: Date.now() + 3600000,
+        };
+
+        global.fetch = vi.fn().mockResolvedValue({
+          ok: true,
+          status: 200,
+          json: async () => mockResponse,
+        });
+
+        const result = await loginWithCredentials('', 'testpassword');
+
+        expect(global.fetch).toHaveBeenCalledWith('/api/auth/login', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            username: '',
+            password: 'testpassword',
+          }),
+        });
+      });
+
+      it('should handle empty password', async () => {
+        // PROVES: Empty password is sent to server for validation
+        const mockResponse: LoginResponse = {
+          token: 'FAKE_TOKEN_NOT_A_SECRET',
+          expiresAt: Date.now() + 3600000,
+        };
+
+        global.fetch = vi.fn().mockResolvedValue({
+          ok: true,
+          status: 200,
+          json: async () => mockResponse,
+        });
+
+        const result = await loginWithCredentials('testadmin', '');
+
+        expect(global.fetch).toHaveBeenCalledWith('/api/auth/login', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            username: 'testadmin',
+            password: '',
+          }),
+        });
+      });
+
+      it('should handle very long credentials', async () => {
+        // PROVES: No client-side length limits on credentials
+        const longUsername = 'a'.repeat(1000);
+        const longPassword = 'b'.repeat(1000);
+
+        const mockResponse: LoginResponse = {
+          token: 'FAKE_TOKEN_NOT_A_SECRET',
+          expiresAt: Date.now() + 3600000,
+        };
+
+        global.fetch = vi.fn().mockResolvedValue({
+          ok: true,
+          status: 200,
+          json: async () => mockResponse,
+        });
+
+        const result = await loginWithCredentials(longUsername, longPassword);
+
+        expect(global.fetch).toHaveBeenCalledWith('/api/auth/login', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            username: longUsername,
+            password: longPassword,
+          }),
+        });
+      });
+
+      it('should handle network errors', async () => {
+        // PROVES: Network failures are caught and returned as errors
+        global.fetch = vi.fn().mockRejectedValue(new Error('Connection timeout'));
+
+        const result = await loginWithCredentials('testadmin', 'testpassword');
+
+        expect(result.success).toBe(false);
+        if (!result.success) {
+          expect(result.error).toBe('NETWORK_ERROR');
+          expect(result.message).toBe('Connection timeout');
+        }
+      });
+
+      it('should handle non-Error exceptions', async () => {
+        // PROVES: Non-Error throws are handled gracefully
+        global.fetch = vi.fn().mockRejectedValue('String error');
+
+        const result = await loginWithCredentials('testadmin', 'testpassword');
+
+        expect(result.success).toBe(false);
+        if (!result.success) {
+          expect(result.error).toBe('NETWORK_ERROR');
+          expect(result.message).toBe('Network request failed');
+        }
+      });
+    });
+
+    describe('response validation', () => {
+      it('should return INVALID_RESPONSE when missing token field', async () => {
+        // PROVES: Response schema is strictly validated
+        global.fetch = vi.fn().mockResolvedValue({
+          ok: true,
+          status: 200,
+          json: async () => ({
+            // Missing token field
+            expiresAt: Date.now() + 3600000,
+          }),
+        });
+
+        const result = await loginWithCredentials('testadmin', 'testpassword');
+
+        expect(result.success).toBe(false);
+        if (!result.success) {
+          expect(result.error).toBe('INVALID_RESPONSE');
+          expect(result.message).toBe('API returned unexpected response format');
+        }
+      });
+
+      it('should return INVALID_RESPONSE when missing expiresAt field', async () => {
+        // PROVES: All response fields are required
+        global.fetch = vi.fn().mockResolvedValue({
+          ok: true,
+          status: 200,
+          json: async () => ({
+            token: 'FAKE_SESSION_TOKEN_NOT_A_SECRET',
+            // Missing expiresAt field
+          }),
+        });
+
+        const result = await loginWithCredentials('testadmin', 'testpassword');
+
+        expect(result.success).toBe(false);
+        if (!result.success) {
+          expect(result.error).toBe('INVALID_RESPONSE');
+        }
+      });
+
+      it('should return INVALID_RESPONSE when token is not a string', async () => {
+        // PROVES: Type validation catches incorrect types
+        global.fetch = vi.fn().mockResolvedValue({
+          ok: true,
+          status: 200,
+          json: async () => ({
+            token: 12345, // number instead of string
+            expiresAt: Date.now() + 3600000,
+          }),
+        });
+
+        const result = await loginWithCredentials('testadmin', 'testpassword');
+
+        expect(result.success).toBe(false);
+        if (!result.success) {
+          expect(result.error).toBe('INVALID_RESPONSE');
+        }
+      });
+
+      it('should return INVALID_RESPONSE when expiresAt is not a number', async () => {
+        // PROVES: Timestamp field must be numeric
+        global.fetch = vi.fn().mockResolvedValue({
+          ok: true,
+          status: 200,
+          json: async () => ({
+            token: 'FAKE_SESSION_TOKEN_NOT_A_SECRET',
+            expiresAt: '2024-01-01T00:00:00Z', // string instead of number
+          }),
+        });
+
+        const result = await loginWithCredentials('testadmin', 'testpassword');
+
+        expect(result.success).toBe(false);
+        if (!result.success) {
+          expect(result.error).toBe('INVALID_RESPONSE');
+        }
+      });
+
+      it('should accept valid response with exact schema', async () => {
+        // PROVES: Correctly formatted responses are accepted
+        const now = Date.now();
+        const mockResponse: LoginResponse = {
+          token: 'FAKE_VALID_SESSION_TOKEN_NOT_A_SECRET',
+          expiresAt: now + 7200000, // 2 hours
+        };
+
+        global.fetch = vi.fn().mockResolvedValue({
+          ok: true,
+          status: 200,
+          json: async () => mockResponse,
+        });
+
+        const result = await loginWithCredentials('testadmin', 'testpassword');
+
+        expect(result.success).toBe(true);
+        if (result.success) {
+          expect(result.data).toEqual(mockResponse);
+        }
+      });
+    });
+
+    describe('HTTP error handling', () => {
+      it('should handle 400 Bad Request', async () => {
+        // PROVES: Client errors return descriptive messages
+        global.fetch = vi.fn().mockResolvedValue({
+          ok: false,
+          status: 400,
+          statusText: 'Bad Request',
+          json: async () => ({
+            error: 'BAD_REQUEST',
+            message: 'Username and password are required',
+          }),
+        });
+
+        const result = await loginWithCredentials('', '');
+
+        expect(result.success).toBe(false);
+        if (!result.success) {
+          expect(result.error).toBe('BAD_REQUEST');
+          expect(result.message).toBe('Username and password are required');
+        }
+      });
+
+      it('should handle 429 Rate Limit', async () => {
+        // PROVES: Rate limiting is communicated to client
+        global.fetch = vi.fn().mockResolvedValue({
+          ok: false,
+          status: 429,
+          statusText: 'Too Many Requests',
+          json: async () => ({
+            error: 'RATE_LIMITED',
+            message: 'Too many login attempts. Please try again later.',
+          }),
+        });
+
+        const result = await loginWithCredentials('testadmin', 'testpassword');
+
+        expect(result.success).toBe(false);
+        if (!result.success) {
+          expect(result.error).toBe('RATE_LIMITED');
+          expect(result.message).toBe('Too many login attempts. Please try again later.');
+        }
+      });
+
+      it('should handle 500 Internal Server Error', async () => {
+        // PROVES: Server errors are handled gracefully
+        global.fetch = vi.fn().mockResolvedValue({
+          ok: false,
+          status: 500,
+          statusText: 'Internal Server Error',
+          json: async () => ({
+            error: 'INTERNAL_ERROR',
+            message: 'Authentication service unavailable',
+          }),
+        });
+
+        const result = await loginWithCredentials('testadmin', 'testpassword');
+
+        expect(result.success).toBe(false);
+        if (!result.success) {
+          expect(result.error).toBe('INTERNAL_ERROR');
+          expect(result.message).toBe('Authentication service unavailable');
+        }
+      });
+
+      it('should handle 503 Service Unavailable', async () => {
+        // PROVES: Service downtime scenarios are handled
+        global.fetch = vi.fn().mockResolvedValue({
+          ok: false,
+          status: 503,
+          statusText: 'Service Unavailable',
+          json: async () => ({
+            error: 'SERVICE_UNAVAILABLE',
+            message: 'Server is temporarily unavailable',
+          }),
+        });
+
+        const result = await loginWithCredentials('testadmin', 'testpassword');
+
+        expect(result.success).toBe(false);
+        if (!result.success) {
+          expect(result.error).toBe('SERVICE_UNAVAILABLE');
+          expect(result.message).toBe('Server is temporarily unavailable');
+        }
+      });
+
+      it('should handle error response without JSON body', async () => {
+        // PROVES: Non-JSON error responses fall back to status text
+        global.fetch = vi.fn().mockResolvedValue({
+          ok: false,
+          status: 401,
+          statusText: 'Unauthorized',
+          json: async () => {
+            throw new Error('Not JSON');
+          },
+        });
+
+        const result = await loginWithCredentials('testadmin', 'testpassword');
+
+        expect(result.success).toBe(false);
+        if (!result.success) {
+          expect(result.error).toBe('API_ERROR');
+          expect(result.message).toBe('HTTP 401: Unauthorized');
+        }
+      });
     });
   });
 });

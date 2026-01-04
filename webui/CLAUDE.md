@@ -22,7 +22,8 @@ npm run test:run -- src/__tests__/api.test.ts  # Run single test file
 
 Create `.env.local` for development:
 - `VITE_API_URL` - Admin API base URL (default: `http://localhost:3000`)
-- `VITE_API_TOKEN` - Bearer token for API auth (matches bot's ADMIN_API_TOKEN)
+- `VITE_AUTH_MODE` - Authentication mode: 'token' (default) or 'credentials'
+- `VITE_API_TOKEN` - Bearer token for API auth (used in 'token' mode, matches bot's ADMIN_API_TOKEN)
 
 ## Architecture
 
@@ -38,7 +39,9 @@ Admin webui for the ShawnBot Discord bot. Communicates with the parent bot's Adm
 
 The webui consumes the bot's Admin API running at `http://127.0.0.1:3000`.
 
-**Authentication:** Bearer token in `Authorization` header for all `/api/*` endpoints.
+**Authentication Modes:**
+- **Token mode** (default, `VITE_AUTH_MODE=token`): Enter bearer token directly. Token is included in `Authorization: Bearer <token>` header for all requests.
+- **Credentials mode** (`VITE_AUTH_MODE=credentials`): Enter username/password. Webui exchanges credentials with `/api/auth/login` endpoint to receive a session token, then uses session token for subsequent requests.
 
 **Endpoints:**
 | Endpoint | Method | Auth | Response |

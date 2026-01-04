@@ -11,7 +11,8 @@
     "test": "vitest",
     "test:run": "vitest run",
     "lint": "eslint src --ext .ts",
-    "lint:fix": "eslint src --ext .ts --fix"
+    "lint:fix": "eslint src --ext .ts --fix",
+    "dev:all": "concurrently -n bot,webui -c blue,magenta \"npm run dev\" \"npm run dev --prefix webui\""
   },
   "keywords": [
     "discord",
@@ -22,6 +23,7 @@
   "license": "MIT",
   "dependencies": {
     "@discordjs/voice": "^0.18.0",
+    "bcrypt": "^6.0.0",
     "better-sqlite3": "^11.0.0",
     "discord.js": "^14.14.0",
     "dotenv": "^16.4.0",
@@ -30,12 +32,14 @@
     "zod": "^3.23.0"
   },
   "devDependencies": {
+    "@types/bcrypt": "^6.0.0",
     "@types/better-sqlite3": "^7.6.11",
     "@types/express": "^5.0.6",
     "@types/node": "^22.0.0",
     "@types/supertest": "^6.0.3",
     "@typescript-eslint/eslint-plugin": "^7.0.0",
     "@typescript-eslint/parser": "^7.0.0",
+    "concurrently": "^9.2.1",
     "eslint": "^8.57.0",
     "pino-pretty": "^11.0.0",
     "supertest": "^7.1.4",

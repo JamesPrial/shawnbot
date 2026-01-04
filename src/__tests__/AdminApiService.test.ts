@@ -87,7 +87,10 @@ describe('AdminApiService', () => {
       voiceConnectionManager: mockVoiceManager,
       logger: mockLogger,
       port: testPort,
-      token: 'test-token-123',
+      token: 'FAKE_TEST_TOKEN_NOT_A_SECRET',
+      bindAddress: '127.0.0.1',
+      username: undefined,
+      passwordHash: undefined,
     });
   });
 
@@ -153,7 +156,8 @@ describe('AdminApiService', () => {
           voiceConnectionManager: mockVoiceManager,
           logger: mockLogger,
           port: testPort,
-          token: 'test-token-456',
+          token: 'FAKE_TEST_TOKEN_NOT_A_SECRET',
+          bindAddress: '127.0.0.1',
         });
 
         // Second service should fail to start
@@ -210,7 +214,7 @@ describe('AdminApiService', () => {
         const app = service.getApp();
         const response = await request(app)
           .get('/api/status')
-          .set('Authorization', 'NotBearer test-token-123')
+          .set('Authorization', 'NotBearer FAKE_TEST_TOKEN_NOT_A_SECRET')
           .expect(401);
 
         expect(response.body).toEqual({
@@ -238,7 +242,7 @@ describe('AdminApiService', () => {
         const app = service.getApp();
         const response = await request(app)
           .get('/api/status')
-          .set('Authorization', 'Bearer test-token-123')
+          .set('Authorization', 'Bearer FAKE_TEST_TOKEN_NOT_A_SECRET')
           .expect(200);
 
         // Should not be an auth error
@@ -249,7 +253,7 @@ describe('AdminApiService', () => {
         const app = service.getApp();
         const response = await request(app)
           .get('/api/status')
-          .set('Authorization', 'Bearer  test-token-123  ')
+          .set('Authorization', 'Bearer  FAKE_TEST_TOKEN_NOT_A_SECRET  ')
           .expect(401);
 
         expect(response.body.error).toBe('Unauthorized');
@@ -284,7 +288,7 @@ describe('AdminApiService', () => {
         // Test authenticated endpoint
         const statusResponse = await request(app)
           .get('/api/status')
-          .set('Authorization', 'Bearer test-token-123');
+          .set('Authorization', 'Bearer FAKE_TEST_TOKEN_NOT_A_SECRET');
         expect(statusResponse.headers['content-type']).toMatch(/application\/json/);
       });
 
@@ -298,7 +302,7 @@ describe('AdminApiService', () => {
         // 404 error
         const notFoundResponse = await request(app)
           .get('/api/nonexistent')
-          .set('Authorization', 'Bearer test-token-123');
+          .set('Authorization', 'Bearer FAKE_TEST_TOKEN_NOT_A_SECRET');
         expect(notFoundResponse.headers['content-type']).toMatch(/application\/json/);
       });
     });
@@ -370,7 +374,7 @@ describe('AdminApiService', () => {
         const app = service.getApp();
         const response = await request(app)
           .get('/api/status')
-          .set('Authorization', 'Bearer test-token-123')
+          .set('Authorization', 'Bearer FAKE_TEST_TOKEN_NOT_A_SECRET')
           .expect(200);
 
         expect(response.body).toEqual({
@@ -398,7 +402,7 @@ describe('AdminApiService', () => {
         const app = service.getApp();
         const response = await request(app)
           .get('/api/status')
-          .set('Authorization', 'Bearer test-token-123')
+          .set('Authorization', 'Bearer FAKE_TEST_TOKEN_NOT_A_SECRET')
           .expect(200);
 
         expect(response.body.memory.heapUsed).toBeGreaterThan(0);
@@ -421,7 +425,7 @@ describe('AdminApiService', () => {
         const app = service.getApp();
         const response = await request(app)
           .post(`/api/guilds/${guildId}/enable`)
-          .set('Authorization', 'Bearer test-token-123')
+          .set('Authorization', 'Bearer FAKE_TEST_TOKEN_NOT_A_SECRET')
           .expect(200);
 
         expect(response.body).toEqual({
@@ -450,7 +454,7 @@ describe('AdminApiService', () => {
         const app = service.getApp();
         const response = await request(app)
           .post('/api/guilds/invalid-id/enable')
-          .set('Authorization', 'Bearer test-token-123')
+          .set('Authorization', 'Bearer FAKE_TEST_TOKEN_NOT_A_SECRET')
           .expect(400);
 
         expect(response.body).toEqual({
@@ -464,7 +468,7 @@ describe('AdminApiService', () => {
         const app = service.getApp();
         const response = await request(app)
           .post('/api/guilds//enable')
-          .set('Authorization', 'Bearer test-token-123')
+          .set('Authorization', 'Bearer FAKE_TEST_TOKEN_NOT_A_SECRET')
           .expect(404); // Express treats this as /api/guilds/enable which doesn't match the route
 
         expect(mockConfigService.updateConfig).not.toHaveBeenCalled();
@@ -483,7 +487,7 @@ describe('AdminApiService', () => {
         const app = service.getApp();
         const response = await request(app)
           .post(`/api/guilds/${guildId}/enable`)
-          .set('Authorization', 'Bearer test-token-123')
+          .set('Authorization', 'Bearer FAKE_TEST_TOKEN_NOT_A_SECRET')
           .expect(200);
 
         expect(response.body.success).toBe(true);
@@ -503,7 +507,7 @@ describe('AdminApiService', () => {
         const app = service.getApp();
         const response = await request(app)
           .post(`/api/guilds/${guildId}/enable`)
-          .set('Authorization', 'Bearer test-token-123')
+          .set('Authorization', 'Bearer FAKE_TEST_TOKEN_NOT_A_SECRET')
           .expect(500);
 
         expect(response.body).toEqual({
@@ -527,7 +531,7 @@ describe('AdminApiService', () => {
         const app = service.getApp();
         const response = await request(app)
           .post(`/api/guilds/${guildId}/disable`)
-          .set('Authorization', 'Bearer test-token-123')
+          .set('Authorization', 'Bearer FAKE_TEST_TOKEN_NOT_A_SECRET')
           .expect(200);
 
         expect(response.body).toEqual({
@@ -556,7 +560,7 @@ describe('AdminApiService', () => {
         const app = service.getApp();
         const response = await request(app)
           .post('/api/guilds/not-a-number/disable')
-          .set('Authorization', 'Bearer test-token-123')
+          .set('Authorization', 'Bearer FAKE_TEST_TOKEN_NOT_A_SECRET')
           .expect(400);
 
         expect(response.body).toEqual({
@@ -579,7 +583,7 @@ describe('AdminApiService', () => {
         const app = service.getApp();
         const response = await request(app)
           .post(`/api/guilds/${guildId}/disable`)
-          .set('Authorization', 'Bearer test-token-123')
+          .set('Authorization', 'Bearer FAKE_TEST_TOKEN_NOT_A_SECRET')
           .expect(200);
 
         expect(response.body.success).toBe(true);
@@ -622,7 +626,7 @@ describe('AdminApiService', () => {
         const app = service.getApp();
         const response = await request(app)
           .get('/api/guilds')
-          .set('Authorization', 'Bearer test-token-123')
+          .set('Authorization', 'Bearer FAKE_TEST_TOKEN_NOT_A_SECRET')
           .expect(200);
 
         expect(response.body).toEqual({
@@ -658,7 +662,7 @@ describe('AdminApiService', () => {
         const app = service.getApp();
         const response = await request(app)
           .get('/api/guilds')
-          .set('Authorization', 'Bearer test-token-123')
+          .set('Authorization', 'Bearer FAKE_TEST_TOKEN_NOT_A_SECRET')
           .expect(200);
 
         expect(response.body).toEqual({
@@ -712,7 +716,7 @@ describe('AdminApiService', () => {
         const app = service.getApp();
         const response = await request(app)
           .get('/api/guilds')
-          .set('Authorization', 'Bearer test-token-123')
+          .set('Authorization', 'Bearer FAKE_TEST_TOKEN_NOT_A_SECRET')
           .expect(200);
 
         // Verify enabled status matches config service
@@ -746,7 +750,7 @@ describe('AdminApiService', () => {
         const app = service.getApp();
         const response = await request(app)
           .get('/api/guilds')
-          .set('Authorization', 'Bearer test-token-123')
+          .set('Authorization', 'Bearer FAKE_TEST_TOKEN_NOT_A_SECRET')
           .expect(200);
 
         // Verify connected status matches voice manager
@@ -775,7 +779,7 @@ describe('AdminApiService', () => {
         const app = service.getApp();
         const response = await request(app)
           .get('/api/guilds')
-          .set('Authorization', 'Bearer test-token-123')
+          .set('Authorization', 'Bearer FAKE_TEST_TOKEN_NOT_A_SECRET')
           .expect(200);
 
         expect(response.body.guilds).toHaveLength(1);
@@ -808,7 +812,7 @@ describe('AdminApiService', () => {
         const app = service.getApp();
         const response = await request(app)
           .get('/api/guilds')
-          .set('Authorization', 'Bearer test-token-123')
+          .set('Authorization', 'Bearer FAKE_TEST_TOKEN_NOT_A_SECRET')
           .expect(200);
 
         expect(response.body.guilds).toHaveLength(100);
@@ -833,7 +837,7 @@ describe('AdminApiService', () => {
         const app = service.getApp();
         const response = await request(app)
           .get('/api/guilds')
-          .set('Authorization', 'Bearer test-token-123')
+          .set('Authorization', 'Bearer FAKE_TEST_TOKEN_NOT_A_SECRET')
           .expect(200);
 
         expect(response.body.guilds[0]?.name).toBe('My Awesome Discord Server');
@@ -858,7 +862,7 @@ describe('AdminApiService', () => {
         const app = service.getApp();
         const response = await request(app)
           .get('/api/guilds')
-          .set('Authorization', 'Bearer test-token-123')
+          .set('Authorization', 'Bearer FAKE_TEST_TOKEN_NOT_A_SECRET')
           .expect(200);
 
         expect(response.body.guilds[0]?.name).toBe("Bob's Server ™ 🎮");
@@ -884,7 +888,7 @@ describe('AdminApiService', () => {
         const app = service.getApp();
         await request(app)
           .get('/api/guilds')
-          .set('Authorization', 'Bearer test-token-123')
+          .set('Authorization', 'Bearer FAKE_TEST_TOKEN_NOT_A_SECRET')
           .expect(200);
 
         expect(mockLogger.info).toHaveBeenCalledWith(
@@ -913,7 +917,7 @@ describe('AdminApiService', () => {
         const app = service.getApp();
         const response = await request(app)
           .get(`/api/guilds/${guildId}/status`)
-          .set('Authorization', 'Bearer test-token-123')
+          .set('Authorization', 'Bearer FAKE_TEST_TOKEN_NOT_A_SECRET')
           .expect(200);
 
         expect(response.body).toEqual({
@@ -939,7 +943,7 @@ describe('AdminApiService', () => {
         const app = service.getApp();
         const response = await request(app)
           .get('/api/guilds/abc123/status')
-          .set('Authorization', 'Bearer test-token-123')
+          .set('Authorization', 'Bearer FAKE_TEST_TOKEN_NOT_A_SECRET')
           .expect(400);
 
         expect(response.body).toEqual({
@@ -958,7 +962,7 @@ describe('AdminApiService', () => {
         const app = service.getApp();
         const response = await request(app)
           .get(`/api/guilds/${guildId}/status`)
-          .set('Authorization', 'Bearer test-token-123')
+          .set('Authorization', 'Bearer FAKE_TEST_TOKEN_NOT_A_SECRET')
           .expect(200);
 
         // Should return guild config
@@ -977,7 +981,7 @@ describe('AdminApiService', () => {
         const app = service.getApp();
         const response = await request(app)
           .get(`/api/guilds/${guildId}/status`)
-          .set('Authorization', 'Bearer test-token-123')
+          .set('Authorization', 'Bearer FAKE_TEST_TOKEN_NOT_A_SECRET')
           .expect(200);
 
         expect(response.body.connected).toBe(false);
@@ -993,7 +997,7 @@ describe('AdminApiService', () => {
         const app = service.getApp();
         const response = await request(app)
           .get(`/api/guilds/${guildId}/status`)
-          .set('Authorization', 'Bearer test-token-123')
+          .set('Authorization', 'Bearer FAKE_TEST_TOKEN_NOT_A_SECRET')
           .expect(200);
 
         expect(response.body.enabled).toBe(false);
@@ -1005,7 +1009,7 @@ describe('AdminApiService', () => {
         const app = service.getApp();
         const response = await request(app)
           .get('/api/nonexistent/route')
-          .set('Authorization', 'Bearer test-token-123')
+          .set('Authorization', 'Bearer FAKE_TEST_TOKEN_NOT_A_SECRET')
           .expect(404);
 
         expect(response.body).toEqual({
@@ -1025,7 +1029,7 @@ describe('AdminApiService', () => {
         const app = service.getApp();
         const response = await request(app)
           .get(`/api/guilds/${guildId}/status`)
-          .set('Authorization', 'Bearer test-token-123')
+          .set('Authorization', 'Bearer FAKE_TEST_TOKEN_NOT_A_SECRET')
           .expect(200);
 
         expect(response.body.guildId).toBe(guildId);
@@ -1035,7 +1039,7 @@ describe('AdminApiService', () => {
         const app = service.getApp();
         const response = await request(app)
           .get('/api/guilds/123;DROP%20TABLE/status')
-          .set('Authorization', 'Bearer test-token-123')
+          .set('Authorization', 'Bearer FAKE_TEST_TOKEN_NOT_A_SECRET')
           .expect(400);
 
         expect(response.body.error).toBe('Bad Request');
@@ -1045,7 +1049,7 @@ describe('AdminApiService', () => {
         const app = service.getApp();
         const response = await request(app)
           .post('/api/status')
-          .set('Authorization', 'Bearer test-token-123')
+          .set('Authorization', 'Bearer FAKE_TEST_TOKEN_NOT_A_SECRET')
           .expect(404);
 
         expect(response.body.error).toBe('Not Found');
@@ -1055,7 +1059,7 @@ describe('AdminApiService', () => {
         const app = service.getApp();
         const response = await request(app)
           .get('/api/guilds/123456789/enable')
-          .set('Authorization', 'Bearer test-token-123')
+          .set('Authorization', 'Bearer FAKE_TEST_TOKEN_NOT_A_SECRET')
           .expect(404);
 
         expect(response.body.error).toBe('Not Found');
@@ -1067,7 +1071,7 @@ describe('AdminApiService', () => {
         const app = service.getApp();
         const response = await request(app)
           .get('/api/status')
-          .set('Authorization', 'Bearer test-token-123')
+          .set('Authorization', 'Bearer FAKE_TEST_TOKEN_NOT_A_SECRET')
           .expect(200);
 
         // Should still return data with memory metrics
@@ -1168,7 +1172,7 @@ describe('AdminApiService', () => {
         const app = service.getApp();
         const response = await request(app)
           .get('/api/guilds')
-          .set('Authorization', 'Bearer test-token-123')
+          .set('Authorization', 'Bearer FAKE_TEST_TOKEN_NOT_A_SECRET')
           .expect(200);
 
         expect(response.body).toEqual({
@@ -1216,7 +1220,7 @@ describe('AdminApiService', () => {
         const app = service.getApp();
         const response = await request(app)
           .get('/api/guilds')
-          .set('Authorization', 'Bearer test-token-123')
+          .set('Authorization', 'Bearer FAKE_TEST_TOKEN_NOT_A_SECRET')
           .expect(200);
 
         expect(response.body).toEqual({
@@ -1265,7 +1269,7 @@ describe('AdminApiService', () => {
         const app = service.getApp();
         const response = await request(app)
           .get('/api/guilds')
-          .set('Authorization', 'Bearer test-token-123')
+          .set('Authorization', 'Bearer FAKE_TEST_TOKEN_NOT_A_SECRET')
           .expect(200);
 
         expect(response.body.guilds[0]).toMatchObject({
@@ -1288,7 +1292,7 @@ describe('AdminApiService', () => {
         const app = service.getApp();
         await request(app)
           .get('/api/guilds')
-          .set('Authorization', 'Bearer test-token-123')
+          .set('Authorization', 'Bearer FAKE_TEST_TOKEN_NOT_A_SECRET')
           .expect(200);
 
         // Verify audit logging occurred (logger.info should be called)
@@ -1320,7 +1324,7 @@ describe('AdminApiService', () => {
         for (const invalidId of invalidIds) {
           const response = await request(app)
             .get(`/api/guilds/${invalidId}/config`)
-            .set('Authorization', 'Bearer test-token-123')
+            .set('Authorization', 'Bearer FAKE_TEST_TOKEN_NOT_A_SECRET')
             .expect(400);
 
           expect(response.body).toEqual({
@@ -1337,7 +1341,7 @@ describe('AdminApiService', () => {
         const app = service.getApp();
         const response = await request(app)
           .get(`/api/guilds/${guildId}/config`)
-          .set('Authorization', 'Bearer test-token-123')
+          .set('Authorization', 'Bearer FAKE_TEST_TOKEN_NOT_A_SECRET')
           .expect(404);
 
         expect(response.body).toEqual({
@@ -1366,7 +1370,7 @@ describe('AdminApiService', () => {
         const app = service.getApp();
         const response = await request(app)
           .get(`/api/guilds/${guildId}/config`)
-          .set('Authorization', 'Bearer test-token-123')
+          .set('Authorization', 'Bearer FAKE_TEST_TOKEN_NOT_A_SECRET')
           .expect(200);
 
         // Must have exactly 7 fields
@@ -1397,7 +1401,7 @@ describe('AdminApiService', () => {
         const app = service.getApp();
         const response = await request(app)
           .get(`/api/guilds/${guildId}/config`)
-          .set('Authorization', 'Bearer test-token-123')
+          .set('Authorization', 'Bearer FAKE_TEST_TOKEN_NOT_A_SECRET')
           .expect(200);
 
         expect(response.body.warningChannelId).toBeNull();
@@ -1419,7 +1423,7 @@ describe('AdminApiService', () => {
         const app = service.getApp();
         const response = await request(app)
           .get(`/api/guilds/${guildId}/config`)
-          .set('Authorization', 'Bearer test-token-123')
+          .set('Authorization', 'Bearer FAKE_TEST_TOKEN_NOT_A_SECRET')
           .expect(200);
 
         expect(response.body.exemptRoleIds).toEqual([]);
@@ -1438,7 +1442,7 @@ describe('AdminApiService', () => {
         const app = service.getApp();
         await request(app)
           .get(`/api/guilds/${guildId}/config`)
-          .set('Authorization', 'Bearer test-token-123')
+          .set('Authorization', 'Bearer FAKE_TEST_TOKEN_NOT_A_SECRET')
           .expect(200);
 
         expect(mockLogger.info).toHaveBeenCalledWith(
@@ -1467,7 +1471,7 @@ describe('AdminApiService', () => {
         const app = service.getApp();
         const response = await request(app)
           .put('/api/guilds/invalid-id/config')
-          .set('Authorization', 'Bearer test-token-123')
+          .set('Authorization', 'Bearer FAKE_TEST_TOKEN_NOT_A_SECRET')
           .send({ enabled: true })
           .expect(400);
 
@@ -1482,7 +1486,7 @@ describe('AdminApiService', () => {
         const app = service.getApp();
         const response = await request(app)
           .put(`/api/guilds/${guildId}/config`)
-          .set('Authorization', 'Bearer test-token-123')
+          .set('Authorization', 'Bearer FAKE_TEST_TOKEN_NOT_A_SECRET')
           .send({ enabled: true })
           .expect(404);
 
@@ -1497,7 +1501,7 @@ describe('AdminApiService', () => {
         const app = service.getApp();
         const response = await request(app)
           .put(`/api/guilds/${guildId}/config`)
-          .set('Authorization', 'Bearer test-token-123')
+          .set('Authorization', 'Bearer FAKE_TEST_TOKEN_NOT_A_SECRET')
           .send({ afkTimeoutSeconds: 'not-a-number' })
           .expect(400);
 
@@ -1515,7 +1519,7 @@ describe('AdminApiService', () => {
         for (const invalidValue of invalidValues) {
           const response = await request(app)
             .put(`/api/guilds/${guildId}/config`)
-            .set('Authorization', 'Bearer test-token-123')
+            .set('Authorization', 'Bearer FAKE_TEST_TOKEN_NOT_A_SECRET')
             .send({ afkTimeoutSeconds: invalidValue })
             .expect(400);
 
@@ -1531,7 +1535,7 @@ describe('AdminApiService', () => {
         const app = service.getApp();
         const response = await request(app)
           .put(`/api/guilds/${guildId}/config`)
-          .set('Authorization', 'Bearer test-token-123')
+          .set('Authorization', 'Bearer FAKE_TEST_TOKEN_NOT_A_SECRET')
           .send({ warningSecondsBefore: 'invalid' })
           .expect(400);
 
@@ -1546,7 +1550,7 @@ describe('AdminApiService', () => {
         const app = service.getApp();
         const response = await request(app)
           .put(`/api/guilds/${guildId}/config`)
-          .set('Authorization', 'Bearer test-token-123')
+          .set('Authorization', 'Bearer FAKE_TEST_TOKEN_NOT_A_SECRET')
           .send({ warningSecondsBefore: -5 })
           .expect(400);
 
@@ -1564,7 +1568,7 @@ describe('AdminApiService', () => {
         for (const invalidValue of invalidValues) {
           const response = await request(app)
             .put(`/api/guilds/${guildId}/config`)
-            .set('Authorization', 'Bearer test-token-123')
+            .set('Authorization', 'Bearer FAKE_TEST_TOKEN_NOT_A_SECRET')
             .send({ warningChannelId: invalidValue })
             .expect(400);
 
@@ -1582,7 +1586,7 @@ describe('AdminApiService', () => {
         for (const invalidSnowflake of invalidSnowflakes) {
           const response = await request(app)
             .put(`/api/guilds/${guildId}/config`)
-            .set('Authorization', 'Bearer test-token-123')
+            .set('Authorization', 'Bearer FAKE_TEST_TOKEN_NOT_A_SECRET')
             .send({ warningChannelId: invalidSnowflake })
             .expect(400);
 
@@ -1601,7 +1605,7 @@ describe('AdminApiService', () => {
         for (const invalidValue of invalidValues) {
           const response = await request(app)
             .put(`/api/guilds/${guildId}/config`)
-            .set('Authorization', 'Bearer test-token-123')
+            .set('Authorization', 'Bearer FAKE_TEST_TOKEN_NOT_A_SECRET')
             .send({ exemptRoleIds: invalidValue })
             .expect(400);
 
@@ -1617,7 +1621,7 @@ describe('AdminApiService', () => {
         const app = service.getApp();
         const response = await request(app)
           .put(`/api/guilds/${guildId}/config`)
-          .set('Authorization', 'Bearer test-token-123')
+          .set('Authorization', 'Bearer FAKE_TEST_TOKEN_NOT_A_SECRET')
           .send({ exemptRoleIds: ['11111111111111111', 'invalid', '22222222222222222'] })
           .expect(400);
 
@@ -1632,7 +1636,7 @@ describe('AdminApiService', () => {
         const app = service.getApp();
         const response = await request(app)
           .put(`/api/guilds/${guildId}/config`)
-          .set('Authorization', 'Bearer test-token-123')
+          .set('Authorization', 'Bearer FAKE_TEST_TOKEN_NOT_A_SECRET')
           .send({ adminRoleIds: 'not-an-array' })
           .expect(400);
 
@@ -1647,7 +1651,7 @@ describe('AdminApiService', () => {
         const app = service.getApp();
         const response = await request(app)
           .put(`/api/guilds/${guildId}/config`)
-          .set('Authorization', 'Bearer test-token-123')
+          .set('Authorization', 'Bearer FAKE_TEST_TOKEN_NOT_A_SECRET')
           .send({ adminRoleIds: ['11111111111111111', 'bad-id'] })
           .expect(400);
 
@@ -1672,7 +1676,7 @@ describe('AdminApiService', () => {
         const app = service.getApp();
         const response = await request(app)
           .put(`/api/guilds/${guildId}/config`)
-          .set('Authorization', 'Bearer test-token-123')
+          .set('Authorization', 'Bearer FAKE_TEST_TOKEN_NOT_A_SECRET')
           .send({ enabled: true })
           .expect(200);
 
@@ -1701,7 +1705,7 @@ describe('AdminApiService', () => {
         const app = service.getApp();
         const response = await request(app)
           .put(`/api/guilds/${guildId}/config`)
-          .set('Authorization', 'Bearer test-token-123')
+          .set('Authorization', 'Bearer FAKE_TEST_TOKEN_NOT_A_SECRET')
           .send({
             enabled: false,
             afkTimeoutSeconds: 900,
@@ -1746,7 +1750,7 @@ describe('AdminApiService', () => {
         const app = service.getApp();
         await request(app)
           .put(`/api/guilds/${guildId}/config`)
-          .set('Authorization', 'Bearer test-token-123')
+          .set('Authorization', 'Bearer FAKE_TEST_TOKEN_NOT_A_SECRET')
           .send(updateData)
           .expect(200);
 
@@ -1773,7 +1777,7 @@ describe('AdminApiService', () => {
         const app = service.getApp();
         const response = await request(app)
           .put(`/api/guilds/${guildId}/config`)
-          .set('Authorization', 'Bearer test-token-123')
+          .set('Authorization', 'Bearer FAKE_TEST_TOKEN_NOT_A_SECRET')
           .send({ afkTimeoutSeconds: 1200 })
           .expect(200);
 
@@ -1800,7 +1804,7 @@ describe('AdminApiService', () => {
         const app = service.getApp();
         await request(app)
           .put(`/api/guilds/${guildId}/config`)
-          .set('Authorization', 'Bearer test-token-123')
+          .set('Authorization', 'Bearer FAKE_TEST_TOKEN_NOT_A_SECRET')
           .send({ enabled: false })
           .expect(200);
 
@@ -1824,7 +1828,7 @@ describe('AdminApiService', () => {
         const app = service.getApp();
         const response = await request(app)
           .put(`/api/guilds/${guildId}/config`)
-          .set('Authorization', 'Bearer test-token-123')
+          .set('Authorization', 'Bearer FAKE_TEST_TOKEN_NOT_A_SECRET')
           .send({ enabled: true })
           .expect(500);
 
@@ -1847,7 +1851,7 @@ describe('AdminApiService', () => {
         const app = service.getApp();
         const response = await request(app)
           .put(`/api/guilds/${guildId}/config`)
-          .set('Authorization', 'Bearer test-token-123')
+          .set('Authorization', 'Bearer FAKE_TEST_TOKEN_NOT_A_SECRET')
           .send({ warningChannelId: null })
           .expect(200);
 
@@ -1871,7 +1875,7 @@ describe('AdminApiService', () => {
         const app = service.getApp();
         const response = await request(app)
           .put(`/api/guilds/${guildId}/config`)
-          .set('Authorization', 'Bearer test-token-123')
+          .set('Authorization', 'Bearer FAKE_TEST_TOKEN_NOT_A_SECRET')
           .send({ exemptRoleIds: [], adminRoleIds: [] })
           .expect(200);
 
@@ -1886,7 +1890,7 @@ describe('AdminApiService', () => {
         const app = service.getApp();
         const response = await request(app)
           .put(`/api/guilds/${guildId}/config`)
-          .set('Authorization', 'Bearer test-token-123')
+          .set('Authorization', 'Bearer FAKE_TEST_TOKEN_NOT_A_SECRET')
           .send({})
           .expect(400);
 
@@ -1901,7 +1905,7 @@ describe('AdminApiService', () => {
         const app = service.getApp();
         const response = await request(app)
           .put(`/api/guilds/${guildId}/config`)
-          .set('Authorization', 'Bearer test-token-123')
+          .set('Authorization', 'Bearer FAKE_TEST_TOKEN_NOT_A_SECRET')
           .send({ unknownField: 'bad', enabled: true })
           .expect(400);
 
@@ -1925,7 +1929,7 @@ describe('AdminApiService', () => {
         const app = service.getApp();
         const response = await request(app)
           .delete('/api/guilds/not-valid/config')
-          .set('Authorization', 'Bearer test-token-123')
+          .set('Authorization', 'Bearer FAKE_TEST_TOKEN_NOT_A_SECRET')
           .expect(400);
 
         expect(response.body.message).toContain('Invalid guild ID');
@@ -1939,7 +1943,7 @@ describe('AdminApiService', () => {
         const app = service.getApp();
         const response = await request(app)
           .delete(`/api/guilds/${guildId}/config`)
-          .set('Authorization', 'Bearer test-token-123')
+          .set('Authorization', 'Bearer FAKE_TEST_TOKEN_NOT_A_SECRET')
           .expect(404);
 
         expect(response.body.error).toBe('Not Found');
@@ -1954,7 +1958,7 @@ describe('AdminApiService', () => {
         const app = service.getApp();
         await request(app)
           .delete(`/api/guilds/${guildId}/config`)
-          .set('Authorization', 'Bearer test-token-123')
+          .set('Authorization', 'Bearer FAKE_TEST_TOKEN_NOT_A_SECRET')
           .expect(200);
 
         expect(mockConfigService.resetConfig).toHaveBeenCalledTimes(1);
@@ -1969,7 +1973,7 @@ describe('AdminApiService', () => {
         const app = service.getApp();
         const response = await request(app)
           .delete(`/api/guilds/${guildId}/config`)
-          .set('Authorization', 'Bearer test-token-123')
+          .set('Authorization', 'Bearer FAKE_TEST_TOKEN_NOT_A_SECRET')
           .expect(200);
 
         expect(response.body).toEqual({
@@ -1987,7 +1991,7 @@ describe('AdminApiService', () => {
         const app = service.getApp();
         await request(app)
           .delete(`/api/guilds/${guildId}/config`)
-          .set('Authorization', 'Bearer test-token-123')
+          .set('Authorization', 'Bearer FAKE_TEST_TOKEN_NOT_A_SECRET')
           .expect(200);
 
         expect(mockLogger.info).toHaveBeenCalledWith(
@@ -2010,7 +2014,7 @@ describe('AdminApiService', () => {
         const app = service.getApp();
         const response = await request(app)
           .delete(`/api/guilds/${guildId}/config`)
-          .set('Authorization', 'Bearer test-token-123')
+          .set('Authorization', 'Bearer FAKE_TEST_TOKEN_NOT_A_SECRET')
           .expect(500);
 
         expect(response.body).toEqual({
@@ -2027,11 +2031,787 @@ describe('AdminApiService', () => {
         const app = service.getApp();
         const response = await request(app)
           .delete(`/api/guilds/${guildId}/config`)
-          .set('Authorization', 'Bearer test-token-123')
+          .set('Authorization', 'Bearer FAKE_TEST_TOKEN_NOT_A_SECRET')
           .expect(200);
 
         // Should succeed idempotently
         expect(response.body.success).toBe(true);
+      });
+    });
+  });
+
+  describe('WU-2: Backend Login Endpoint + Session Management', () => {
+    describe('POST /api/login', () => {
+      describe('when username/password authentication is configured', () => {
+        let serviceWithCredentials: any;
+
+        beforeEach(async () => {
+          // Create service with username/password credentials
+          serviceWithCredentials = new AdminApiService({
+            client: mockClient,
+            guildConfigService: mockConfigService,
+            afkDetectionService: mockAfkService,
+            voiceConnectionManager: mockVoiceManager,
+            logger: mockLogger,
+            port: testPort + 100,
+            token: 'FAKE_TEST_TOKEN_NOT_A_SECRET',
+            username: 'admin',
+            // bcrypt hash of 'correctpassword' with rounds=10
+            passwordHash: '$2b$10$Mra.F.uMhHxtpT4m4nOKm.HMlenbF7tHZc6LbmWkFNuqiLQVePzcK',
+          });
+          await serviceWithCredentials.start();
+        });
+
+        afterEach(async () => {
+          await serviceWithCredentials.stop();
+        });
+
+        it('should return session token with correct username and password', async () => {
+          const app = serviceWithCredentials.getApp();
+          const response = await request(app)
+            .post('/api/auth/login')
+            .send({
+              username: 'admin',
+              password: 'correctpassword',
+            })
+            .expect(200);
+
+          expect(response.body).toEqual({
+            token: expect.any(String),
+            expiresAt: expect.any(Number),
+          });
+          expect(response.body.token).toMatch(/^[0-9a-f]+$/); // Hex token
+          expect(response.body.token.length).toBeGreaterThan(20);
+          expect(response.body.expiresAt).toBeGreaterThan(0);
+          expect(response.headers['content-type']).toMatch(/application\/json/);
+        });
+
+        it('should return 401 with generic message for wrong password', async () => {
+          const app = serviceWithCredentials.getApp();
+          const response = await request(app)
+            .post('/api/auth/login')
+            .send({
+              username: 'admin',
+              password: 'wrongpassword',
+            })
+            .expect(401);
+
+          expect(response.body).toEqual({
+            error: 'Unauthorized',
+            message: 'Invalid credentials',
+          });
+          expect(response.headers['content-type']).toMatch(/application\/json/);
+        });
+
+        it('should return 401 with same generic message for wrong username (no user enumeration)', async () => {
+          const app = serviceWithCredentials.getApp();
+          const response = await request(app)
+            .post('/api/auth/login')
+            .send({
+              username: 'wronguser',
+              password: 'correctpassword',
+            })
+            .expect(401);
+
+          // Same message as wrong password to prevent user enumeration
+          expect(response.body).toEqual({
+            error: 'Unauthorized',
+            message: 'Invalid credentials',
+          });
+        });
+
+        it('should return 400 for missing username field', async () => {
+          const app = serviceWithCredentials.getApp();
+          const response = await request(app)
+            .post('/api/auth/login')
+            .send({
+              password: 'correctpassword',
+            })
+            .expect(400);
+
+          expect(response.body.error).toBeDefined();
+          expect(response.body.message).toBeDefined();
+        });
+
+        it('should return 400 for missing password field', async () => {
+          const app = serviceWithCredentials.getApp();
+          const response = await request(app)
+            .post('/api/auth/login')
+            .send({
+              username: 'admin',
+            })
+            .expect(400);
+
+          expect(response.body.error).toBeDefined();
+          expect(response.body.message).toBeDefined();
+        });
+
+        it('should return 400 for empty username', async () => {
+          const app = serviceWithCredentials.getApp();
+          const response = await request(app)
+            .post('/api/auth/login')
+            .send({
+              username: '',
+              password: 'correctpassword',
+            })
+            .expect(400);
+
+          expect(response.body.error).toBeDefined();
+        });
+
+        it('should return 400 for empty password', async () => {
+          const app = serviceWithCredentials.getApp();
+          const response = await request(app)
+            .post('/api/auth/login')
+            .send({
+              username: 'admin',
+              password: '',
+            })
+            .expect(400);
+
+          expect(response.body.error).toBeDefined();
+        });
+
+        it('should return error for malformed JSON body', async () => {
+          const app = serviceWithCredentials.getApp();
+          // Express returns 400 or 500 for JSON parse errors depending on version
+          const response = await request(app)
+            .post('/api/auth/login')
+            .set('Content-Type', 'application/json')
+            .send('{"invalid json}');
+
+          // Should be an error status (4xx or 5xx)
+          expect(response.status).toBeGreaterThanOrEqual(400);
+          expect(response.status).toBeLessThan(600);
+        });
+
+        it('should return 400 for non-string username', async () => {
+          const app = serviceWithCredentials.getApp();
+          const response = await request(app)
+            .post('/api/auth/login')
+            .send({
+              username: 12345,
+              password: 'correctpassword',
+            })
+            .expect(400);
+
+          expect(response.body.error).toBeDefined();
+        });
+
+        it('should return 400 for non-string password', async () => {
+          const app = serviceWithCredentials.getApp();
+          const response = await request(app)
+            .post('/api/auth/login')
+            .send({
+              username: 'admin',
+              password: 12345,
+            })
+            .expect(400);
+
+          expect(response.body.error).toBeDefined();
+        });
+
+        it('should be case-sensitive for username comparison', async () => {
+          const app = serviceWithCredentials.getApp();
+          const response = await request(app)
+            .post('/api/auth/login')
+            .send({
+              username: 'Admin', // Wrong case
+              password: 'correctpassword',
+            })
+            .expect(401);
+
+          expect(response.body.message).toBe('Invalid credentials');
+        });
+
+        it('should audit log successful login', async () => {
+          const app = serviceWithCredentials.getApp();
+          await request(app)
+            .post('/api/auth/login')
+            .send({
+              username: 'admin',
+              password: 'correctpassword',
+            })
+            .expect(200);
+
+          expect(mockLogger.info).toHaveBeenCalledWith(
+            expect.objectContaining({
+              correlationId: expect.any(String),
+              username: 'admin',
+            }),
+            expect.stringContaining('logged in successfully')
+          );
+        });
+
+        it('should audit log failed login attempts', async () => {
+          const app = serviceWithCredentials.getApp();
+          await request(app)
+            .post('/api/auth/login')
+            .send({
+              username: 'admin',
+              password: 'wrongpassword',
+            })
+            .expect(401);
+
+          expect(mockLogger.warn).toHaveBeenCalledWith(
+            expect.objectContaining({
+              correlationId: expect.any(String),
+              username: 'admin',
+            }),
+            expect.stringContaining('invalid credentials')
+          );
+        });
+
+        it('should handle multiple concurrent login attempts', async () => {
+          const app = serviceWithCredentials.getApp();
+
+          const requests = Array.from({ length: 5 }, () =>
+            request(app)
+              .post('/api/auth/login')
+              .send({
+                username: 'admin',
+                password: 'correctpassword',
+              })
+          );
+
+          const responses = await Promise.all(requests);
+
+          // All should succeed
+          responses.forEach(response => {
+            expect(response.status).toBe(200);
+            expect(response.body.token).toBeDefined();
+            expect(response.body.expiresAt).toBeDefined();
+          });
+
+          // Each should get a unique token
+          const tokens = responses.map(r => r.body.token);
+          const uniqueTokens = new Set(tokens);
+          expect(uniqueTokens.size).toBe(5);
+        });
+      });
+
+      describe('when credentials are not configured', () => {
+        beforeEach(async () => {
+          // Use the default service without username/password
+          await service.start();
+        });
+
+        it('should return 401 when login attempted without credentials configured', async () => {
+          const app = service.getApp();
+          const response = await request(app)
+            .post('/api/auth/login')
+            .send({
+              username: 'admin',
+              password: 'anypassword',
+            })
+            .expect(401);
+
+          expect(response.body).toEqual({
+            error: 'Unauthorized',
+            message: 'Invalid credentials',
+          });
+        });
+
+        it('should still allow bearer token authentication', async () => {
+          const app = service.getApp();
+          const response = await request(app)
+            .get('/api/status')
+            .set('Authorization', 'Bearer FAKE_TEST_TOKEN_NOT_A_SECRET')
+            .expect(200);
+
+          expect(response.body.guilds).toBeDefined();
+        });
+      });
+    });
+
+    describe('Session Token Authentication', () => {
+      let serviceWithCredentials: any;
+      let sessionToken: string;
+
+      beforeEach(async () => {
+        serviceWithCredentials = new AdminApiService({
+          client: mockClient,
+          guildConfigService: mockConfigService,
+          afkDetectionService: mockAfkService,
+          voiceConnectionManager: mockVoiceManager,
+          logger: mockLogger,
+          port: testPort + 200,
+          token: 'FAKE_TEST_TOKEN_NOT_A_SECRET',
+          username: 'admin',
+          passwordHash: '$2b$10$Mra.F.uMhHxtpT4m4nOKm.HMlenbF7tHZc6LbmWkFNuqiLQVePzcK',
+        });
+        await serviceWithCredentials.start();
+
+        // Get a valid session token
+        const loginResponse = await request(serviceWithCredentials.getApp())
+          .post('/api/auth/login')
+          .send({ username: 'admin', password: 'correctpassword' });
+        sessionToken = loginResponse.body.token;
+      });
+
+      afterEach(async () => {
+        await serviceWithCredentials.stop();
+      });
+
+      it('should accept session token for authenticated endpoints', async () => {
+        const app = serviceWithCredentials.getApp();
+        const response = await request(app)
+          .get('/api/status')
+          .set('Authorization', `Bearer ${sessionToken}`)
+          .expect(200);
+
+        expect(response.body.guilds).toBeDefined();
+        expect(response.body.memory).toBeDefined();
+      });
+
+      it('should reject expired session token', async () => {
+        // Create a fresh service with credentials for this test
+        const expiredTestService = new AdminApiService({
+          client: mockClient,
+          guildConfigService: mockConfigService,
+          afkDetectionService: mockAfkService,
+          voiceConnectionManager: mockVoiceManager,
+          logger: mockLogger,
+          port: testPort + 150,
+          token: 'FAKE_TEST_TOKEN_NOT_A_SECRET',
+          bindAddress: '127.0.0.1',
+          username: 'admin',
+          passwordHash: '$2b$10$Mra.F.uMhHxtpT4m4nOKm.HMlenbF7tHZc6LbmWkFNuqiLQVePzcK',
+        });
+
+        try {
+          // Set fake timers before any time-sensitive operations
+          vi.useFakeTimers();
+          const now = Date.now();
+          vi.setSystemTime(now);
+
+          await expiredTestService.start();
+          const app = expiredTestService.getApp();
+
+          // Login to get a session token
+          const loginResponse = await request(app)
+            .post('/api/auth/login')
+            .send({ username: 'admin', password: 'correctpassword' });
+
+          const expiredToken = loginResponse.body.token;
+
+          // Advance time past session expiration (8 hours + buffer)
+          vi.advanceTimersByTime(9 * 60 * 60 * 1000); // 9 hours
+
+          // Try to use the expired token
+          const response = await request(app)
+            .get('/api/status')
+            .set('Authorization', `Bearer ${expiredToken}`)
+            .expect(401);
+
+          expect(response.body.error).toBe('Unauthorized');
+        } finally {
+          vi.useRealTimers();
+          await expiredTestService.stop();
+        }
+      });
+
+      it('should reject invalid session token format', async () => {
+        const app = serviceWithCredentials.getApp();
+        const response = await request(app)
+          .get('/api/status')
+          .set('Authorization', 'Bearer invalid-session-token-xyz')
+          .expect(401);
+
+        expect(response.body.error).toBe('Unauthorized');
+      });
+
+      it('should reject session token after logout', async () => {
+        const app = serviceWithCredentials.getApp();
+
+        // Logout
+        await request(app)
+          .post('/api/auth/logout')
+          .set('Authorization', `Bearer ${sessionToken}`)
+          .expect(204);
+
+        // Try to use the same token
+        const response = await request(app)
+          .get('/api/status')
+          .set('Authorization', `Bearer ${sessionToken}`)
+          .expect(401);
+
+        expect(response.body.error).toBe('Unauthorized');
+      });
+
+      it('should still accept bearer token (ADMIN_API_TOKEN) for authenticated endpoints', async () => {
+        const app = serviceWithCredentials.getApp();
+        const response = await request(app)
+          .get('/api/status')
+          .set('Authorization', 'Bearer FAKE_TEST_TOKEN_NOT_A_SECRET')
+          .expect(200);
+
+        expect(response.body.guilds).toBeDefined();
+      });
+
+      it('should handle session token with extra whitespace gracefully', async () => {
+        const app = serviceWithCredentials.getApp();
+        const response = await request(app)
+          .get('/api/status')
+          .set('Authorization', `Bearer  ${sessionToken}  `)
+          .expect(401);
+
+        // Should reject due to whitespace
+        expect(response.body.error).toBe('Unauthorized');
+      });
+
+      it('should generate different session tokens for each login', async () => {
+        const app = serviceWithCredentials.getApp();
+
+        const response1 = await request(app)
+          .post('/api/auth/login')
+          .send({ username: 'admin', password: 'correctpassword' });
+
+        const response2 = await request(app)
+          .post('/api/auth/login')
+          .send({ username: 'admin', password: 'correctpassword' });
+
+        expect(response1.body.token).not.toBe(response2.body.token);
+      });
+
+      it('should include token expiration time in login response', async () => {
+        const app = serviceWithCredentials.getApp();
+        const beforeLogin = Date.now();
+        const response = await request(app)
+          .post('/api/auth/login')
+          .send({ username: 'admin', password: 'correctpassword' })
+          .expect(200);
+
+        expect(response.body.expiresAt).toBeDefined();
+        expect(typeof response.body.expiresAt).toBe('number');
+        expect(response.body.expiresAt).toBeGreaterThan(beforeLogin);
+        // Default should be around 8 hours (28800000 ms) from login time
+        const maxExpiration = beforeLogin + 28800000 + 5000; // 5s buffer
+        expect(response.body.expiresAt).toBeLessThanOrEqual(maxExpiration);
+      });
+    });
+
+    describe('POST /api/logout', () => {
+      let serviceWithCredentials: any;
+      let sessionToken: string;
+
+      beforeEach(async () => {
+        serviceWithCredentials = new AdminApiService({
+          client: mockClient,
+          guildConfigService: mockConfigService,
+          afkDetectionService: mockAfkService,
+          voiceConnectionManager: mockVoiceManager,
+          logger: mockLogger,
+          port: testPort + 300,
+          token: 'FAKE_TEST_TOKEN_NOT_A_SECRET',
+          username: 'admin',
+          passwordHash: '$2b$10$Mra.F.uMhHxtpT4m4nOKm.HMlenbF7tHZc6LbmWkFNuqiLQVePzcK',
+        });
+        await serviceWithCredentials.start();
+
+        const loginResponse = await request(serviceWithCredentials.getApp())
+          .post('/api/auth/login')
+          .send({ username: 'admin', password: 'correctpassword' });
+        sessionToken = loginResponse.body.token;
+      });
+
+      afterEach(async () => {
+        await serviceWithCredentials.stop();
+      });
+
+      it('should invalidate session token on logout', async () => {
+        const app = serviceWithCredentials.getApp();
+
+        // Logout
+        const logoutResponse = await request(app)
+          .post('/api/auth/logout')
+          .set('Authorization', `Bearer ${sessionToken}`)
+          .expect(204);
+
+        // Verify token is now invalid
+        const statusResponse = await request(app)
+          .get('/api/status')
+          .set('Authorization', `Bearer ${sessionToken}`)
+          .expect(401);
+
+        expect(statusResponse.body.error).toBe('Unauthorized');
+      });
+
+      it('should return 401 when logging out with invalid token', async () => {
+        const app = serviceWithCredentials.getApp();
+        const response = await request(app)
+          .post('/api/auth/logout')
+          .set('Authorization', 'Bearer invalid-token')
+          .expect(401);
+
+        expect(response.body.error).toBe('Unauthorized');
+      });
+
+      it('should return 401 when logging out without authorization header', async () => {
+        const app = serviceWithCredentials.getApp();
+        const response = await request(app)
+          .post('/api/auth/logout')
+          .expect(401);
+
+        expect(response.body).toEqual({
+          error: 'Unauthorized',
+          message: expect.stringContaining('Authorization'),
+        });
+      });
+
+      it('should allow logout with bearer token (ADMIN_API_TOKEN)', async () => {
+        const app = serviceWithCredentials.getApp();
+        // The static bearer token authenticates successfully, and logout just removes it from sessions
+        // Since it's not a session token, it won't be in the sessions map, so logout returns 204
+        const response = await request(app)
+          .post('/api/auth/logout')
+          .set('Authorization', 'Bearer FAKE_TEST_TOKEN_NOT_A_SECRET')
+          .expect(204);
+
+        // No body with 204 response
+        expect(response.body).toEqual({});
+      });
+
+      it('should audit log logout action', async () => {
+        const app = serviceWithCredentials.getApp();
+        await request(app)
+          .post('/api/auth/logout')
+          .set('Authorization', `Bearer ${sessionToken}`)
+          .expect(204);
+
+        expect(mockLogger.info).toHaveBeenCalledWith(
+          expect.objectContaining({
+            correlationId: expect.any(String),
+          }),
+          expect.stringContaining('logged out successfully')
+        );
+      });
+
+      it('should allow logout idempotently (second logout returns 401)', async () => {
+        const app = serviceWithCredentials.getApp();
+
+        // First logout succeeds
+        await request(app)
+          .post('/api/auth/logout')
+          .set('Authorization', `Bearer ${sessionToken}`)
+          .expect(204);
+
+        // Second logout with same token fails because it's been deleted from sessions
+        // and it's not the static bearer token
+        const response = await request(app)
+          .post('/api/auth/logout')
+          .set('Authorization', `Bearer ${sessionToken}`)
+          .expect(401);
+
+        expect(response.body.error).toBe('Unauthorized');
+      });
+    });
+
+    describe('Bind Address Configuration', () => {
+      it('should bind to configured address when ADMIN_API_BIND_ADDRESS is set', async () => {
+        const customService = new AdminApiService({
+          client: mockClient,
+          guildConfigService: mockConfigService,
+          afkDetectionService: mockAfkService,
+          voiceConnectionManager: mockVoiceManager,
+          logger: mockLogger,
+          port: testPort + 400,
+          token: 'FAKE_TEST_TOKEN_NOT_A_SECRET',
+          bindAddress: '0.0.0.0',
+        });
+
+        await customService.start();
+
+        expect(mockLogger.info).toHaveBeenCalledWith(
+          expect.objectContaining({
+            port: testPort + 400,
+            host: '0.0.0.0',
+          }),
+          expect.stringContaining('Admin API server started')
+        );
+
+        await customService.stop();
+      });
+
+      it('should default to 127.0.0.1 when bindAddress not specified', async () => {
+        await service.start();
+
+        expect(mockLogger.info).toHaveBeenCalledWith(
+          expect.objectContaining({
+            port: testPort,
+            host: '127.0.0.1',
+          }),
+          expect.stringContaining('Admin API server started')
+        );
+      });
+
+      it('should log warning when binding to non-localhost address', async () => {
+        const customService = new AdminApiService({
+          client: mockClient,
+          guildConfigService: mockConfigService,
+          afkDetectionService: mockAfkService,
+          voiceConnectionManager: mockVoiceManager,
+          logger: mockLogger,
+          port: testPort + 500,
+          token: 'FAKE_TEST_TOKEN_NOT_A_SECRET',
+          bindAddress: '0.0.0.0',
+        });
+
+        await customService.start();
+
+        expect(mockLogger.warn).toHaveBeenCalledWith(
+          expect.objectContaining({
+            bindAddress: '0.0.0.0',
+          }),
+          expect.stringContaining('Admin API is not bound to localhost - this may expose the API to external networks')
+        );
+
+        await customService.stop();
+      });
+
+      it('should not log warning when binding to localhost (127.0.0.1)', async () => {
+        const customService = new AdminApiService({
+          client: mockClient,
+          guildConfigService: mockConfigService,
+          afkDetectionService: mockAfkService,
+          voiceConnectionManager: mockVoiceManager,
+          logger: mockLogger,
+          port: testPort + 600,
+          token: 'FAKE_TEST_TOKEN_NOT_A_SECRET',
+          bindAddress: '127.0.0.1',
+        });
+
+        await customService.start();
+
+        // Should NOT have warning about non-localhost
+        const warningCalls = mockLogger.warn.mock.calls.filter((call: any[]) =>
+          call.some(arg => typeof arg === 'string' && arg.includes('non-localhost'))
+        );
+        expect(warningCalls).toHaveLength(0);
+
+        await customService.stop();
+      });
+
+      it('should not log warning when binding to ::1 (IPv6 localhost)', async () => {
+        const customService = new AdminApiService({
+          client: mockClient,
+          guildConfigService: mockConfigService,
+          afkDetectionService: mockAfkService,
+          voiceConnectionManager: mockVoiceManager,
+          logger: mockLogger,
+          port: testPort + 700,
+          token: 'FAKE_TEST_TOKEN_NOT_A_SECRET',
+          bindAddress: '::1',
+        });
+
+        await customService.start();
+
+        // Should NOT have warning about non-localhost
+        const warningCalls = mockLogger.warn.mock.calls.filter((call: any[]) =>
+          call.some(arg => typeof arg === 'string' && arg.includes('non-localhost'))
+        );
+        expect(warningCalls).toHaveLength(0);
+
+        await customService.stop();
+      });
+
+      it('should handle bind address in server start log', async () => {
+        const customService = new AdminApiService({
+          client: mockClient,
+          guildConfigService: mockConfigService,
+          afkDetectionService: mockAfkService,
+          voiceConnectionManager: mockVoiceManager,
+          logger: mockLogger,
+          port: testPort + 800,
+          token: 'FAKE_TEST_TOKEN_NOT_A_SECRET',
+          bindAddress: '0.0.0.0',
+        });
+
+        await customService.start();
+
+        expect(mockLogger.info).toHaveBeenCalledWith(
+          expect.objectContaining({
+            port: testPort + 800,
+            host: '0.0.0.0',
+          }),
+          expect.stringContaining('Admin API server started')
+        );
+
+        await customService.stop();
+      });
+    });
+
+    describe('Security: User Enumeration Prevention', () => {
+      let serviceWithCredentials: any;
+
+      beforeEach(async () => {
+        serviceWithCredentials = new AdminApiService({
+          client: mockClient,
+          guildConfigService: mockConfigService,
+          afkDetectionService: mockAfkService,
+          voiceConnectionManager: mockVoiceManager,
+          logger: mockLogger,
+          port: testPort + 900,
+          token: 'FAKE_TEST_TOKEN_NOT_A_SECRET',
+          username: 'admin',
+          passwordHash: '$2b$10$Mra.F.uMhHxtpT4m4nOKm.HMlenbF7tHZc6LbmWkFNuqiLQVePzcK',
+        });
+        await serviceWithCredentials.start();
+      });
+
+      afterEach(async () => {
+        await serviceWithCredentials.stop();
+      });
+
+      it('should return identical error message for wrong username and wrong password', async () => {
+        const app = serviceWithCredentials.getApp();
+
+        const wrongUsernameResponse = await request(app)
+          .post('/api/auth/login')
+          .send({ username: 'nonexistent', password: 'correctpassword' });
+
+        const wrongPasswordResponse = await request(app)
+          .post('/api/auth/login')
+          .send({ username: 'admin', password: 'wrongpassword' });
+
+        expect(wrongUsernameResponse.body.message).toBe(wrongPasswordResponse.body.message);
+        expect(wrongUsernameResponse.body.message).toBe('Invalid credentials');
+      });
+
+      it('should have similar response times for wrong username and wrong password', async () => {
+        const app = serviceWithCredentials.getApp();
+
+        const startWrongUser = Date.now();
+        await request(app)
+          .post('/api/auth/login')
+          .send({ username: 'nonexistent', password: 'password123' });
+        const wrongUserTime = Date.now() - startWrongUser;
+
+        const startWrongPass = Date.now();
+        await request(app)
+          .post('/api/auth/login')
+          .send({ username: 'admin', password: 'wrongpassword' });
+        const wrongPassTime = Date.now() - startWrongPass;
+
+        // Response times should be within reasonable threshold (allow bcrypt variance)
+        // This is a timing attack mitigation check
+        const timeDiff = Math.abs(wrongUserTime - wrongPassTime);
+        expect(timeDiff).toBeLessThan(100); // 100ms threshold is generous for CI environments
+      });
+
+      it('should not leak username existence in error messages', async () => {
+        const app = serviceWithCredentials.getApp();
+
+        const response = await request(app)
+          .post('/api/auth/login')
+          .send({ username: 'definitelynotreal', password: 'anypassword' })
+          .expect(401);
+
+        expect(response.body.message).not.toContain('definitelynotreal');
+        expect(response.body.message).not.toContain('user');
+        expect(response.body.message).not.toContain('username');
+        expect(response.body.message).not.toContain('exist');
+        expect(response.body.message).not.toContain('not found');
       });
     });
   });
