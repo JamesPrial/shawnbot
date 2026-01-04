@@ -61,6 +61,7 @@ describe('AdminApiService', () => {
     mockConfigService = {
       getConfig: vi.fn(),
       updateConfig: vi.fn(),
+      resetConfig: vi.fn(),
     } as unknown as GuildConfigService;
 
     // Mock AFKDetectionService with tracking state
@@ -98,6 +99,24 @@ describe('AdminApiService', () => {
       // Ignore errors if already stopped
     }
   });
+
+  /**
+   * Helper function to mock the guild cache with Map-based iteration.
+   * This is required because the actual implementation uses `for...of` iteration over the cache.
+   *
+   * @param guilds - Array of guild objects with id, name, and memberCount
+   */
+  function mockGuildCache(guilds: Array<{ id: string; name: string; memberCount: number }>) {
+    const guildCache = new Map(guilds.map(g => [g.id, g]));
+    vi.mocked(mockClient.guilds.cache).size = guilds.length;
+
+    // Make the mock cache iterable as a Map
+    const mockCacheIterator = guildCache[Symbol.iterator].bind(guildCache);
+    Object.defineProperty(mockClient.guilds.cache, Symbol.iterator, {
+      value: mockCacheIterator,
+      configurable: true,
+    });
+  }
 
   describe('WU-2: Core Service Infrastructure', () => {
     describe('start', () => {
@@ -598,10 +617,7 @@ describe('AdminApiService', () => {
 
       it('should return empty array when bot is in no guilds', async () => {
         // Mock client with zero guilds
-        (mockClient.guilds.cache as any) = {
-          size: 0,
-          map: vi.fn().mockReturnValue([]),
-        };
+        mockGuildCache([]);
 
         const app = service.getApp();
         const response = await request(app)
@@ -611,22 +627,20 @@ describe('AdminApiService', () => {
 
         expect(response.body).toEqual({
           guilds: [],
+          total: 0,
         });
         expect(response.headers['content-type']).toMatch(/application\/json/);
       });
 
-      it('should return list of guilds with correct fields (guildId, name, enabled, connected)', async () => {
+      it('should return list of guilds with correct fields (guildId, name, memberCount, enabled, connected)', async () => {
         const mockGuildsData = [
-          { id: '11111111111111111', name: 'Test Guild 1' },
-          { id: '22222222222222222', name: 'Test Guild 2' },
-          { id: '33333333333333333', name: 'Test Guild 3' },
+          { id: '11111111111111111', name: 'Test Guild 1', memberCount: 100 },
+          { id: '22222222222222222', name: 'Test Guild 2', memberCount: 50 },
+          { id: '33333333333333333', name: 'Test Guild 3', memberCount: 75 },
         ];
 
-        // Mock guilds cache with map function
-        (mockClient.guilds.cache as any) = {
-          size: 3,
-          map: vi.fn((callback) => mockGuildsData.map(callback)),
-        };
+        // Mock guilds cache with Map-based iteration
+        mockGuildCache(mockGuildsData);
 
         // Mock config service to return enabled status for each guild
         vi.mocked(mockConfigService.getConfig).mockImplementation((guildId) => {
@@ -652,36 +666,38 @@ describe('AdminApiService', () => {
             {
               guildId: '11111111111111111',
               name: 'Test Guild 1',
+              memberCount: 100,
               enabled: true,
               connected: true,
             },
             {
               guildId: '22222222222222222',
               name: 'Test Guild 2',
+              memberCount: 50,
               enabled: false,
               connected: false,
             },
             {
               guildId: '33333333333333333',
               name: 'Test Guild 3',
+              memberCount: 75,
               enabled: false,
               connected: false,
             },
           ],
+          total: 3,
         });
         expect(response.headers['content-type']).toMatch(/application\/json/);
       });
 
       it('should return correct enabled status from guildConfigService', async () => {
         const mockGuildsData = [
-          { id: '44444444444444444', name: 'Enabled Guild' },
-          { id: '55555555555555555', name: 'Disabled Guild' },
+          { id: '44444444444444444', name: 'Enabled Guild', memberCount: 200 },
+          { id: '55555555555555555', name: 'Disabled Guild', memberCount: 150 },
         ];
 
-        (mockClient.guilds.cache as any) = {
-          size: 2,
-          map: vi.fn((callback) => mockGuildsData.map(callback)),
-        };
+        // Mock guilds cache with Map-based iteration
+        mockGuildCache(mockGuildsData);
 
         // Explicitly set enabled status for each guild
         vi.mocked(mockConfigService.getConfig).mockImplementation((guildId) => {
@@ -702,6 +718,7 @@ describe('AdminApiService', () => {
         // Verify enabled status matches config service
         expect(response.body.guilds[0]?.enabled).toBe(true);
         expect(response.body.guilds[1]?.enabled).toBe(false);
+        expect(response.body.total).toBe(2);
 
         // Verify config service was called for each guild
         expect(mockConfigService.getConfig).toHaveBeenCalledWith('44444444444444444');
@@ -710,14 +727,12 @@ describe('AdminApiService', () => {
 
       it('should return correct connected status from voiceConnectionManager', async () => {
         const mockGuildsData = [
-          { id: '66666666666666666', name: 'Connected Guild' },
-          { id: '77777777777777777', name: 'Disconnected Guild' },
+          { id: '66666666666666666', name: 'Connected Guild', memberCount: 300 },
+          { id: '77777777777777777', name: 'Disconnected Guild', memberCount: 250 },
         ];
 
-        (mockClient.guilds.cache as any) = {
-          size: 2,
-          map: vi.fn((callback) => mockGuildsData.map(callback)),
-        };
+        // Mock guilds cache with Map-based iteration
+        mockGuildCache(mockGuildsData);
 
         vi.mocked(mockConfigService.getConfig).mockImplementation((guildId) => {
           return createMockGuildSettings({ guildId, enabled: true });
@@ -737,6 +752,7 @@ describe('AdminApiService', () => {
         // Verify connected status matches voice manager
         expect(response.body.guilds[0]?.connected).toBe(true);
         expect(response.body.guilds[1]?.connected).toBe(false);
+        expect(response.body.total).toBe(2);
 
         // Verify voice manager was called for each guild
         expect(mockVoiceManager.hasConnection).toHaveBeenCalledWith('66666666666666666');
@@ -745,13 +761,11 @@ describe('AdminApiService', () => {
 
       it('should handle single guild correctly', async () => {
         const mockGuildsData = [
-          { id: '88888888888888888', name: 'Solo Guild' },
+          { id: '88888888888888888', name: 'Solo Guild', memberCount: 500 },
         ];
 
-        (mockClient.guilds.cache as any) = {
-          size: 1,
-          map: vi.fn((callback) => mockGuildsData.map(callback)),
-        };
+        // Mock guilds cache with Map-based iteration
+        mockGuildCache(mockGuildsData);
 
         vi.mocked(mockConfigService.getConfig).mockReturnValue(
           createMockGuildSettings({ guildId: '88888888888888888', enabled: true })
@@ -768,9 +782,11 @@ describe('AdminApiService', () => {
         expect(response.body.guilds[0]).toEqual({
           guildId: '88888888888888888',
           name: 'Solo Guild',
+          memberCount: 500,
           enabled: true,
           connected: true,
         });
+        expect(response.body.total).toBe(1);
       });
 
       it('should handle many guilds without performance issues', async () => {
@@ -778,12 +794,11 @@ describe('AdminApiService', () => {
         const mockGuildsData = Array.from({ length: 100 }, (_, i) => ({
           id: `${1000000000000000 + i}`.padEnd(17, '0'),
           name: `Guild ${i}`,
+          memberCount: 100 + i,
         }));
 
-        (mockClient.guilds.cache as any) = {
-          size: 100,
-          map: vi.fn((callback) => mockGuildsData.map(callback)),
-        };
+        // Mock guilds cache with Map-based iteration
+        mockGuildCache(mockGuildsData);
 
         vi.mocked(mockConfigService.getConfig).mockImplementation((guildId) => {
           return createMockGuildSettings({ guildId, enabled: true });
@@ -799,17 +814,16 @@ describe('AdminApiService', () => {
         expect(response.body.guilds).toHaveLength(100);
         expect(response.body.guilds[0]?.name).toBe('Guild 0');
         expect(response.body.guilds[99]?.name).toBe('Guild 99');
+        expect(response.body.total).toBe(100);
       });
 
       it('should include guild name in response', async () => {
         const mockGuildsData = [
-          { id: '99999999999999999', name: 'My Awesome Discord Server' },
+          { id: '99999999999999999', name: 'My Awesome Discord Server', memberCount: 999 },
         ];
 
-        (mockClient.guilds.cache as any) = {
-          size: 1,
-          map: vi.fn((callback) => mockGuildsData.map(callback)),
-        };
+        // Mock guilds cache with Map-based iteration
+        mockGuildCache(mockGuildsData);
 
         vi.mocked(mockConfigService.getConfig).mockReturnValue(
           createMockGuildSettings({ guildId: '99999999999999999', enabled: false })
@@ -823,19 +837,18 @@ describe('AdminApiService', () => {
           .expect(200);
 
         expect(response.body.guilds[0]?.name).toBe('My Awesome Discord Server');
+        expect(response.body.total).toBe(1);
       });
 
       it('should handle guilds with special characters in names', async () => {
         const mockGuildsData = [
-          { id: '10000000000000000', name: "Bob's Server ™ 🎮" },
-          { id: '10000000000000001', name: 'Server with "quotes"' },
-          { id: '10000000000000002', name: 'Server\nwith\nnewlines' },
+          { id: '10000000000000000', name: "Bob's Server ™ 🎮", memberCount: 42 },
+          { id: '10000000000000001', name: 'Server with "quotes"', memberCount: 84 },
+          { id: '10000000000000002', name: 'Server\nwith\nnewlines', memberCount: 126 },
         ];
 
-        (mockClient.guilds.cache as any) = {
-          size: 3,
-          map: vi.fn((callback) => mockGuildsData.map(callback)),
-        };
+        // Mock guilds cache with Map-based iteration
+        mockGuildCache(mockGuildsData);
 
         vi.mocked(mockConfigService.getConfig).mockImplementation((guildId) => {
           return createMockGuildSettings({ guildId, enabled: false });
@@ -851,18 +864,17 @@ describe('AdminApiService', () => {
         expect(response.body.guilds[0]?.name).toBe("Bob's Server ™ 🎮");
         expect(response.body.guilds[1]?.name).toBe('Server with "quotes"');
         expect(response.body.guilds[2]?.name).toBe('Server\nwith\nnewlines');
+        expect(response.body.total).toBe(3);
       });
 
       it('should log guild count when accessed', async () => {
         const mockGuildsData = [
-          { id: '11111111111111111', name: 'Guild 1' },
-          { id: '22222222222222222', name: 'Guild 2' },
+          { id: '11111111111111111', name: 'Guild 1', memberCount: 10 },
+          { id: '22222222222222222', name: 'Guild 2', memberCount: 20 },
         ];
 
-        (mockClient.guilds.cache as any) = {
-          size: 2,
-          map: vi.fn((callback) => mockGuildsData.map(callback)),
-        };
+        // Mock guilds cache with Map-based iteration
+        mockGuildCache(mockGuildsData);
 
         vi.mocked(mockConfigService.getConfig).mockImplementation((guildId) => {
           return createMockGuildSettings({ guildId, enabled: false });
@@ -877,7 +889,7 @@ describe('AdminApiService', () => {
 
         expect(mockLogger.info).toHaveBeenCalledWith(
           expect.objectContaining({
-            guildCount: 2,
+            count: 2,
           }),
           expect.stringContaining('Guilds list endpoint accessed')
         );
@@ -1074,6 +1086,10 @@ describe('AdminApiService', () => {
           { method: 'post', path: '/api/guilds/123/enable' },
           { method: 'post', path: '/api/guilds/123/disable' },
           { method: 'get', path: '/api/guilds/123/status' },
+          { method: 'get', path: '/api/guilds' },
+          { method: 'get', path: '/api/guilds/123/config' },
+          { method: 'put', path: '/api/guilds/123/config' },
+          { method: 'delete', path: '/api/guilds/123/config' },
         ];
 
         for (const endpoint of protectedEndpoints) {
@@ -1112,6 +1128,910 @@ describe('AdminApiService', () => {
           .expect(401);
 
         expect(response.body.error).toBe('Unauthorized');
+      });
+    });
+
+    describe('GET /api/guilds', () => {
+      it('should return 401 without authorization header', async () => {
+        const app = service.getApp();
+        const response = await request(app)
+          .get('/api/guilds')
+          .expect(401);
+
+        expect(response.body).toEqual({
+          error: 'Unauthorized',
+          message: expect.stringContaining('Authorization'),
+        });
+      });
+
+      it('should return 401 with invalid token', async () => {
+        const app = service.getApp();
+        const response = await request(app)
+          .get('/api/guilds')
+          .set('Authorization', 'Bearer wrong-token')
+          .expect(401);
+
+        expect(response.body.error).toBe('Unauthorized');
+      });
+
+      it('should return empty array when no guilds in cache', async () => {
+        // Mock empty guild cache
+        const emptyCache = new Map();
+        vi.mocked(mockClient.guilds.cache).size = 0;
+        // Make the mock cache iterable as a Map
+        const mockCacheIterator = emptyCache[Symbol.iterator].bind(emptyCache);
+        Object.defineProperty(mockClient.guilds.cache, Symbol.iterator, {
+          value: mockCacheIterator,
+          configurable: true,
+        });
+
+        const app = service.getApp();
+        const response = await request(app)
+          .get('/api/guilds')
+          .set('Authorization', 'Bearer test-token-123')
+          .expect(200);
+
+        expect(response.body).toEqual({
+          guilds: [],
+          total: 0,
+        });
+        expect(response.headers['content-type']).toMatch(/application\/json/);
+      });
+
+      it('should return list of guilds with correct shape', async () => {
+        // Mock guild cache with multiple guilds
+        const mockGuild1 = {
+          id: '11111111111111111',
+          name: 'Test Guild 1',
+          memberCount: 150,
+        };
+        const mockGuild2 = {
+          id: '22222222222222222',
+          name: 'Test Guild 2',
+          memberCount: 75,
+        };
+
+        const guildCache = new Map([
+          [mockGuild1.id, mockGuild1],
+          [mockGuild2.id, mockGuild2],
+        ]);
+        vi.mocked(mockClient.guilds.cache).size = 2;
+        // Make the mock cache iterable as a Map
+        const mockCacheIterator = guildCache[Symbol.iterator].bind(guildCache);
+        Object.defineProperty(mockClient.guilds.cache, Symbol.iterator, {
+          value: mockCacheIterator,
+          configurable: true,
+        });
+
+        // Mock config service to return enabled states
+        vi.mocked(mockConfigService.getConfig)
+          .mockReturnValueOnce(createMockGuildSettings({ guildId: mockGuild1.id, enabled: true }))
+          .mockReturnValueOnce(createMockGuildSettings({ guildId: mockGuild2.id, enabled: false }));
+
+        // Mock voice connection states
+        vi.mocked(mockVoiceManager.hasConnection)
+          .mockReturnValueOnce(true)
+          .mockReturnValueOnce(false);
+
+        const app = service.getApp();
+        const response = await request(app)
+          .get('/api/guilds')
+          .set('Authorization', 'Bearer test-token-123')
+          .expect(200);
+
+        expect(response.body).toEqual({
+          guilds: [
+            {
+              guildId: '11111111111111111',
+              name: 'Test Guild 1',
+              memberCount: 150,
+              enabled: true,
+              connected: true,
+            },
+            {
+              guildId: '22222222222222222',
+              name: 'Test Guild 2',
+              memberCount: 75,
+              enabled: false,
+              connected: false,
+            },
+          ],
+          total: 2,
+        });
+      });
+
+      it('should correctly map config.enabled and voiceConnectionManager.hasConnection()', async () => {
+        const mockGuild = {
+          id: '33333333333333333',
+          name: 'Config Test Guild',
+          memberCount: 100,
+        };
+
+        const guildCache = new Map([[mockGuild.id, mockGuild]]);
+        vi.mocked(mockClient.guilds.cache).size = 1;
+        // Make the mock cache iterable as a Map
+        const mockCacheIterator = guildCache[Symbol.iterator].bind(guildCache);
+        Object.defineProperty(mockClient.guilds.cache, Symbol.iterator, {
+          value: mockCacheIterator,
+          configurable: true,
+        });
+
+        // Enabled with no connection
+        vi.mocked(mockConfigService.getConfig).mockReturnValue(
+          createMockGuildSettings({ guildId: mockGuild.id, enabled: true })
+        );
+        vi.mocked(mockVoiceManager.hasConnection).mockReturnValue(false);
+
+        const app = service.getApp();
+        const response = await request(app)
+          .get('/api/guilds')
+          .set('Authorization', 'Bearer test-token-123')
+          .expect(200);
+
+        expect(response.body.guilds[0]).toMatchObject({
+          guildId: '33333333333333333',
+          enabled: true,
+          connected: false,
+        });
+      });
+
+      it('should audit log access with guild count', async () => {
+        const guildCache = new Map();
+        vi.mocked(mockClient.guilds.cache).size = 0;
+        // Make the mock cache iterable as a Map
+        const mockCacheIterator = guildCache[Symbol.iterator].bind(guildCache);
+        Object.defineProperty(mockClient.guilds.cache, Symbol.iterator, {
+          value: mockCacheIterator,
+          configurable: true,
+        });
+
+        const app = service.getApp();
+        await request(app)
+          .get('/api/guilds')
+          .set('Authorization', 'Bearer test-token-123')
+          .expect(200);
+
+        // Verify audit logging occurred (logger.info should be called)
+        expect(mockLogger.info).toHaveBeenCalledWith(
+          expect.objectContaining({
+            correlationId: expect.any(String),
+            count: 0,
+          }),
+          expect.stringContaining('Guilds list endpoint accessed')
+        );
+      });
+    });
+
+    describe('GET /api/guilds/:id/config', () => {
+      it('should return 401 without authorization header', async () => {
+        const app = service.getApp();
+        const response = await request(app)
+          .get('/api/guilds/12345678901234567/config')
+          .expect(401);
+
+        expect(response.body.error).toBe('Unauthorized');
+      });
+
+      it('should return 400 for invalid guild ID format', async () => {
+        const app = service.getApp();
+
+        const invalidIds = ['abc', '123abc', '12345', '12345678901234567890123', 'not-a-number'];
+
+        for (const invalidId of invalidIds) {
+          const response = await request(app)
+            .get(`/api/guilds/${invalidId}/config`)
+            .set('Authorization', 'Bearer test-token-123')
+            .expect(400);
+
+          expect(response.body).toEqual({
+            error: 'Bad Request',
+            message: expect.stringContaining('Invalid guild ID'),
+          });
+        }
+      });
+
+      it('should return 404 when bot not in guild', async () => {
+        const guildId = '99999999999999999';
+        vi.mocked(mockClient.guilds.cache).get = vi.fn().mockReturnValue(undefined);
+
+        const app = service.getApp();
+        const response = await request(app)
+          .get(`/api/guilds/${guildId}/config`)
+          .set('Authorization', 'Bearer test-token-123')
+          .expect(404);
+
+        expect(response.body).toEqual({
+          error: 'Not Found',
+          message: expect.stringContaining('not in the specified guild'),
+        });
+      });
+
+      it('should return full config (all 7 fields) for valid guild', async () => {
+        const guildId = '44444444444444444';
+        const mockGuild = { id: guildId, name: 'Full Config Guild' };
+
+        vi.mocked(mockClient.guilds.cache).get = vi.fn().mockReturnValue(mockGuild as any);
+        vi.mocked(mockConfigService.getConfig).mockReturnValue(
+          createMockGuildSettings({
+            guildId,
+            enabled: true,
+            afkTimeoutSeconds: 600,
+            warningSecondsBefore: 120,
+            warningChannelId: '11111111111111111',
+            exemptRoleIds: ['22222222222222222', '33333333333333333'],
+            adminRoleIds: ['44444444444444444'],
+          })
+        );
+
+        const app = service.getApp();
+        const response = await request(app)
+          .get(`/api/guilds/${guildId}/config`)
+          .set('Authorization', 'Bearer test-token-123')
+          .expect(200);
+
+        // Must have exactly 7 fields
+        expect(response.body).toEqual({
+          guildId: '44444444444444444',
+          enabled: true,
+          afkTimeoutSeconds: 600,
+          warningSecondsBefore: 120,
+          warningChannelId: '11111111111111111',
+          exemptRoleIds: ['22222222222222222', '33333333333333333'],
+          adminRoleIds: ['44444444444444444'],
+        });
+        expect(Object.keys(response.body)).toHaveLength(7);
+      });
+
+      it('should handle null warningChannelId', async () => {
+        const guildId = '55555555555555555';
+        const mockGuild = { id: guildId, name: 'Null Channel Guild' };
+
+        vi.mocked(mockClient.guilds.cache).get = vi.fn().mockReturnValue(mockGuild as any);
+        vi.mocked(mockConfigService.getConfig).mockReturnValue(
+          createMockGuildSettings({
+            guildId,
+            warningChannelId: null,
+          })
+        );
+
+        const app = service.getApp();
+        const response = await request(app)
+          .get(`/api/guilds/${guildId}/config`)
+          .set('Authorization', 'Bearer test-token-123')
+          .expect(200);
+
+        expect(response.body.warningChannelId).toBeNull();
+      });
+
+      it('should handle empty role arrays', async () => {
+        const guildId = '66666666666666666';
+        const mockGuild = { id: guildId, name: 'Empty Roles Guild' };
+
+        vi.mocked(mockClient.guilds.cache).get = vi.fn().mockReturnValue(mockGuild as any);
+        vi.mocked(mockConfigService.getConfig).mockReturnValue(
+          createMockGuildSettings({
+            guildId,
+            exemptRoleIds: [],
+            adminRoleIds: [],
+          })
+        );
+
+        const app = service.getApp();
+        const response = await request(app)
+          .get(`/api/guilds/${guildId}/config`)
+          .set('Authorization', 'Bearer test-token-123')
+          .expect(200);
+
+        expect(response.body.exemptRoleIds).toEqual([]);
+        expect(response.body.adminRoleIds).toEqual([]);
+      });
+
+      it('should audit log access', async () => {
+        const guildId = '77777777777777777';
+        const mockGuild = { id: guildId, name: 'Audit Guild' };
+
+        vi.mocked(mockClient.guilds.cache).get = vi.fn().mockReturnValue(mockGuild as any);
+        vi.mocked(mockConfigService.getConfig).mockReturnValue(
+          createMockGuildSettings({ guildId })
+        );
+
+        const app = service.getApp();
+        await request(app)
+          .get(`/api/guilds/${guildId}/config`)
+          .set('Authorization', 'Bearer test-token-123')
+          .expect(200);
+
+        expect(mockLogger.info).toHaveBeenCalledWith(
+          expect.objectContaining({
+            correlationId: expect.any(String),
+            guildId,
+          }),
+          expect.stringContaining('Guild config endpoint accessed')
+        );
+      });
+    });
+
+    describe('PUT /api/guilds/:id/config', () => {
+      it('should return 401 without authorization header', async () => {
+        const app = service.getApp();
+        const response = await request(app)
+          .put('/api/guilds/12345678901234567/config')
+          .send({ enabled: true })
+          .expect(401);
+
+        expect(response.body.error).toBe('Unauthorized');
+        expect(mockConfigService.updateConfig).not.toHaveBeenCalled();
+      });
+
+      it('should return 400 for invalid guild ID format', async () => {
+        const app = service.getApp();
+        const response = await request(app)
+          .put('/api/guilds/invalid-id/config')
+          .set('Authorization', 'Bearer test-token-123')
+          .send({ enabled: true })
+          .expect(400);
+
+        expect(response.body.message).toContain('Invalid guild ID');
+        expect(mockConfigService.updateConfig).not.toHaveBeenCalled();
+      });
+
+      it('should return 404 when bot not in guild', async () => {
+        const guildId = '88888888888888888';
+        vi.mocked(mockClient.guilds.cache).get = vi.fn().mockReturnValue(undefined);
+
+        const app = service.getApp();
+        const response = await request(app)
+          .put(`/api/guilds/${guildId}/config`)
+          .set('Authorization', 'Bearer test-token-123')
+          .send({ enabled: true })
+          .expect(404);
+
+        expect(response.body.error).toBe('Not Found');
+        expect(mockConfigService.updateConfig).not.toHaveBeenCalled();
+      });
+
+      it('should return 400 for invalid afkTimeoutSeconds (non-number)', async () => {
+        const guildId = '11111111111111111';
+        vi.mocked(mockClient.guilds.cache).get = vi.fn().mockReturnValue({ id: guildId } as any);
+
+        const app = service.getApp();
+        const response = await request(app)
+          .put(`/api/guilds/${guildId}/config`)
+          .set('Authorization', 'Bearer test-token-123')
+          .send({ afkTimeoutSeconds: 'not-a-number' })
+          .expect(400);
+
+        expect(response.body.message).toContain('afkTimeoutSeconds');
+        expect(mockConfigService.updateConfig).not.toHaveBeenCalled();
+      });
+
+      it('should return 400 for invalid afkTimeoutSeconds (< 1)', async () => {
+        const guildId = '11111111111111111';
+        vi.mocked(mockClient.guilds.cache).get = vi.fn().mockReturnValue({ id: guildId } as any);
+
+        const app = service.getApp();
+
+        const invalidValues = [0, -1, -100];
+        for (const invalidValue of invalidValues) {
+          const response = await request(app)
+            .put(`/api/guilds/${guildId}/config`)
+            .set('Authorization', 'Bearer test-token-123')
+            .send({ afkTimeoutSeconds: invalidValue })
+            .expect(400);
+
+          expect(response.body.message).toContain('afkTimeoutSeconds');
+          expect(response.body.message).toContain('greater than 0');
+        }
+      });
+
+      it('should return 400 for invalid warningSecondsBefore (non-number)', async () => {
+        const guildId = '11111111111111111';
+        vi.mocked(mockClient.guilds.cache).get = vi.fn().mockReturnValue({ id: guildId } as any);
+
+        const app = service.getApp();
+        const response = await request(app)
+          .put(`/api/guilds/${guildId}/config`)
+          .set('Authorization', 'Bearer test-token-123')
+          .send({ warningSecondsBefore: 'invalid' })
+          .expect(400);
+
+        expect(response.body.message).toContain('warningSecondsBefore');
+        expect(mockConfigService.updateConfig).not.toHaveBeenCalled();
+      });
+
+      it('should return 400 for invalid warningSecondsBefore (< 0)', async () => {
+        const guildId = '11111111111111111';
+        vi.mocked(mockClient.guilds.cache).get = vi.fn().mockReturnValue({ id: guildId } as any);
+
+        const app = service.getApp();
+        const response = await request(app)
+          .put(`/api/guilds/${guildId}/config`)
+          .set('Authorization', 'Bearer test-token-123')
+          .send({ warningSecondsBefore: -5 })
+          .expect(400);
+
+        expect(response.body.message).toContain('warningSecondsBefore');
+        expect(response.body.message).toContain('greater than or equal to 0');
+      });
+
+      it('should return 400 for invalid warningChannelId (not null/string)', async () => {
+        const guildId = '11111111111111111';
+        vi.mocked(mockClient.guilds.cache).get = vi.fn().mockReturnValue({ id: guildId } as any);
+
+        const app = service.getApp();
+
+        const invalidValues = [123, true, [], {}];
+        for (const invalidValue of invalidValues) {
+          const response = await request(app)
+            .put(`/api/guilds/${guildId}/config`)
+            .set('Authorization', 'Bearer test-token-123')
+            .send({ warningChannelId: invalidValue })
+            .expect(400);
+
+          expect(response.body.message).toContain('warningChannelId');
+        }
+      });
+
+      it('should return 400 for invalid warningChannelId (invalid snowflake)', async () => {
+        const guildId = '11111111111111111';
+        vi.mocked(mockClient.guilds.cache).get = vi.fn().mockReturnValue({ id: guildId } as any);
+
+        const app = service.getApp();
+
+        const invalidSnowflakes = ['abc', '123', '12345678901234567890123'];
+        for (const invalidSnowflake of invalidSnowflakes) {
+          const response = await request(app)
+            .put(`/api/guilds/${guildId}/config`)
+            .set('Authorization', 'Bearer test-token-123')
+            .send({ warningChannelId: invalidSnowflake })
+            .expect(400);
+
+          expect(response.body.message).toContain('warningChannelId');
+          expect(response.body.message).toContain('valid Discord snowflake');
+        }
+      });
+
+      it('should return 400 for invalid exemptRoleIds (not array)', async () => {
+        const guildId = '11111111111111111';
+        vi.mocked(mockClient.guilds.cache).get = vi.fn().mockReturnValue({ id: guildId } as any);
+
+        const app = service.getApp();
+
+        const invalidValues = ['not-array', 123, { invalid: 'object' }];
+        for (const invalidValue of invalidValues) {
+          const response = await request(app)
+            .put(`/api/guilds/${guildId}/config`)
+            .set('Authorization', 'Bearer test-token-123')
+            .send({ exemptRoleIds: invalidValue })
+            .expect(400);
+
+          expect(response.body.message).toContain('exemptRoleIds');
+          expect(response.body.message).toContain('array');
+        }
+      });
+
+      it('should return 400 for invalid exemptRoleIds (invalid snowflakes)', async () => {
+        const guildId = '11111111111111111';
+        vi.mocked(mockClient.guilds.cache).get = vi.fn().mockReturnValue({ id: guildId } as any);
+
+        const app = service.getApp();
+        const response = await request(app)
+          .put(`/api/guilds/${guildId}/config`)
+          .set('Authorization', 'Bearer test-token-123')
+          .send({ exemptRoleIds: ['11111111111111111', 'invalid', '22222222222222222'] })
+          .expect(400);
+
+        expect(response.body.message).toContain('exemptRoleIds');
+        expect(response.body.message).toContain('valid Discord snowflake');
+      });
+
+      it('should return 400 for invalid adminRoleIds (not array)', async () => {
+        const guildId = '11111111111111111';
+        vi.mocked(mockClient.guilds.cache).get = vi.fn().mockReturnValue({ id: guildId } as any);
+
+        const app = service.getApp();
+        const response = await request(app)
+          .put(`/api/guilds/${guildId}/config`)
+          .set('Authorization', 'Bearer test-token-123')
+          .send({ adminRoleIds: 'not-an-array' })
+          .expect(400);
+
+        expect(response.body.message).toContain('adminRoleIds');
+        expect(response.body.message).toContain('array');
+      });
+
+      it('should return 400 for invalid adminRoleIds (invalid snowflakes)', async () => {
+        const guildId = '11111111111111111';
+        vi.mocked(mockClient.guilds.cache).get = vi.fn().mockReturnValue({ id: guildId } as any);
+
+        const app = service.getApp();
+        const response = await request(app)
+          .put(`/api/guilds/${guildId}/config`)
+          .set('Authorization', 'Bearer test-token-123')
+          .send({ adminRoleIds: ['11111111111111111', 'bad-id'] })
+          .expect(400);
+
+        expect(response.body.message).toContain('adminRoleIds');
+      });
+
+      it('should successfully update single field', async () => {
+        const guildId = '11111111111111111';
+        vi.mocked(mockClient.guilds.cache).get = vi.fn().mockReturnValue({ id: guildId } as any);
+        vi.mocked(mockConfigService.updateConfig).mockReturnValue(
+          createMockGuildSettings({
+            guildId,
+            enabled: true,
+            afkTimeoutSeconds: 600,
+            warningSecondsBefore: 120,
+            warningChannelId: null,
+            exemptRoleIds: [],
+            adminRoleIds: [],
+          })
+        );
+
+        const app = service.getApp();
+        const response = await request(app)
+          .put(`/api/guilds/${guildId}/config`)
+          .set('Authorization', 'Bearer test-token-123')
+          .send({ enabled: true })
+          .expect(200);
+
+        expect(mockConfigService.updateConfig).toHaveBeenCalledWith(guildId, { enabled: true });
+        expect(response.body).toMatchObject({
+          guildId,
+          enabled: true,
+        });
+      });
+
+      it('should successfully update multiple fields', async () => {
+        const guildId = '22222222222222222';
+        vi.mocked(mockClient.guilds.cache).get = vi.fn().mockReturnValue({ id: guildId } as any);
+        vi.mocked(mockConfigService.updateConfig).mockReturnValue(
+          createMockGuildSettings({
+            guildId,
+            enabled: false,
+            afkTimeoutSeconds: 900,
+            warningSecondsBefore: 180,
+            warningChannelId: '33333333333333333',
+            exemptRoleIds: ['44444444444444444', '55555555555555555'],
+            adminRoleIds: ['66666666666666666'],
+          })
+        );
+
+        const app = service.getApp();
+        const response = await request(app)
+          .put(`/api/guilds/${guildId}/config`)
+          .set('Authorization', 'Bearer test-token-123')
+          .send({
+            enabled: false,
+            afkTimeoutSeconds: 900,
+            warningSecondsBefore: 180,
+            warningChannelId: '33333333333333333',
+            exemptRoleIds: ['44444444444444444', '55555555555555555'],
+            adminRoleIds: ['66666666666666666'],
+          })
+          .expect(200);
+
+        expect(mockConfigService.updateConfig).toHaveBeenCalledWith(guildId, {
+          enabled: false,
+          afkTimeoutSeconds: 900,
+          warningSecondsBefore: 180,
+          warningChannelId: '33333333333333333',
+          exemptRoleIds: ['44444444444444444', '55555555555555555'],
+          adminRoleIds: ['66666666666666666'],
+        });
+        expect(response.body).toEqual({
+          guildId,
+          enabled: false,
+          afkTimeoutSeconds: 900,
+          warningSecondsBefore: 180,
+          warningChannelId: '33333333333333333',
+          exemptRoleIds: ['44444444444444444', '55555555555555555'],
+          adminRoleIds: ['66666666666666666'],
+        });
+      });
+
+      it('should call guildConfigService.updateConfig() with correct params', async () => {
+        const guildId = '33333333333333333';
+        vi.mocked(mockClient.guilds.cache).get = vi.fn().mockReturnValue({ id: guildId } as any);
+        vi.mocked(mockConfigService.updateConfig).mockReturnValue(
+          createMockGuildSettings({ guildId })
+        );
+
+        const updateData = {
+          afkTimeoutSeconds: 720,
+          exemptRoleIds: ['77777777777777777'],
+        };
+
+        const app = service.getApp();
+        await request(app)
+          .put(`/api/guilds/${guildId}/config`)
+          .set('Authorization', 'Bearer test-token-123')
+          .send(updateData)
+          .expect(200);
+
+        // Verify exact parameters passed to updateConfig
+        expect(mockConfigService.updateConfig).toHaveBeenCalledTimes(1);
+        expect(mockConfigService.updateConfig).toHaveBeenCalledWith(guildId, updateData);
+      });
+
+      it('should return updated config as GuildConfigResponse', async () => {
+        const guildId = '44444444444444444';
+        vi.mocked(mockClient.guilds.cache).get = vi.fn().mockReturnValue({ id: guildId } as any);
+
+        const updatedConfig = createMockGuildSettings({
+          guildId,
+          enabled: true,
+          afkTimeoutSeconds: 1200,
+          warningSecondsBefore: 240,
+          warningChannelId: '88888888888888888',
+          exemptRoleIds: ['99999999999999999'],
+          adminRoleIds: ['10101010101010101'],
+        });
+        vi.mocked(mockConfigService.updateConfig).mockReturnValue(updatedConfig);
+
+        const app = service.getApp();
+        const response = await request(app)
+          .put(`/api/guilds/${guildId}/config`)
+          .set('Authorization', 'Bearer test-token-123')
+          .send({ afkTimeoutSeconds: 1200 })
+          .expect(200);
+
+        // Response shape must match GuildConfigResponse exactly (7 fields)
+        expect(Object.keys(response.body)).toHaveLength(7);
+        expect(response.body).toEqual({
+          guildId: '44444444444444444',
+          enabled: true,
+          afkTimeoutSeconds: 1200,
+          warningSecondsBefore: 240,
+          warningChannelId: '88888888888888888',
+          exemptRoleIds: ['99999999999999999'],
+          adminRoleIds: ['10101010101010101'],
+        });
+      });
+
+      it('should audit log update action', async () => {
+        const guildId = '55555555555555555';
+        vi.mocked(mockClient.guilds.cache).get = vi.fn().mockReturnValue({ id: guildId } as any);
+        vi.mocked(mockConfigService.updateConfig).mockReturnValue(
+          createMockGuildSettings({ guildId })
+        );
+
+        const app = service.getApp();
+        await request(app)
+          .put(`/api/guilds/${guildId}/config`)
+          .set('Authorization', 'Bearer test-token-123')
+          .send({ enabled: false })
+          .expect(200);
+
+        expect(mockLogger.info).toHaveBeenCalledWith(
+          expect.objectContaining({
+            correlationId: expect.any(String),
+            guildId,
+            action: 'update_guild_config',
+          }),
+          expect.stringContaining('Guild config updated via API')
+        );
+      });
+
+      it('should handle updateConfig errors gracefully', async () => {
+        const guildId = '66666666666666666';
+        vi.mocked(mockClient.guilds.cache).get = vi.fn().mockReturnValue({ id: guildId } as any);
+        vi.mocked(mockConfigService.updateConfig).mockImplementation(() => {
+          throw new Error('Database write failed');
+        });
+
+        const app = service.getApp();
+        const response = await request(app)
+          .put(`/api/guilds/${guildId}/config`)
+          .set('Authorization', 'Bearer test-token-123')
+          .send({ enabled: true })
+          .expect(500);
+
+        expect(response.body).toEqual({
+          error: 'Internal Server Error',
+          message: expect.any(String),
+        });
+      });
+
+      it('should accept null warningChannelId to clear the setting', async () => {
+        const guildId = '77777777777777777';
+        vi.mocked(mockClient.guilds.cache).get = vi.fn().mockReturnValue({ id: guildId } as any);
+        vi.mocked(mockConfigService.updateConfig).mockReturnValue(
+          createMockGuildSettings({
+            guildId,
+            warningChannelId: null,
+          })
+        );
+
+        const app = service.getApp();
+        const response = await request(app)
+          .put(`/api/guilds/${guildId}/config`)
+          .set('Authorization', 'Bearer test-token-123')
+          .send({ warningChannelId: null })
+          .expect(200);
+
+        expect(mockConfigService.updateConfig).toHaveBeenCalledWith(guildId, {
+          warningChannelId: null,
+        });
+        expect(response.body.warningChannelId).toBeNull();
+      });
+
+      it('should accept empty arrays for role IDs to clear roles', async () => {
+        const guildId = '88888888888888888';
+        vi.mocked(mockClient.guilds.cache).get = vi.fn().mockReturnValue({ id: guildId } as any);
+        vi.mocked(mockConfigService.updateConfig).mockReturnValue(
+          createMockGuildSettings({
+            guildId,
+            exemptRoleIds: [],
+            adminRoleIds: [],
+          })
+        );
+
+        const app = service.getApp();
+        const response = await request(app)
+          .put(`/api/guilds/${guildId}/config`)
+          .set('Authorization', 'Bearer test-token-123')
+          .send({ exemptRoleIds: [], adminRoleIds: [] })
+          .expect(200);
+
+        expect(response.body.exemptRoleIds).toEqual([]);
+        expect(response.body.adminRoleIds).toEqual([]);
+      });
+
+      it('should reject empty request body', async () => {
+        const guildId = '99999999999999999';
+        vi.mocked(mockClient.guilds.cache).get = vi.fn().mockReturnValue({ id: guildId } as any);
+
+        const app = service.getApp();
+        const response = await request(app)
+          .put(`/api/guilds/${guildId}/config`)
+          .set('Authorization', 'Bearer test-token-123')
+          .send({})
+          .expect(400);
+
+        expect(response.body.message).toContain('At least one field must be provided');
+        expect(mockConfigService.updateConfig).not.toHaveBeenCalled();
+      });
+
+      it('should reject unknown fields in request body', async () => {
+        const guildId = '10101010101010101';
+        vi.mocked(mockClient.guilds.cache).get = vi.fn().mockReturnValue({ id: guildId } as any);
+
+        const app = service.getApp();
+        const response = await request(app)
+          .put(`/api/guilds/${guildId}/config`)
+          .set('Authorization', 'Bearer test-token-123')
+          .send({ unknownField: 'bad', enabled: true })
+          .expect(400);
+
+        expect(response.body.message).toContain('Unknown field');
+        expect(mockConfigService.updateConfig).not.toHaveBeenCalled();
+      });
+    });
+
+    describe('DELETE /api/guilds/:id/config', () => {
+      it('should return 401 without authorization header', async () => {
+        const app = service.getApp();
+        const response = await request(app)
+          .delete('/api/guilds/12345678901234567/config')
+          .expect(401);
+
+        expect(response.body.error).toBe('Unauthorized');
+        expect(mockConfigService.resetConfig).not.toHaveBeenCalled();
+      });
+
+      it('should return 400 for invalid guild ID format', async () => {
+        const app = service.getApp();
+        const response = await request(app)
+          .delete('/api/guilds/not-valid/config')
+          .set('Authorization', 'Bearer test-token-123')
+          .expect(400);
+
+        expect(response.body.message).toContain('Invalid guild ID');
+        expect(mockConfigService.resetConfig).not.toHaveBeenCalled();
+      });
+
+      it('should return 404 when bot not in guild', async () => {
+        const guildId = '11111111111111111';
+        vi.mocked(mockClient.guilds.cache).get = vi.fn().mockReturnValue(undefined);
+
+        const app = service.getApp();
+        const response = await request(app)
+          .delete(`/api/guilds/${guildId}/config`)
+          .set('Authorization', 'Bearer test-token-123')
+          .expect(404);
+
+        expect(response.body.error).toBe('Not Found');
+        expect(mockConfigService.resetConfig).not.toHaveBeenCalled();
+      });
+
+      it('should call guildConfigService.resetConfig()', async () => {
+        const guildId = '22222222222222222';
+        vi.mocked(mockClient.guilds.cache).get = vi.fn().mockReturnValue({ id: guildId } as any);
+        vi.mocked(mockConfigService.resetConfig).mockReturnValue(undefined);
+
+        const app = service.getApp();
+        await request(app)
+          .delete(`/api/guilds/${guildId}/config`)
+          .set('Authorization', 'Bearer test-token-123')
+          .expect(200);
+
+        expect(mockConfigService.resetConfig).toHaveBeenCalledTimes(1);
+        expect(mockConfigService.resetConfig).toHaveBeenCalledWith(guildId);
+      });
+
+      it('should return success response with message', async () => {
+        const guildId = '33333333333333333';
+        vi.mocked(mockClient.guilds.cache).get = vi.fn().mockReturnValue({ id: guildId } as any);
+        vi.mocked(mockConfigService.resetConfig).mockReturnValue(undefined);
+
+        const app = service.getApp();
+        const response = await request(app)
+          .delete(`/api/guilds/${guildId}/config`)
+          .set('Authorization', 'Bearer test-token-123')
+          .expect(200);
+
+        expect(response.body).toEqual({
+          success: true,
+          guildId: '33333333333333333',
+          message: expect.stringContaining('reset to defaults'),
+        });
+      });
+
+      it('should audit log reset action', async () => {
+        const guildId = '44444444444444444';
+        vi.mocked(mockClient.guilds.cache).get = vi.fn().mockReturnValue({ id: guildId } as any);
+        vi.mocked(mockConfigService.resetConfig).mockReturnValue(undefined);
+
+        const app = service.getApp();
+        await request(app)
+          .delete(`/api/guilds/${guildId}/config`)
+          .set('Authorization', 'Bearer test-token-123')
+          .expect(200);
+
+        expect(mockLogger.info).toHaveBeenCalledWith(
+          expect.objectContaining({
+            correlationId: expect.any(String),
+            guildId,
+            action: 'reset_guild_config',
+          }),
+          expect.stringContaining('Guild config reset to defaults via API')
+        );
+      });
+
+      it('should handle resetConfig errors gracefully', async () => {
+        const guildId = '55555555555555555';
+        vi.mocked(mockClient.guilds.cache).get = vi.fn().mockReturnValue({ id: guildId } as any);
+        vi.mocked(mockConfigService.resetConfig).mockImplementation(() => {
+          throw new Error('Database delete failed');
+        });
+
+        const app = service.getApp();
+        const response = await request(app)
+          .delete(`/api/guilds/${guildId}/config`)
+          .set('Authorization', 'Bearer test-token-123')
+          .expect(500);
+
+        expect(response.body).toEqual({
+          error: 'Internal Server Error',
+          message: expect.any(String),
+        });
+      });
+
+      it('should succeed even if config was already at defaults', async () => {
+        const guildId = '66666666666666666';
+        vi.mocked(mockClient.guilds.cache).get = vi.fn().mockReturnValue({ id: guildId } as any);
+        vi.mocked(mockConfigService.resetConfig).mockReturnValue(undefined);
+
+        const app = service.getApp();
+        const response = await request(app)
+          .delete(`/api/guilds/${guildId}/config`)
+          .set('Authorization', 'Bearer test-token-123')
+          .expect(200);
+
+        // Should succeed idempotently
+        expect(response.body.success).toBe(true);
       });
     });
   });

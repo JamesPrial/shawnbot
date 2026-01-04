@@ -13,6 +13,10 @@ import type {
   OperationResponse,
   GuildsListResponse,
   GuildSummary,
+  GuildConfigResponse,
+  GuildConfigUpdate,
+  ConfigResetResponse,
+  GuildListItem,
 } from './types';
 
 /**
@@ -53,6 +57,55 @@ async function parseErrorResponse(response: Response): Promise<{ error: string; 
       message: `HTTP ${response.status}: ${response.statusText}`,
     };
   }
+}
+
+/**
+ * Validate a Discord guild ID (snowflake format)
+ * Guild IDs are 17-19 digit numeric strings
+ *
+ * @param guildId - Guild ID to validate
+ * @returns true if valid snowflake format, false otherwise
+ */
+function isValidGuildId(guildId: string): boolean {
+  return /^\d{17,19}$/.test(guildId);
+}
+
+/**
+ * Type guard for GuildSummary
+ */
+function isGuildSummary(value: unknown): value is GuildSummary {
+  return (
+    value !== null &&
+    typeof value === 'object' &&
+    'guildId' in value &&
+    'name' in value &&
+    'enabled' in value &&
+    'connected' in value &&
+    typeof value.guildId === 'string' &&
+    typeof value.name === 'string' &&
+    typeof value.enabled === 'boolean' &&
+    typeof value.connected === 'boolean'
+  );
+}
+
+/**
+ * Type guard for GuildListItem
+ */
+function isGuildListItem(value: unknown): value is GuildListItem {
+  return (
+    value !== null &&
+    typeof value === 'object' &&
+    'guildId' in value &&
+    'name' in value &&
+    'memberCount' in value &&
+    'enabled' in value &&
+    'connected' in value &&
+    typeof value.guildId === 'string' &&
+    typeof value.name === 'string' &&
+    typeof value.memberCount === 'number' &&
+    typeof value.enabled === 'boolean' &&
+    typeof value.connected === 'boolean'
+  );
 }
 
 /**
@@ -238,48 +291,18 @@ export async function validateToken(token: string): Promise<boolean> {
 }
 
 /**
- * Validate a Discord guild ID (snowflake format)
- * Guild IDs are 17-19 digit numeric strings
- *
- * @param guildId - Guild ID to validate
- * @returns true if valid snowflake format, false otherwise
- */
-function isValidGuildId(guildId: string): boolean {
-  return /^\d{17,19}$/.test(guildId);
-}
-
-/**
- * Type guard for GuildSummary
- */
-function isGuildSummary(value: unknown): value is GuildSummary {
-  return (
-    value !== null &&
-    typeof value === 'object' &&
-    'guildId' in value &&
-    'name' in value &&
-    'enabled' in value &&
-    'connected' in value &&
-    typeof value.guildId === 'string' &&
-    typeof value.name === 'string' &&
-    typeof value.enabled === 'boolean' &&
-    typeof value.connected === 'boolean'
-  );
-}
-
-/**
- * Fetch list of guilds the bot is connected to
+ * Fetch list of all guilds with their basic status
  * Authenticated endpoint - requires bearer token
  *
  * @param token - Bearer token for authentication
- * @returns List of guild summaries or error
+ * @returns List of guilds or error
  *
  * @example
  * ```typescript
  * const result = await getGuilds('my-secret-token');
  * if (result.success) {
- *   result.data.guilds.forEach(guild => {
- *     console.log(`${guild.name}: ${guild.enabled ? 'enabled' : 'disabled'}`);
- *   });
+ *   console.log(`Found ${result.data.total} guilds`);
+ *   result.data.guilds.forEach(g => console.log(g.name));
  * } else if (result.error === 'UNAUTHORIZED') {
  *   console.error('Invalid token');
  * } else {
@@ -322,13 +345,19 @@ export async function getGuilds(token: string): Promise<ApiResult<GuildsListResp
       data !== null &&
       typeof data === 'object' &&
       'guilds' in data &&
+      'total' in data &&
       Array.isArray(data.guilds) &&
-      data.guilds.every(isGuildSummary)
+      typeof data.total === 'number'
     ) {
-      return {
-        success: true,
-        data: data as GuildsListResponse,
-      };
+      // Validate each guild item in the array
+      const isValidGuildList = data.guilds.every(isGuildListItem);
+
+      if (isValidGuildList) {
+        return {
+          success: true,
+          data: data as GuildsListResponse,
+        };
+      }
     }
 
     return {
@@ -427,6 +456,329 @@ export async function getGuildStatus(
       return {
         success: true,
         data: data as GuildStatusResponse,
+      };
+    }
+
+    return {
+      success: false,
+      error: 'INVALID_RESPONSE',
+      message: 'API returned unexpected response format',
+    };
+  } catch (error) {
+    // Network error or fetch exception
+    const message = error instanceof Error ? error.message : 'Network request failed';
+    return {
+      success: false,
+      error: 'NETWORK_ERROR',
+      message,
+    };
+  }
+}
+
+/**
+ * Fetch full configuration for a specific guild
+ * Authenticated endpoint - requires bearer token
+ *
+ * @param token - Bearer token for authentication
+ * @param guildId - Discord guild ID (snowflake)
+ * @returns Guild configuration or error
+ *
+ * @example
+ * ```typescript
+ * const result = await getGuildConfig('my-secret-token', '123456789012345678');
+ * if (result.success) {
+ *   console.log(`AFK timeout: ${result.data.afkTimeoutSeconds}s`);
+ * } else if (result.error === 'UNAUTHORIZED') {
+ *   console.error('Invalid token');
+ * } else {
+ *   console.error(result.message);
+ * }
+ * ```
+ */
+export async function getGuildConfig(
+  token: string,
+  guildId: string,
+): Promise<ApiResult<GuildConfigResponse>> {
+  // Validate guild ID format before making request
+  if (!isValidGuildId(guildId)) {
+    return {
+      success: false,
+      error: 'INVALID_GUILD_ID',
+      message: 'Guild ID must be a 17-19 digit Discord snowflake',
+    };
+  }
+
+  try {
+    const response = await fetch(`${API_BASE_URL}/api/guilds/${guildId}/config`, {
+      method: 'GET',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${token}`,
+      },
+    });
+
+    // Handle 401 Unauthorized specifically
+    if (response.status === 401) {
+      return {
+        success: false,
+        error: 'UNAUTHORIZED',
+        message: 'Invalid token - authentication failed',
+      };
+    }
+
+    if (!response.ok) {
+      const errorData = await parseErrorResponse(response);
+      return {
+        success: false,
+        error: errorData.error,
+        message: errorData.message,
+      };
+    }
+
+    const data: unknown = await response.json();
+
+    // Type guard for GuildConfigResponse
+    if (
+      data !== null &&
+      typeof data === 'object' &&
+      'guildId' in data &&
+      'enabled' in data &&
+      'afkTimeoutSeconds' in data &&
+      'warningSecondsBefore' in data &&
+      'warningChannelId' in data &&
+      'exemptRoleIds' in data &&
+      'adminRoleIds' in data &&
+      typeof data.guildId === 'string' &&
+      typeof data.enabled === 'boolean' &&
+      typeof data.afkTimeoutSeconds === 'number' &&
+      typeof data.warningSecondsBefore === 'number' &&
+      (data.warningChannelId === null || typeof data.warningChannelId === 'string') &&
+      Array.isArray(data.exemptRoleIds) &&
+      Array.isArray(data.adminRoleIds)
+    ) {
+      // Validate that all array elements are strings
+      const exemptRoleIdsValid = data.exemptRoleIds.every(
+        (id: unknown) => typeof id === 'string',
+      );
+      const adminRoleIdsValid = data.adminRoleIds.every((id: unknown) => typeof id === 'string');
+
+      if (exemptRoleIdsValid && adminRoleIdsValid) {
+        return {
+          success: true,
+          data: data as GuildConfigResponse,
+        };
+      }
+    }
+
+    return {
+      success: false,
+      error: 'INVALID_RESPONSE',
+      message: 'API returned unexpected response format',
+    };
+  } catch (error) {
+    // Network error or fetch exception
+    const message = error instanceof Error ? error.message : 'Network request failed';
+    return {
+      success: false,
+      error: 'NETWORK_ERROR',
+      message,
+    };
+  }
+}
+
+/**
+ * Update guild configuration with partial changes
+ * Authenticated endpoint - requires bearer token
+ *
+ * @param token - Bearer token for authentication
+ * @param guildId - Discord guild ID (snowflake)
+ * @param update - Partial configuration changes to apply
+ * @returns Updated guild configuration or error
+ *
+ * @example
+ * ```typescript
+ * const result = await updateGuildConfig('my-secret-token', '123456789012345678', {
+ *   enabled: true,
+ *   afkTimeoutSeconds: 600,
+ * });
+ * if (result.success) {
+ *   console.log('Configuration updated');
+ * } else if (result.error === 'UNAUTHORIZED') {
+ *   console.error('Invalid token');
+ * } else {
+ *   console.error(result.message);
+ * }
+ * ```
+ */
+export async function updateGuildConfig(
+  token: string,
+  guildId: string,
+  update: GuildConfigUpdate,
+): Promise<ApiResult<GuildConfigResponse>> {
+  // Validate guild ID format before making request
+  if (!isValidGuildId(guildId)) {
+    return {
+      success: false,
+      error: 'INVALID_GUILD_ID',
+      message: 'Guild ID must be a 17-19 digit Discord snowflake',
+    };
+  }
+
+  try {
+    const response = await fetch(`${API_BASE_URL}/api/guilds/${guildId}/config`, {
+      method: 'PUT',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${token}`,
+      },
+      body: JSON.stringify(update),
+    });
+
+    // Handle 401 Unauthorized specifically
+    if (response.status === 401) {
+      return {
+        success: false,
+        error: 'UNAUTHORIZED',
+        message: 'Invalid token - authentication failed',
+      };
+    }
+
+    if (!response.ok) {
+      const errorData = await parseErrorResponse(response);
+      return {
+        success: false,
+        error: errorData.error,
+        message: errorData.message,
+      };
+    }
+
+    const data: unknown = await response.json();
+
+    // Type guard for GuildConfigResponse
+    if (
+      data !== null &&
+      typeof data === 'object' &&
+      'guildId' in data &&
+      'enabled' in data &&
+      'afkTimeoutSeconds' in data &&
+      'warningSecondsBefore' in data &&
+      'warningChannelId' in data &&
+      'exemptRoleIds' in data &&
+      'adminRoleIds' in data &&
+      typeof data.guildId === 'string' &&
+      typeof data.enabled === 'boolean' &&
+      typeof data.afkTimeoutSeconds === 'number' &&
+      typeof data.warningSecondsBefore === 'number' &&
+      (data.warningChannelId === null || typeof data.warningChannelId === 'string') &&
+      Array.isArray(data.exemptRoleIds) &&
+      Array.isArray(data.adminRoleIds)
+    ) {
+      // Validate that all array elements are strings
+      const exemptRoleIdsValid = data.exemptRoleIds.every(
+        (id: unknown) => typeof id === 'string',
+      );
+      const adminRoleIdsValid = data.adminRoleIds.every((id: unknown) => typeof id === 'string');
+
+      if (exemptRoleIdsValid && adminRoleIdsValid) {
+        return {
+          success: true,
+          data: data as GuildConfigResponse,
+        };
+      }
+    }
+
+    return {
+      success: false,
+      error: 'INVALID_RESPONSE',
+      message: 'API returned unexpected response format',
+    };
+  } catch (error) {
+    // Network error or fetch exception
+    const message = error instanceof Error ? error.message : 'Network request failed';
+    return {
+      success: false,
+      error: 'NETWORK_ERROR',
+      message,
+    };
+  }
+}
+
+/**
+ * Reset guild configuration to default values
+ * Authenticated endpoint - requires bearer token
+ *
+ * @param token - Bearer token for authentication
+ * @param guildId - Discord guild ID (snowflake)
+ * @returns Reset confirmation or error
+ *
+ * @example
+ * ```typescript
+ * const result = await resetGuildConfig('my-secret-token', '123456789012345678');
+ * if (result.success) {
+ *   console.log(result.data.message);
+ * } else if (result.error === 'UNAUTHORIZED') {
+ *   console.error('Invalid token');
+ * } else {
+ *   console.error(result.message);
+ * }
+ * ```
+ */
+export async function resetGuildConfig(
+  token: string,
+  guildId: string,
+): Promise<ApiResult<ConfigResetResponse>> {
+  // Validate guild ID format before making request
+  if (!isValidGuildId(guildId)) {
+    return {
+      success: false,
+      error: 'INVALID_GUILD_ID',
+      message: 'Guild ID must be a 17-19 digit Discord snowflake',
+    };
+  }
+
+  try {
+    const response = await fetch(`${API_BASE_URL}/api/guilds/${guildId}/config`, {
+      method: 'DELETE',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${token}`,
+      },
+    });
+
+    // Handle 401 Unauthorized specifically
+    if (response.status === 401) {
+      return {
+        success: false,
+        error: 'UNAUTHORIZED',
+        message: 'Invalid token - authentication failed',
+      };
+    }
+
+    if (!response.ok) {
+      const errorData = await parseErrorResponse(response);
+      return {
+        success: false,
+        error: errorData.error,
+        message: errorData.message,
+      };
+    }
+
+    const data: unknown = await response.json();
+
+    // Type guard for ConfigResetResponse
+    if (
+      data !== null &&
+      typeof data === 'object' &&
+      'success' in data &&
+      'guildId' in data &&
+      'message' in data &&
+      typeof data.success === 'boolean' &&
+      typeof data.guildId === 'string' &&
+      typeof data.message === 'string'
+    ) {
+      return {
+        success: true,
+        data: data as ConfigResetResponse,
       };
     }
 

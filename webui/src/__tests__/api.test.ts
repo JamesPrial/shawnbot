@@ -392,16 +392,19 @@ describe('API Client', () => {
           {
             guildId: '123456789012345678',
             name: 'Test Guild 1',
+            memberCount: 150,
             enabled: true,
             connected: true,
           },
           {
             guildId: '987654321098765432',
             name: 'Test Guild 2',
+            memberCount: 75,
             enabled: false,
             connected: false,
           },
         ],
+        total: 2,
       };
 
       global.fetch = vi.fn().mockResolvedValue({
@@ -415,12 +418,15 @@ describe('API Client', () => {
       expect(result.success).toBe(true);
       if (result.success) {
         expect(result.data.guilds).toHaveLength(2);
+        expect(result.data.total).toBe(2);
         expect(result.data.guilds[0]?.guildId).toBe('123456789012345678');
         expect(result.data.guilds[0]?.name).toBe('Test Guild 1');
+        expect(result.data.guilds[0]?.memberCount).toBe(150);
         expect(result.data.guilds[0]?.enabled).toBe(true);
         expect(result.data.guilds[0]?.connected).toBe(true);
         expect(result.data.guilds[1]?.guildId).toBe('987654321098765432');
         expect(result.data.guilds[1]?.name).toBe('Test Guild 2');
+        expect(result.data.guilds[1]?.memberCount).toBe(75);
         expect(result.data.guilds[1]?.enabled).toBe(false);
         expect(result.data.guilds[1]?.connected).toBe(false);
       }
@@ -438,6 +444,7 @@ describe('API Client', () => {
       // Test that an empty guilds array is valid and parsed correctly
       const mockResponse = {
         guilds: [],
+        total: 0,
       };
 
       global.fetch = vi.fn().mockResolvedValue({
@@ -451,6 +458,7 @@ describe('API Client', () => {
       expect(result.success).toBe(true);
       if (result.success) {
         expect(result.data.guilds).toHaveLength(0);
+        expect(result.data.total).toBe(0);
       }
     });
 
@@ -536,9 +544,10 @@ describe('API Client', () => {
             {
               guildId: '123456789012345678',
               name: 'Test Guild',
-              // missing enabled and connected
+              // missing memberCount, enabled and connected
             },
           ],
+          total: 1,
         }),
       });
 
@@ -560,10 +569,12 @@ describe('API Client', () => {
             {
               guildId: 123456789012345678, // number instead of string
               name: 'Test Guild',
+              memberCount: 100,
               enabled: true,
               connected: true,
             },
           ],
+          total: 1,
         }),
       });
 

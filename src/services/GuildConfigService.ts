@@ -136,6 +136,16 @@ export class GuildConfigService {
     return withDefaults;
   }
 
+  /**
+   * Resets a guild's configuration to defaults by deleting it from the database.
+   * The next getConfig() call will return default values.
+   */
+  resetConfig(guildId: string): void {
+    this.repository.delete(guildId);
+    this.cache.delete(guildId);
+    this.logger.info({ guildId }, 'Guild config reset to defaults');
+  }
+
   clearCache(guildId?: string): void {
     if (guildId) {
       this.cache.delete(guildId);
