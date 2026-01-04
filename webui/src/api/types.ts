@@ -53,6 +53,25 @@ export interface OperationResponse {
 }
 
 /**
+ * Summary information for a single guild
+ * Part of the GuildsListResponse
+ */
+export interface GuildSummary {
+  guildId: string;
+  name: string;
+  enabled: boolean;
+  connected: boolean;
+}
+
+/**
+ * Response from GET /api/guilds
+ * Authenticated endpoint requiring bearer token
+ */
+export interface GuildsListResponse {
+  guilds: GuildSummary[];
+}
+
+/**
  * Error response format returned by the API
  * Returned for HTTP 4xx/5xx responses with JSON body
  */

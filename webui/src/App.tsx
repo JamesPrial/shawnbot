@@ -10,22 +10,7 @@
 import { AuthProvider } from './auth/AuthContext';
 import { useAuth } from './auth/useAuth';
 import { LoginPage } from './pages/LoginPage';
-
-/**
- * Logout button component for authenticated users
- */
-function LogoutButton(): JSX.Element {
-  const { logout } = useAuth();
-
-  return (
-    <button
-      onClick={logout}
-      className="mt-4 px-4 py-2 bg-red-600 text-white rounded-md hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-red-500 focus:ring-offset-2 transition-colors"
-    >
-      Logout
-    </button>
-  );
-}
+import { DashboardPage } from './pages/DashboardPage';
 
 /**
  * Application content with auth-based routing
@@ -51,22 +36,8 @@ function AppContent(): JSX.Element {
     return <LoginPage />;
   }
 
-  // Dashboard placeholder for authenticated users
-  return (
-    <div className="min-h-screen bg-gray-100 p-8">
-      <div className="max-w-4xl mx-auto">
-        <div className="bg-white rounded-lg shadow-lg p-8">
-          <h1 className="text-2xl font-bold text-gray-900 mb-2">Dashboard</h1>
-          <p className="text-green-600 font-medium mb-4">Logged in successfully!</p>
-          <p className="text-gray-600">
-            This is a placeholder dashboard. Future updates will add guild management
-            and bot configuration features.
-          </p>
-          <LogoutButton />
-        </div>
-      </div>
-    </div>
-  );
+  // Dashboard for authenticated users
+  return <DashboardPage />;
 }
 
 /**

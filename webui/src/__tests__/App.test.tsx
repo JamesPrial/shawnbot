@@ -8,19 +8,27 @@
  * 4. Logout button calls logout() and returns to login
  */
 
-import { describe, it, expect, vi, beforeEach, type Mock } from 'vitest';
-import { render, screen, waitFor, act } from '@testing-library/react';
+import { describe, it, expect, vi, beforeEach, afterEach, type Mock } from 'vitest';
+import { render, screen, waitFor, act, cleanup } from '@testing-library/react';
 import { App } from '../App';
 import * as authContext from '../auth/AuthContext';
 import type { AuthContextValue } from '../auth/AuthContext';
 import * as apiClient from '../api/client';
 import * as useAuthModule from '../auth/useAuth';
+import * as tokenStorageModule from '../auth/tokenStorage';
 
 // Mock the API client
 vi.mock('../api/client');
 
 // Mock the useAuth hook
 vi.mock('../auth/useAuth');
+
+// Mock the tokenStorage module
+vi.mock('../auth/tokenStorage', () => ({
+  getToken: vi.fn(() => 'test-token'),
+  setToken: vi.fn(),
+  clearToken: vi.fn(),
+}));
 
 describe('App', () => {
   beforeEach(() => {
@@ -31,6 +39,25 @@ describe('App', () => {
       success: true,
       data: { status: 'ok', uptime: 100, ready: true, guilds: 5 },
     });
+
+    // Mock getStatus for DashboardPage
+    vi.mocked(apiClient.getStatus).mockResolvedValue({
+      success: true,
+      data: {
+        guilds: 5,
+        voiceConnections: 2,
+        memory: { heapUsed: 50000000, heapTotal: 100000000, rss: 150000000 },
+      },
+    });
+
+    // Mock getGuilds for DashboardPage
+    vi.mocked(apiClient.getGuilds).mockResolvedValue({
+      success: true,
+      data: { guilds: [] },
+    });
+
+    // Set default mock for tokenStorage
+    vi.mocked(tokenStorageModule.getToken).mockReturnValue('test-token');
 
     // Set default mock for useAuth
     vi.mocked(useAuthModule.useAuth).mockReturnValue({
@@ -44,6 +71,11 @@ describe('App', () => {
     vi.spyOn(authContext, 'AuthProvider').mockImplementation(({ children }) => {
       return <>{children}</>;
     });
+  });
+
+  afterEach(() => {
+    // Clean up DOM between tests
+    cleanup();
   });
 
   describe('Loading State', () => {
@@ -120,6 +152,8 @@ describe('App', () => {
       // BEHAVIOR: Protected content must not be accessible without authentication
       // WHY: Security - prevent unauthorized access to admin interface
 
+      // Make sure this test starts fresh
+      cleanup();
       vi.mocked(useAuthModule.useAuth).mockReturnValue({
         isAuthenticated: false,
         isLoading: false,
@@ -132,9 +166,10 @@ describe('App', () => {
       });
 
       // These should not be in the document
-      expect(screen.queryByText(/logout/i)).not.toBeInTheDocument();
-      expect(screen.queryByRole('heading', { name: /dashboard/i })).not.toBeInTheDocument();
-      expect(screen.queryByText(/logged in successfully/i)).not.toBeInTheDocument();
+      expect(screen.queryByText(/bot status/i)).not.toBeInTheDocument();
+      expect(screen.queryByRole('button', { name: /logout/i })).not.toBeInTheDocument();
+      // Make sure only login page is shown
+      expect(screen.getByLabelText(/access token/i)).toBeInTheDocument();
     });
   });
 
@@ -154,8 +189,13 @@ describe('App', () => {
         render(<App />);
       });
 
+      // Wait for dashboard to load
+      await waitFor(() => {
+        expect(screen.getByText(/shawnbot admin/i)).toBeInTheDocument();
+      });
+
       // Dashboard should be visible
-      expect(screen.getByText(/logged in successfully/i)).toBeInTheDocument();
+      expect(screen.getByText(/bot status/i)).toBeInTheDocument();
 
       // LoginPage should NOT be visible
       expect(screen.queryByLabelText(/access token/i)).not.toBeInTheDocument();
@@ -313,7 +353,7 @@ describe('App', () => {
       // Should now show dashboard
       await waitFor(() => {
         expect(screen.queryByLabelText(/access token/i)).not.toBeInTheDocument();
-        expect(screen.getByRole('heading', { name: /dashboard/i })).toBeInTheDocument();
+        expect(screen.getByText(/shawnbot admin/i)).toBeInTheDocument();
       });
     });
 
@@ -324,6 +364,9 @@ describe('App', () => {
       const mockLogin = vi.fn();
       const mockLogout = vi.fn();
 
+      // Clean up first
+      cleanup();
+
       // Start authenticated
       vi.mocked(useAuthModule.useAuth).mockReturnValue({
         isAuthenticated: true,
@@ -332,10 +375,14 @@ describe('App', () => {
         logout: mockLogout,
       });
 
-      const { rerender } = render(<App />);
+      const { rerender } = await act(async () => {
+        return render(<App />);
+      });
 
-      // Initially shows dashboard
-      expect(screen.getByRole('heading', { name: /dashboard/i })).toBeInTheDocument();
+      // Initially shows dashboard - wait for it to load
+      await waitFor(() => {
+        expect(screen.getByText(/shawnbot admin/i)).toBeInTheDocument();
+      });
 
       // Simulate logout
       vi.mocked(useAuthModule.useAuth).mockReturnValue({
@@ -351,7 +398,7 @@ describe('App', () => {
 
       // Should now show login page
       await waitFor(() => {
-        expect(screen.queryByRole('heading', { name: /dashboard/i })).not.toBeInTheDocument();
+        expect(screen.queryByText(/bot status/i)).not.toBeInTheDocument();
         expect(screen.getByLabelText(/access token/i)).toBeInTheDocument();
       });
     });
@@ -422,9 +469,9 @@ describe('App', () => {
   });
 
   describe('Dashboard Content', () => {
-    it('should display placeholder message about future features', async () => {
-      // BEHAVIOR: Dashboard should inform users about upcoming functionality
-      // WHY: Sets expectations for what will be added
+    it('should display ShawnBot Admin header and Bot Status section', async () => {
+      // BEHAVIOR: Dashboard should display main header and status panel
+      // WHY: Provides clear dashboard structure and bot information
 
       vi.mocked(useAuthModule.useAuth).mockReturnValue({
         isAuthenticated: true,
@@ -437,17 +484,19 @@ describe('App', () => {
         render(<App />);
       });
 
-      expect(
-        screen.getByText(/this is a placeholder dashboard/i),
-      ).toBeInTheDocument();
-      expect(
-        screen.getByText(/future updates will add guild management/i),
-      ).toBeInTheDocument();
+      // Wait for async data loading
+      await waitFor(() => {
+        expect(screen.getByText(/shawnbot admin/i)).toBeInTheDocument();
+      });
+
+      expect(screen.getByText(/bot status/i)).toBeInTheDocument();
+      expect(screen.getByText(/voice connections/i)).toBeInTheDocument();
+      expect(screen.getByText(/memory usage/i)).toBeInTheDocument();
     });
 
-    it('should show success message after login', async () => {
-      // BEHAVIOR: Dashboard should confirm successful authentication
-      // WHY: Provides positive feedback to user
+    it('should display guild management section', async () => {
+      // BEHAVIOR: Dashboard should show guild list and management controls
+      // WHY: Allows admin to manage AFK detection per guild
 
       vi.mocked(useAuthModule.useAuth).mockReturnValue({
         isAuthenticated: true,
@@ -460,7 +509,18 @@ describe('App', () => {
         render(<App />);
       });
 
-      expect(screen.getByText(/logged in successfully/i)).toBeInTheDocument();
+      // Wait for async data loading
+      await waitFor(() => {
+        expect(screen.getByText(/bot status/i)).toBeInTheDocument();
+      });
+
+      // Check for guild section heading
+      const guildHeading = screen.getAllByText(/^Guilds$/);
+      // The second "Guilds" text should be the section heading for the guild table
+      expect(guildHeading.length).toBeGreaterThan(0);
+
+      // When no guilds, we show the "No Guilds Found" message
+      expect(screen.getByText(/no guilds found/i)).toBeInTheDocument();
     });
   });
 });

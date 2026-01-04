@@ -81,6 +81,23 @@ interface OperationResponse {
 }
 
 /**
+ * Guild summary structure for guilds list.
+ */
+interface GuildSummary {
+  guildId: string;
+  name: string;
+  enabled: boolean;
+  connected: boolean;
+}
+
+/**
+ * Guilds list response structure.
+ */
+interface GuildsListResponse {
+  guilds: GuildSummary[];
+}
+
+/**
  * AdminApiService provides a REST API for bot administration.
  * Implements security best practices including:
  * - Localhost-only binding (127.0.0.1)
@@ -152,6 +169,7 @@ export class AdminApiService {
 
     // Protected endpoints (auth required)
     this.app.get('/api/status', this.authMiddleware.bind(this), this.handleStatus.bind(this));
+    this.app.get('/api/guilds', this.authMiddleware.bind(this), this.handleGuildsList.bind(this));
     this.app.get('/api/guilds/:id/status', this.authMiddleware.bind(this), this.handleGuildStatus.bind(this));
     this.app.post('/api/guilds/:id/enable', this.authMiddleware.bind(this), this.handleGuildEnable.bind(this));
     this.app.post('/api/guilds/:id/disable', this.authMiddleware.bind(this), this.handleGuildDisable.bind(this));
@@ -315,6 +333,36 @@ export class AdminApiService {
         rss: memoryUsage.rss,
       },
     } satisfies StatusResponse);
+  }
+
+  /**
+   * GET /api/guilds - List all guilds the bot is in.
+   */
+  private handleGuildsList(req: RequestWithCorrelation, res: Response): void {
+    const guilds = this.client.guilds.cache.map((guild) => {
+      const config = this.guildConfigService.getConfig(guild.id);
+      const connected = this.voiceConnectionManager.hasConnection(guild.id);
+
+      return {
+        guildId: guild.id,
+        name: guild.name,
+        enabled: config.enabled,
+        connected,
+      } satisfies GuildSummary;
+    });
+
+    this.logger.info(
+      {
+        correlationId: req.correlationId,
+        ip: req.ip,
+        guildCount: guilds.length,
+      },
+      'Guilds list endpoint accessed'
+    );
+
+    res.json({
+      guilds,
+    } satisfies GuildsListResponse);
   }
 
   /**
