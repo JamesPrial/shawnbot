@@ -106,6 +106,10 @@ Optional REST API (`src/api/AdminApiService.ts`) for bot administration over HTT
 **Endpoints:**
 - `GET /health` - Public health check
 - `GET /api/status` - Bot metrics (auth required)
-- `GET /api/guilds/:id/status` - Guild config (auth required)
+- `GET /api/guilds` - List all guilds (auth required)
+- `GET /api/guilds/:id/status` - Guild status (auth required)
+- `GET /api/guilds/:id/config` - Full guild config (auth required)
+- `PUT /api/guilds/:id/config` - Update guild config (auth required)
+- `DELETE /api/guilds/:id/config` - Reset guild to defaults (auth required)
 - `POST /api/guilds/:id/enable` - Enable AFK detection (auth required)
 - `POST /api/guilds/:id/disable` - Disable AFK detection (auth required)

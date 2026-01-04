@@ -63,7 +63,11 @@ ADMIN_API_TOKEN=your_secret      # Required when API is enabled
 |--------|------|------|-------------|
 | GET | `/health` | No | Health check (uptime, ready, guilds) |
 | GET | `/api/status` | Yes | Bot metrics (guilds, voice connections, memory) |
+| GET | `/api/guilds` | Yes | List all guilds with status |
 | GET | `/api/guilds/:id/status` | Yes | Guild config and connection status |
+| GET | `/api/guilds/:id/config` | Yes | Full guild configuration |
+| PUT | `/api/guilds/:id/config` | Yes | Update guild configuration |
+| DELETE | `/api/guilds/:id/config` | Yes | Reset guild config to defaults |
 | POST | `/api/guilds/:id/enable` | Yes | Enable AFK detection for guild |
 | POST | `/api/guilds/:id/disable` | Yes | Disable AFK detection for guild |
 
@@ -83,6 +87,36 @@ curl http://127.0.0.1:3000/health
 
 # Get bot status
 curl -H "Authorization: Bearer YOUR_TOKEN" http://127.0.0.1:3000/api/status
+
+# List all guilds
+curl -H "Authorization: Bearer YOUR_TOKEN" http://127.0.0.1:3000/api/guilds
+
+# Get full guild configuration
+curl -H "Authorization: Bearer YOUR_TOKEN" \
+  http://127.0.0.1:3000/api/guilds/123456789012345678/config
+
+# Update guild configuration
+curl -X PUT -H "Authorization: Bearer YOUR_TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{"afkTimeoutSeconds": 600, "warningSecondsBefore": 120}' \
+  http://127.0.0.1:3000/api/guilds/123456789012345678/config
+
+# Update guild with all fields
+curl -X PUT -H "Authorization: Bearer YOUR_TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "enabled": true,
+    "afkTimeoutSeconds": 600,
+    "warningSecondsBefore": 120,
+    "warningChannelId": "987654321098765432",
+    "exemptRoleIds": ["111111111111111111", "222222222222222222"],
+    "adminRoleIds": ["333333333333333333"]
+  }' \
+  http://127.0.0.1:3000/api/guilds/123456789012345678/config
+
+# Reset guild config to defaults
+curl -X DELETE -H "Authorization: Bearer YOUR_TOKEN" \
+  http://127.0.0.1:3000/api/guilds/123456789012345678/config
 
 # Enable AFK detection for a guild
 curl -X POST -H "Authorization: Bearer YOUR_TOKEN" \

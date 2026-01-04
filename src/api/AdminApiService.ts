@@ -81,7 +81,7 @@ interface OperationResponse {
 }
 
 /**
- * Guild summary structure for guilds list.
+ * Guild summary structure for guilds list (lightweight for list view).
  */
 interface GuildSummary {
   guildId: string;
@@ -91,10 +91,56 @@ interface GuildSummary {
 }
 
 /**
+ * Guild list item structure (includes memberCount for detailed list view).
+ */
+interface GuildListItem {
+  guildId: string;
+  name: string;
+  memberCount: number;
+  enabled: boolean;
+  connected: boolean;
+}
+
+/**
  * Guilds list response structure.
  */
 interface GuildsListResponse {
-  guilds: GuildSummary[];
+  guilds: GuildListItem[];
+  total: number;
+}
+
+/**
+ * Full guild config response structure.
+ */
+interface GuildConfigResponse {
+  guildId: string;
+  enabled: boolean;
+  afkTimeoutSeconds: number;
+  warningSecondsBefore: number;
+  warningChannelId: string | null;
+  exemptRoleIds: string[];
+  adminRoleIds: string[];
+}
+
+/**
+ * Guild config update request structure.
+ */
+interface GuildConfigUpdateRequest {
+  enabled?: boolean;
+  afkTimeoutSeconds?: number;
+  warningSecondsBefore?: number;
+  warningChannelId?: string | null;
+  exemptRoleIds?: string[];
+  adminRoleIds?: string[];
+}
+
+/**
+ * Config reset response structure.
+ */
+interface ConfigResetResponse {
+  success: boolean;
+  guildId: string;
+  message: string;
 }
 
 /**
@@ -171,6 +217,9 @@ export class AdminApiService {
     this.app.get('/api/status', this.authMiddleware.bind(this), this.handleStatus.bind(this));
     this.app.get('/api/guilds', this.authMiddleware.bind(this), this.handleGuildsList.bind(this));
     this.app.get('/api/guilds/:id/status', this.authMiddleware.bind(this), this.handleGuildStatus.bind(this));
+    this.app.get('/api/guilds/:id/config', this.authMiddleware.bind(this), this.handleGuildConfig.bind(this));
+    this.app.put('/api/guilds/:id/config', this.authMiddleware.bind(this), this.handleGuildConfigUpdate.bind(this));
+    this.app.delete('/api/guilds/:id/config', this.authMiddleware.bind(this), this.handleGuildConfigReset.bind(this));
     this.app.post('/api/guilds/:id/enable', this.authMiddleware.bind(this), this.handleGuildEnable.bind(this));
     this.app.post('/api/guilds/:id/disable', this.authMiddleware.bind(this), this.handleGuildDisable.bind(this));
 
@@ -339,30 +388,25 @@ export class AdminApiService {
    * GET /api/guilds - List all guilds the bot is in.
    */
   private handleGuildsList(req: RequestWithCorrelation, res: Response): void {
-    const guilds = this.client.guilds.cache.map((guild) => {
-      const config = this.guildConfigService.getConfig(guild.id);
-      const connected = this.voiceConnectionManager.hasConnection(guild.id);
+    const guilds: GuildListItem[] = [];
 
-      return {
-        guildId: guild.id,
+    for (const [guildId, guild] of this.client.guilds.cache) {
+      const config = this.guildConfigService.getConfig(guildId);
+      guilds.push({
+        guildId,
         name: guild.name,
+        memberCount: guild.memberCount,
         enabled: config.enabled,
-        connected,
-      } satisfies GuildSummary;
-    });
+        connected: this.voiceConnectionManager.hasConnection(guildId),
+      });
+    }
 
     this.logger.info(
-      {
-        correlationId: req.correlationId,
-        ip: req.ip,
-        guildCount: guilds.length,
-      },
+      { correlationId: req.correlationId, ip: req.ip, count: guilds.length },
       'Guilds list endpoint accessed'
     );
 
-    res.json({
-      guilds,
-    } satisfies GuildsListResponse);
+    res.json({ guilds, total: guilds.length } satisfies GuildsListResponse);
   }
 
   /**
@@ -410,6 +454,283 @@ export class AdminApiService {
       warningSecondsBefore: config.warningSecondsBefore,
       connected,
     } satisfies GuildStatusResponse);
+  }
+
+  /**
+   * GET /api/guilds/:id/config - Get full guild configuration.
+   */
+  private handleGuildConfig(req: RequestWithCorrelation, res: Response): void {
+    const guildId = req.params['id'];
+
+    if (guildId === undefined || guildId === '' || !this.isValidGuildId(guildId)) {
+      res.status(400).json({
+        error: 'Bad Request',
+        message: 'Invalid guild ID format',
+      } satisfies ErrorResponse);
+      return;
+    }
+
+    // Check if bot is in the guild
+    const guild = this.client.guilds.cache.get(guildId);
+    if (!guild) {
+      res.status(404).json({
+        error: 'Not Found',
+        message: 'Bot is not in the specified guild',
+      } satisfies ErrorResponse);
+      return;
+    }
+
+    const config = this.guildConfigService.getConfig(guildId);
+
+    this.logger.info(
+      {
+        correlationId: req.correlationId,
+        ip: req.ip,
+        guildId,
+      },
+      'Guild config endpoint accessed'
+    );
+
+    res.json({
+      guildId,
+      enabled: config.enabled,
+      afkTimeoutSeconds: config.afkTimeoutSeconds,
+      warningSecondsBefore: config.warningSecondsBefore,
+      warningChannelId: config.warningChannelId,
+      exemptRoleIds: config.exemptRoleIds,
+      adminRoleIds: config.adminRoleIds,
+    } satisfies GuildConfigResponse);
+  }
+
+  /**
+   * PUT /api/guilds/:id/config - Update guild configuration.
+   */
+  private handleGuildConfigUpdate(req: RequestWithCorrelation, res: Response): void {
+    const guildId = req.params['id'];
+
+    if (guildId === undefined || guildId === '' || !this.isValidGuildId(guildId)) {
+      res.status(400).json({
+        error: 'Bad Request',
+        message: 'Invalid guild ID format',
+      } satisfies ErrorResponse);
+      return;
+    }
+
+    // Check if bot is in the guild
+    const guild = this.client.guilds.cache.get(guildId);
+    if (!guild) {
+      res.status(404).json({
+        error: 'Not Found',
+        message: 'Bot is not in the specified guild',
+      } satisfies ErrorResponse);
+      return;
+    }
+
+    // Validate request body
+    const updates = req.body as GuildConfigUpdateRequest;
+
+    // Check for empty body and unknown fields
+    const validFields = ['enabled', 'afkTimeoutSeconds', 'warningSecondsBefore', 'warningChannelId', 'exemptRoleIds', 'adminRoleIds'];
+    const bodyKeys = Object.keys(req.body as object);
+    const providedFields = bodyKeys.filter(key => validFields.includes(key));
+
+    if (bodyKeys.length === 0 || providedFields.length === 0) {
+      res.status(400).json({
+        error: 'Bad Request',
+        message: 'At least one field must be provided',
+      } satisfies ErrorResponse);
+      return;
+    }
+
+    // Check for unknown fields
+    const unknownFields = bodyKeys.filter(key => !validFields.includes(key));
+    if (unknownFields.length > 0) {
+      res.status(400).json({
+        error: 'Bad Request',
+        message: `Unknown field(s): ${unknownFields.join(', ')}`,
+      } satisfies ErrorResponse);
+      return;
+    }
+
+    // Validate enabled (moved earlier to be with other validations)
+    if (updates.enabled !== undefined && typeof updates.enabled !== 'boolean') {
+      res.status(400).json({
+        error: 'Bad Request',
+        message: 'enabled must be a boolean',
+      } satisfies ErrorResponse);
+      return;
+    }
+
+    // Validate afkTimeoutSeconds
+    if (updates.afkTimeoutSeconds !== undefined) {
+      if (typeof updates.afkTimeoutSeconds !== 'number' || updates.afkTimeoutSeconds < 1) {
+        res.status(400).json({
+          error: 'Bad Request',
+          message: 'afkTimeoutSeconds must be greater than 0',
+        } satisfies ErrorResponse);
+        return;
+      }
+    }
+
+    // Validate warningSecondsBefore
+    if (updates.warningSecondsBefore !== undefined) {
+      if (typeof updates.warningSecondsBefore !== 'number' || updates.warningSecondsBefore < 0) {
+        res.status(400).json({
+          error: 'Bad Request',
+          message: 'warningSecondsBefore must be greater than or equal to 0',
+        } satisfies ErrorResponse);
+        return;
+      }
+    }
+
+    // Validate warningChannelId
+    if (updates.warningChannelId !== undefined && updates.warningChannelId !== null) {
+      if (typeof updates.warningChannelId !== 'string' || !this.isValidGuildId(updates.warningChannelId)) {
+        res.status(400).json({
+          error: 'Bad Request',
+          message: 'warningChannelId must be null or a valid Discord snowflake',
+        } satisfies ErrorResponse);
+        return;
+      }
+    }
+
+    // Validate exemptRoleIds
+    if (updates.exemptRoleIds !== undefined) {
+      if (!Array.isArray(updates.exemptRoleIds)) {
+        res.status(400).json({
+          error: 'Bad Request',
+          message: 'exemptRoleIds must be an array',
+        } satisfies ErrorResponse);
+        return;
+      }
+      for (const roleId of updates.exemptRoleIds) {
+        if (typeof roleId !== 'string' || !this.isValidGuildId(roleId)) {
+          res.status(400).json({
+            error: 'Bad Request',
+            message: 'exemptRoleIds must contain only valid Discord snowflakes',
+          } satisfies ErrorResponse);
+          return;
+        }
+      }
+    }
+
+    // Validate adminRoleIds
+    if (updates.adminRoleIds !== undefined) {
+      if (!Array.isArray(updates.adminRoleIds)) {
+        res.status(400).json({
+          error: 'Bad Request',
+          message: 'adminRoleIds must be an array',
+        } satisfies ErrorResponse);
+        return;
+      }
+      for (const roleId of updates.adminRoleIds) {
+        if (typeof roleId !== 'string' || !this.isValidGuildId(roleId)) {
+          res.status(400).json({
+            error: 'Bad Request',
+            message: 'adminRoleIds must contain only valid Discord snowflakes',
+          } satisfies ErrorResponse);
+          return;
+        }
+      }
+    }
+
+    try {
+      const updatedConfig = this.guildConfigService.updateConfig(guildId, updates);
+
+      this.logger.info(
+        {
+          correlationId: req.correlationId,
+          ip: req.ip,
+          guildId,
+          action: 'update_guild_config',
+          updates: Object.keys(updates),
+        },
+        'Guild config updated via API'
+      );
+
+      res.json({
+        guildId,
+        enabled: updatedConfig.enabled,
+        afkTimeoutSeconds: updatedConfig.afkTimeoutSeconds,
+        warningSecondsBefore: updatedConfig.warningSecondsBefore,
+        warningChannelId: updatedConfig.warningChannelId,
+        exemptRoleIds: updatedConfig.exemptRoleIds,
+        adminRoleIds: updatedConfig.adminRoleIds,
+      } satisfies GuildConfigResponse);
+    } catch (error) {
+      this.logger.error(
+        {
+          correlationId: req.correlationId,
+          error,
+          guildId,
+        },
+        'Failed to update guild config'
+      );
+
+      res.status(500).json({
+        error: 'Internal Server Error',
+        message: 'Failed to update guild config',
+      } satisfies ErrorResponse);
+    }
+  }
+
+  /**
+   * DELETE /api/guilds/:id/config - Reset guild configuration to defaults.
+   */
+  private handleGuildConfigReset(req: RequestWithCorrelation, res: Response): void {
+    const guildId = req.params['id'];
+
+    if (guildId === undefined || guildId === '' || !this.isValidGuildId(guildId)) {
+      res.status(400).json({
+        error: 'Bad Request',
+        message: 'Invalid guild ID format',
+      } satisfies ErrorResponse);
+      return;
+    }
+
+    // Check if bot is in the guild
+    const guild = this.client.guilds.cache.get(guildId);
+    if (!guild) {
+      res.status(404).json({
+        error: 'Not Found',
+        message: 'Bot is not in the specified guild',
+      } satisfies ErrorResponse);
+      return;
+    }
+
+    try {
+      this.guildConfigService.resetConfig(guildId);
+
+      this.logger.info(
+        {
+          correlationId: req.correlationId,
+          ip: req.ip,
+          guildId,
+          action: 'reset_guild_config',
+        },
+        'Guild config reset to defaults via API'
+      );
+
+      res.json({
+        success: true,
+        guildId,
+        message: 'Guild configuration reset to defaults',
+      } satisfies ConfigResetResponse);
+    } catch (error) {
+      this.logger.error(
+        {
+          correlationId: req.correlationId,
+          error,
+          guildId,
+        },
+        'Failed to reset guild config'
+      );
+
+      res.status(500).json({
+        error: 'Internal Server Error',
+        message: 'Failed to reset guild config',
+      } satisfies ErrorResponse);
+    }
   }
 
   /**
