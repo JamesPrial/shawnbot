@@ -61,8 +61,10 @@ export class RateLimiter {
     const windowStart = now - this.config.windowMs;
 
     // Prune timestamps outside the sliding window
-    while (this.timestamps.length > 0 && this.timestamps[0] < windowStart) {
+    let firstTimestamp = this.timestamps[0];
+    while (firstTimestamp !== undefined && firstTimestamp < windowStart) {
       this.timestamps.shift();
+      firstTimestamp = this.timestamps[0];
     }
 
     // Record the current action

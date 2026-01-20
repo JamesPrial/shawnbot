@@ -82,10 +82,10 @@ function getRootLogger(): Logger {
  */
 export const logger = new Proxy({} as Logger, {
   get(_, prop) {
-    return (getRootLogger() as Record<string, unknown>)[prop as string];
+    return (getRootLogger() as unknown as Record<string, unknown>)[prop as string];
   },
   set(_, prop, value) {
-    (getRootLogger() as Record<string, unknown>)[prop as string] = value;
+    (getRootLogger() as unknown as Record<string, unknown>)[prop as string] = value;
     return true;
   },
 });

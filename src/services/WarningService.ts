@@ -37,7 +37,12 @@ export class WarningService {
       }
 
       // Check if bot has SEND_MESSAGES permission in the warning channel
-      const botPermissions = warningChannel.permissionsFor(guild.members.me);
+      const botMember = guild.members.me;
+      if (!botMember) {
+        this.logger.warn({ guildId }, 'Bot member not cached in guild');
+        return;
+      }
+      const botPermissions = warningChannel.permissionsFor(botMember);
       const hasPermission = botPermissions?.has(PermissionFlagsBits.SendMessages) ?? false;
       const permissionsNull = botPermissions === null;
 
