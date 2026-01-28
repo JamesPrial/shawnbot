@@ -1,5 +1,6 @@
 import { vi } from 'vitest';
 import type { GuildSettings } from '../database/repositories/GuildSettingsRepository';
+import { createTestSnowflake } from './testHelpers';
 
 /**
  * Mock logger interface matching pino's Logger.
@@ -63,9 +64,11 @@ export function createMockRateLimiter(): MockRateLimiter {
 /**
  * Default guild settings values matching GuildConfigService.DEFAULT_CONFIG.
  * These are the values used when no database entry exists for a guild.
+ *
+ * Note: guildId uses a valid Discord snowflake format (17-19 digit numeric string).
  */
 const DEFAULT_GUILD_SETTINGS: GuildSettings = {
-  guildId: 'test-guild-123',
+  guildId: '123456789012345678',
   enabled: false,
   afkTimeoutSeconds: 300,
   warningSecondsBefore: 60,
@@ -154,3 +157,26 @@ export const INVALID_CONFIGS: Array<{ name: string; config: Partial<GuildSetting
     config: { afkTimeoutSeconds: 300, warningSecondsBefore: 400 },
   },
 ];
+
+// ============================================================================
+// Type-Safe Helper Functions
+// ============================================================================
+
+/**
+ * Generates a valid Discord snowflake for use in test fixtures.
+ * Each call returns a unique snowflake that passes Discord's validation.
+ *
+ * This is useful when you need a valid snowflake ID but don't need the branded type.
+ * For type-safe branded IDs, use the helpers from testHelpers.ts directly.
+ *
+ * @returns A unique valid Discord snowflake string
+ *
+ * @example
+ * const config = createMockGuildSettings({
+ *   guildId: generateTestSnowflake(),
+ *   warningChannelId: generateTestSnowflake()
+ * });
+ */
+export function generateTestSnowflake(): string {
+  return createTestSnowflake();
+}
