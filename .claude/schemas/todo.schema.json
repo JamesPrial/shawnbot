@@ -1,0 +1,62 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://shawnbot.local/schemas/todo.schema.json",
+  "title": "TodoWrite Todo Schema",
+  "description": "Schema for validating todo snapshots created by the TodoWrite tool",
+  "type": "object",
+  "required": ["timestamp", "session_id", "cwd", "todos"],
+  "properties": {
+    "timestamp": {
+      "type": "string",
+      "format": "date-time",
+      "description": "ISO8601 timestamp when the todo snapshot was created"
+    },
+    "session_id": {
+      "type": "string",
+      "format": "uuid",
+      "description": "Unique identifier (UUID v4) for the agent session"
+    },
+    "cwd": {
+      "type": "string",
+      "description": "Current working directory path when todos were created",
+      "minLength": 1
+    },
+    "todos": {
+      "type": "array",
+      "description": "Array of todo items tracking work items for the session",
+      "items": {
+        "$ref": "#/$defs/TodoItem"
+      },
+      "minItems": 0
+    }
+  },
+  "additionalProperties": false,
+  "$defs": {
+    "TodoItem": {
+      "type": "object",
+      "title": "Todo Item",
+      "description": "A single todo item with content, status, and active form",
+      "required": ["content", "status", "activeForm"],
+      "properties": {
+        "content": {
+          "type": "string",
+          "description": "Todo content in imperative form (e.g., 'Fix the bug', 'Add feature')",
+          "minLength": 1,
+          "maxLength": 500
+        },
+        "status": {
+          "type": "string",
+          "enum": ["pending", "in_progress", "completed"],
+          "description": "Current status of the todo item"
+        },
+        "activeForm": {
+          "type": "string",
+          "description": "Present continuous form of the todo (e.g., 'Fixing the bug', 'Adding feature')",
+          "minLength": 1,
+          "maxLength": 500
+        }
+      },
+      "additionalProperties": false
+    }
+  }
+}

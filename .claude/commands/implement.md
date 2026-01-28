@@ -205,13 +205,19 @@ REVIEWER GROUPINGS:
 
 ### Plan Mode Gate
 
+**To check if plan mode is active:**
+Read `.claude/plan-state/state.json` - if `active: true`, you are in plan mode.
+
 **If plan mode is active:**
-1. Write the SYNTHESIZED PLAN to the plan file (specified in system reminder)
-2. Call ExitPlanMode tool
+1. Write the SYNTHESIZED PLAN to the plan file (default: `.claude/plan-state/PLAN.md`)
+2. Run the `/exit-plan-mode` command to update state and notify user
 3. STOP - do not proceed to Phase 2 until user approves and re-runs
 
 **If plan mode is NOT active:**
 - Continue directly to Phase 2
+
+**To enter plan mode (for user):**
+Run `/enter-plan-mode <plan-file-path>` before starting the workflow.
 
 ---
 
@@ -399,10 +405,20 @@ Return: APPROVE | REQUEST_CHANGES: [specific cross-unit issues]
 
 **Only after integration review returns APPROVE.**
 
-Launch **git-ops** agent:
+Launch **git-ops** agent (defined in `.claude/agents/git-ops.md`):
 ```
 Commit and push: [summary of what was implemented]
+
+Branch: [current branch name]
+Files changed: [list of files]
 ```
+
+The git-ops agent will:
+1. Verify branch (refuse to push to main/master without explicit permission)
+2. Review changes with `git diff`
+3. Create a commit with conventional commit format
+4. Push to the current branch
+5. Report what was committed
 
 Mark all todos complete.
 
@@ -444,3 +460,57 @@ The workflow is complete when ALL are true:
 8. **Don't skip synthesis** - raw perspective outputs need conflict resolution
 9. **Don't let one perspective dominate** - synthesis requires trade-offs
 10. **Don't ask user about every conflict** - use judgment, only escalate when truly ambiguous
+
+---
+
+## State Management & Schemas
+
+### Plan Mode State
+
+Location: `.claude/plan-state/state.json`
+
+```json
+{
+  "active": boolean,      // true when in plan mode
+  "planFile": string|null, // path to plan file
+  "createdAt": string|null, // ISO8601 timestamp
+  "sessionId": string|null  // UUID for the session
+}
+```
+
+**Commands:**
+- `/enter-plan-mode <plan-file>` - Activates plan mode, sets state
+- `/exit-plan-mode` - Deactivates plan mode, notifies user
+
+Schema: `.claude/schemas/plan-state.schema.json`
+
+### Todo Schema
+
+Location: `.claude/schemas/todo.schema.json`
+
+Validates todo snapshots with:
+- `timestamp`: ISO8601 date-time
+- `session_id`: UUID v4
+- `cwd`: Working directory path
+- `todos`: Array of TodoItem
+  - `content`: Imperative form (1-500 chars)
+  - `status`: "pending" | "in_progress" | "completed"
+  - `activeForm`: Present continuous form (1-500 chars)
+
+### Agent Definitions
+
+All agents are defined in `.claude/agents/`:
+- `typescript-craftsman.md` - Implementation
+- `typescript-test-architect.md` - Test writing
+- `typescript-code-reviewer.md` - Code review
+- `ts-test-runner.md` - Test execution
+- `quick-impl.md` - Ad-hoc tasks
+- `git-ops.md` - Git commit/push operations
+
+### Extensibility
+
+To add new perspectives or agents:
+1. Create agent definition in `.claude/agents/[name].md`
+2. Follow the frontmatter format: name, description, tools, model, color
+3. Reference in the appropriate workflow phase
+4. Add to the agent table in Context Strategy section

@@ -1,0 +1,28 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "Plan Mode State",
+  "description": "State management for Claude's plan mode during code sessions",
+  "type": "object",
+  "properties": {
+    "active": {
+      "type": "boolean",
+      "description": "Whether plan mode is currently active"
+    },
+    "planFile": {
+      "type": ["string", "null"],
+      "description": "Path to the current plan file, or null if no plan is active"
+    },
+    "createdAt": {
+      "type": ["string", "null"],
+      "format": "date-time",
+      "description": "ISO8601 timestamp when the current plan was created, or null if no plan is active"
+    },
+    "sessionId": {
+      "type": ["string", "null"],
+      "format": "uuid",
+      "description": "UUID of the current session, or null if no plan is active"
+    }
+  },
+  "required": ["active", "planFile", "createdAt", "sessionId"],
+  "additionalProperties": false
+}
