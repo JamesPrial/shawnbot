@@ -3,6 +3,7 @@ import {
   createMockLogger,
   createMockRateLimiter,
   createMockGuildSettings,
+  generateTestSnowflake,
   ENABLED_CONFIG,
   DISABLED_CONFIG,
   INVALID_CONFIGS,
@@ -55,12 +56,14 @@ describe('fixtures', () => {
       const logger1 = createMockLogger();
       const logger2 = createMockLogger();
 
-      // Configure mocks differently
-      logger1.error.mockReturnValue('error1' as any);
-      logger2.error.mockReturnValue('error2' as any);
+      // Track calls with different identifiers
+      logger1.error('from logger1');
+      logger2.error('from logger2');
 
-      expect(logger1.error()).toBe('error1');
-      expect(logger2.error()).toBe('error2');
+      expect(logger1.error).toHaveBeenCalledWith('from logger1');
+      expect(logger1.error).not.toHaveBeenCalledWith('from logger2');
+      expect(logger2.error).toHaveBeenCalledWith('from logger2');
+      expect(logger2.error).not.toHaveBeenCalledWith('from logger1');
     });
 
     it('should configure child method to return the logger itself', () => {
@@ -159,7 +162,7 @@ describe('fixtures', () => {
       it('should return default values matching the documented defaults', () => {
         const settings = createMockGuildSettings();
 
-        expect(settings.guildId).toBe('test-guild-123');
+        expect(settings.guildId).toBe('123456789012345678');
         expect(settings.enabled).toBe(false);
         expect(settings.afkTimeoutSeconds).toBe(300);
         expect(settings.warningSecondsBefore).toBe(60);
@@ -175,6 +178,13 @@ describe('fixtures', () => {
         expect(settings.warningSecondsBefore).toBeGreaterThan(0);
         expect(settings.warningSecondsBefore).toBeLessThan(settings.afkTimeoutSeconds);
       });
+
+      it('should have a valid Discord snowflake format for guildId', () => {
+        const settings = createMockGuildSettings();
+
+        // Discord snowflakes are 17-19 digit numeric strings
+        expect(settings.guildId).toMatch(/^\d{17,19}$/);
+      });
     });
 
     describe('when called with overrides', () => {
@@ -187,7 +197,7 @@ describe('fixtures', () => {
         expect(settings.enabled).toBe(true);
         expect(settings.afkTimeoutSeconds).toBe(600);
         // Other fields should retain defaults
-        expect(settings.guildId).toBe('test-guild-123');
+        expect(settings.guildId).toBe('123456789012345678');
         expect(settings.warningSecondsBefore).toBe(60);
       });
 
@@ -215,7 +225,7 @@ describe('fixtures', () => {
         });
 
         expect(settings.warningChannelId).toBe('test-channel-456');
-        expect(settings.guildId).toBe('test-guild-123');
+        expect(settings.guildId).toBe('123456789012345678');
         expect(settings.enabled).toBe(false);
         expect(settings.afkTimeoutSeconds).toBe(300);
       });
@@ -455,6 +465,40 @@ describe('fixtures', () => {
       expect(settings.adminRoleIds).toBeDefined();
       expect(settings.createdAt).toBeDefined();
       expect(settings.updatedAt).toBeDefined();
+    });
+  });
+
+  describe('generateTestSnowflake', () => {
+    it('should return a string in valid Discord snowflake format', () => {
+      const snowflake = generateTestSnowflake();
+
+      expect(typeof snowflake).toBe('string');
+      expect(snowflake).toMatch(/^\d{17,19}$/);
+    });
+
+    it('should generate unique snowflakes on each call', () => {
+      const snowflake1 = generateTestSnowflake();
+      const snowflake2 = generateTestSnowflake();
+      const snowflake3 = generateTestSnowflake();
+
+      expect(snowflake1).not.toBe(snowflake2);
+      expect(snowflake2).not.toBe(snowflake3);
+      expect(snowflake1).not.toBe(snowflake3);
+    });
+
+    it('should be usable with createMockGuildSettings', () => {
+      const guildId = generateTestSnowflake();
+      const channelId = generateTestSnowflake();
+
+      const settings = createMockGuildSettings({
+        guildId,
+        warningChannelId: channelId,
+      });
+
+      expect(settings.guildId).toBe(guildId);
+      expect(settings.warningChannelId).toBe(channelId);
+      expect(guildId).toMatch(/^\d{17,19}$/);
+      expect(channelId).toMatch(/^\d{17,19}$/);
     });
   });
 });
